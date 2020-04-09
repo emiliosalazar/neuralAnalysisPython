@@ -217,7 +217,7 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         if np.linalg.matrix_rank(covX) == n_features:
             scale = np.exp(2*np.sum(np.log(np.diag(np.linalg.cholesky(covX))))/n_features)
         else:
-            raise("not enough observations!")
+            raise Exception("FA:NumObs", "Not enough observations! Rank covariance mat = " + str(np.linalg.matrix_rank(covX)) + ". Num features = " + str(n_features))
 
         L = np.random.randn(n_features, n_components)*scale
         psi = np.diag(covX)

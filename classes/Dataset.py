@@ -5,7 +5,7 @@ Created on Tue Jan 28 10:46:04 2020
 
 @author: emilio
 """
-from MatFileMethods import LoadMatFile
+from MatFileMethods import LoadDataset
 import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from copy import copy
@@ -19,7 +19,9 @@ class Dataset():
     colorsetMayavi = [tuple(col) for col in colorset]
     
     def __init__(self, dataMatPath, preprocessor, notChan=None, removeCoincidentChans = True):
-        annots = LoadMatFile(dataMatPath)
+        print("loading data")
+        annots = LoadDataset(dataMatPath)
+        print("data loaded")
         self.cosTuningCurveParams = {'thBestPerChan': np.empty(0), 'modPerChan': np.empty(0), 'bslnPerChan': np.empty(0), 'tuningCurves': np.empty(0)}
         if preprocessor == 'Erinn':
         
@@ -52,14 +54,18 @@ class Dataset():
                 emptyObjArr = np.empty((0,0), dtype='uint8')
                 # fa = np.array([[(emptyObjArr)]], dtype=[('hah', 'object')])
                 #np.ndarray((0,0), dtype='int8')# np.array(([[np.ndarray((0,0), dtype='int8')]]), dtype=[('0', 'object')])
-                np.array(())
+                # np.array(())
                 if not struc.size:
                     kinematicsTemp[idx] = np.array([[(emptyObjArr,emptyObjArr,emptyObjArr,emptyObjArr)]], dtype=[('time', 'O'), ('position', 'O'), ('velocity', 'O'), ('acceleration', 'O')])
             self.kinematics = np.stack(kinematicsTemp)
             self.kinematicCenter = stateHandLoc
         elif preprocessor == 'Yuyan':
+            # if 'angle' in annots['S'].dtype.names:
             spikesArrayTrlChanTm = annots['S']['spikes'][0]
-            self.trialStatuses = np.ones((spikesArrayTrlChanTm.shape[0]))
+            # else:
+            #     spikesArrayTrlChanTm = [spks for spks in annots['S']['spikes'][0]]
+                # np.stack([])
+                # np.stack([trlDat['spikes'][0][0]['sort'][0] for trlDat in annots['Data']['TrialData'][0]])
             
             # note that the [:,None].T part is to make the shape the same as Erinn's preprocessing above...
             weirdIntermediate = np.squeeze(np.stack([[np.where(chan)[0][:, None] for chan in trl] for trl in spikesArrayTrlChanTm]))
@@ -74,12 +80,22 @@ class Dataset():
                     if valIn[()].size != 0:
                         valOut[()] = 1/np.diff(valIn[()])
             
-            spikeDatChannels = np.stack(range(0, spikesArrayTrlChanTm.shape[1]))
+            
+            self.spikeDatSort = np.ones(self.spikeDatTimestamps.shape[0:2])
+            
+            # if 'angle' in annots['S'].dtype.names:
+            self.markerTargAngles = np.expand_dims(np.squeeze(annots['S']['angle']),axis=1)/180*np.pi #gotta convert these angles to radians to match above...
+            self.trialStatuses = np.ones((self.spikeDatTimestamps.shape[0]))
+            # spikeDatChannels = np.stack(range(0, self.spikeDatTimestamps.shape[1]))
+            # self.spikeDatChannels = np.repeat(spikeDatChannels[None, :], len(self.trialStatuses), axis=0)
+            # elif 'cue' in annots['S'].dtype.names:
+            #     self.markerTargAngles = np.expand_dims(np.squeeze(annots['S']['cue']),axis=1)
+            #     self.trialStatuses = np.squeeze(annots['S']['status'])
+            #     # spikeDatChannels = np.stack(range(0, spikesArrayTrlChanTm[0].shape[0]))
+            #     # self.spikeDatChannels = np.repeat(spikeDatChannels[None, :], len(self.trialStatuses), axis=0)
+                
+            spikeDatChannels = np.stack(range(0, self.spikeDatTimestamps.shape[1]))
             self.spikeDatChannels = np.repeat(spikeDatChannels[None, :], len(self.trialStatuses), axis=0)
-            
-            self.spikeDatSort = np.ones(spikesArrayTrlChanTm.shape[0:2])
-            
-            self.markerTargAngles = np.expand_dims(np.squeeze(annots['S']['angle']),axis=1)/180*np.pi #gotta conver these angles to radians to match above...
             
             # this is a (hopefully) temporary hard coding to reflect how Yuyan
             # preprocessed MGS data to include only the delay period 
@@ -88,11 +104,45 @@ class Dataset():
             # data the 'Delay Period' indicates the time when the monkey would have been
             # consciously aware of the flash, so ~100ms later. Here, we're just assuming
             # they happen at the same time
+            # if 'angle' in annots['S'].dtype.names:
             self.statesPresented = [np.stack([[1, 2, -1], [0, 0, sATCT.shape[1]]]) for sATCT in spikesArrayTrlChanTm]
+            # else:
+            #     # note that this is based on V4 cued data having 300ms of blank present before target presentation...
+            #     self.statesPresented = [np.stack([[1,2,-1], [0,300,sATCT.shape[1]]]) for sATCT in spikesArrayTrlChanTm]
             
             stateNames = np.array(['Target Flash', 'Delay Period'])
             self.stateNames = stateNames[None, :]
             
+            self.kinematics = None
+        elif preprocessor is 'Emilio':
+            spikesArrayTrlChanTm = [spks for spks in annots['S']['spikes'][0]]
+            
+            # note that the [:,None].T part is to make the shape the same as Erinn's preprocessing above...
+            weirdIntermediate = np.squeeze(np.stack([[np.where(chan)[0][:, None] for chan in trl] for trl in spikesArrayTrlChanTm]))
+            with np.nditer(weirdIntermediate, ['refs_ok'], ['readwrite']) as iterRef:
+                for valIn in iterRef:
+                    valIn[()] = valIn[()].T
+                    
+            self.spikeDatTimestamps = weirdIntermediate
+            self.isi = np.empty(self.spikeDatTimestamps.shape, dtype=object) # initialize to right size
+            
+            with np.nditer([self.isi, self.spikeDatTimestamps], ['refs_ok'], [['writeonly'], ['readonly']]) as iterRef:
+                for valOut, valIn in iterRef:
+                    if valIn[()].size != 0:
+                        valOut[()] = 1/np.diff(valIn[()])
+            
+            
+            self.spikeDatSort = np.ones(self.spikeDatTimestamps.shape[0:2])
+            
+            self.markerTargAngles = np.stack([cue[0] for cue in annots['S']['cue'][0]])/180*180 # /*180 is to convert to dtype=float64 for matching to others
+            self.trialStatuses = np.stack([stat[0,0] for stat in annots['S']['status'][0]])
+            
+            spikeDatChannels = np.stack(range(0, self.spikeDatTimestamps.shape[1]))
+            self.spikeDatChannels = np.repeat(spikeDatChannels[None, :], len(self.trialStatuses), axis=0)
+            
+            self.statesPresented = [stPres for stPres in annots['S']['statesPresented'][0]]
+            
+            self.stateNames = annots['S']['stateNames'][0,0]
             self.kinematics = None
         
         if notChan is not None:
@@ -136,6 +186,8 @@ class Dataset():
         return datasetWithoutCatch
     
     def binSpikeData(self, startMs=0, endMs=3600, binSizeMs=50, notChan = None):
+        
+        from classes.BinnedSpikeSet import BinnedSpikeSet
         if type(endMs) is list:
             spikeDatBinnedList = [[[[counts for counts in np.histogram(chanSpks, bins=np.arange(sMs, eMs, binSizeMs))][0] for chanSpks in trlChans][0] for trlChans in trl] for trl, sMs, eMs in zip(self.spikeDatTimestamps, startMs, endMs)]
         else:
@@ -309,17 +361,17 @@ class Dataset():
                 
         return stateTmPres
             
-    def computeDelayStartAndEnd(self):
-        indDelayPres = np.where(self.stateNames == 'Delay Period')[1][0] # this is a horizontal vector...
+    def computeDelayStartAndEnd(self, stateNameDelayStart = 'Delay Period'):
+        indDelayPres = np.where(self.stateNames == stateNameDelayStart)[1][0] # this is a horizontal vector...
         startTmsPres = []
         endTmsPres = []
         for statesPres in self.statesPresented:
             locDelayLog = statesPres[0,:]==(indDelayPres+1) # remember Matlab is 1-indexed
             if np.any(locDelayLog):
                 locDelayStrtSt = np.where(locDelayLog)[0][0]
-                targAppearSt = locDelayStrtSt - 1
+                delayStartSt = locDelayStrtSt
                 locDelayEndSt = locDelayStrtSt + 1
-                startTmsPres.append(statesPres[1, targAppearSt])
+                startTmsPres.append(statesPres[1, delayStartSt])
                 endTmsPres.append(statesPres[1, locDelayEndSt])
             else:
                 startTmsPres.append(np.nan)

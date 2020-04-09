@@ -16,7 +16,10 @@ class MatlabConversion:
         return self
     
     def convertMatlabArrayToNumpy(matlabArray):
-        npArr = np.array(matlabArray._data).reshape(matlabArray.size, order='F')
+        if type(matlabArray) is float:
+            npArr = matlabArray
+        else:
+            npArr = np.array(matlabArray._data).reshape(matlabArray.size, order='F')
         return npArr
     
     def convertNumpyArrayToMatlab(numpyArray):
@@ -30,6 +33,8 @@ class MatlabConversion:
                 numpyDict[key] = MatlabConversion.convertMatlabArrayToNumpy(val)
             elif type(val) is dict:
                 numpyDict[key] = MatlabConversion.convertMatlabDictToNumpy(val)
+            elif type(val) is bool:
+                numpyDict[key] = val
             
         return numpyDict
             
