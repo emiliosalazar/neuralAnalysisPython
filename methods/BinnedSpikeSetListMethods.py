@@ -140,17 +140,15 @@ def ldaComputation(listBSS, plot=True):
 
 def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,
                     crossvalidateNumFolds = 4, xDimTest = [2,5,8], firingRateThresh=0.5, signalDescriptor = ""):
-    from matlab import engine
+
     # from classes.GPFA import GPFA
     from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
+    from methods.GeneralMethods import loadDefaultParams, prepareMatlab
+    
+    eng = prepareMatlab()
     
     
-    try:
-        eng.workspace
-    except (engine.RejectedExecutionError, NameError) as e:
-        eng = engine.start_matlab()
-    finally:
-        eng.clear('all', nargout=0)
+   
         
     plotInfo = {}
     figErr = plt.figure()
