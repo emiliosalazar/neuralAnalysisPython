@@ -185,7 +185,8 @@ paths = [data[idx]['path'] for idx in dataIndsProcess]
 
 xDimTest = [2]#[2,5,8,12,15]#[2,5,8,12,15]
 firingRateThresh = 0.5
-numStimulusConditions = 1 # because V4 has two...
+combineConditions = False
+numStimulusConditions = False # because V4 has two...
 
 # # ** inputs for delay start ** #
 # listBSS = binnedSpikesShortStart
@@ -208,7 +209,7 @@ listBSS = binnedSpikesShortStartOffshift
 timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
 timeBeforeAndAfterEnd = None
 baselineSubtract = True
-signalDescriptor = "first%dMsDelayOffshift%dMsFRThresh%0.2f%sCondNum%d" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "", numStimulusConditions)
+signalDescriptor = "first%dMsDelayOffshift%dMsFRThresh%0.2f%s" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "")
 
 
 
@@ -217,5 +218,5 @@ dimsB, gpPrepB = gpfaComputation(
     listBSS, descriptions, paths, signalDescriptor = signalDescriptor,
                 # [listBSS[-1]], [descriptions[-1]], [paths[-1]],
                           timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd = timeBeforeAndAfterEnd,
-                          balanceDirs = True, numStimulusConditions = numStimulusConditions, baselineSubtract = baselineSubtract, 
+                          balanceDirs = True, numStimulusConditions = numStimulusConditions, combineConditions=combineConditions, baselineSubtract = baselineSubtract, 
                           crossvalidateNumFolds = 4, xDimTest = xDimTest, firingRateThresh=firingRateThresh)
