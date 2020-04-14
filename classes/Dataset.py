@@ -10,7 +10,7 @@ import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from copy import copy
 from matplotlib import pyplot as plt
-from mayavi import mlab
+#from mayavi import mlab
 
 class Dataset():
     

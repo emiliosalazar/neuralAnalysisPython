@@ -12,9 +12,13 @@ from matplotlib import pyplot as plt
 from matplotlib import use as mtpltUse
 from matplotlib import get_backend as mtpltWhatBackend
 #mtpltUse('qt5agg') # nobody knows why, but this is necessary to not plot a million figures and *also* the combo tabs...
+mtpltUse('agg') # nobody knows why, but this is necessary to not plot a million figures and *also* the combo tabs...
 from matplotlib.backends.backend_pdf import PdfPages
-from IPython import get_ipython
-from plotWindow.plotWindow import plotWindow
+try:
+    from IPython import get_ipython
+except ModuleNotFoundError as e:
+    pass # don't think we actually use this at the moment...
+#from plotWindow.plotWindow import plotWindow
 
 from classes.Dataset import Dataset
 

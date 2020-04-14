@@ -11,7 +11,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from classes.FactorAnalysis import FactorAnalysis
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
-from mayavi import mlab
+#from mayavi import mlab
 
 from copy import copy
 
