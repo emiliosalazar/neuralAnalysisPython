@@ -54,7 +54,7 @@ processedDataMat = 'processedData.mat'
 
 # dataset = [ [] for _ in range(len(data))]
 cosTuningCurves = []
-dataIndsProcess = [7]#[1,4,7]
+dataIndsProcess = [1,4,7]
 datasets = []
 for ind in dataIndsProcess:
 # for ind, dataUse in enumerate(data):
@@ -183,7 +183,7 @@ from methods.BinnedSpikeSetListMethods import gpfaComputation
 descriptions = [data[idx]['description'] for idx in dataIndsProcess]
 paths = [data[idx]['path'] for idx in dataIndsProcess]
 
-xDimTest = [2]#[2,5,8,12,15]#[2,5,8,12,15]
+xDimTest = [2,5,8,12,15]#[2,5,8,12,15]
 firingRateThresh = 0.5
 numStimulusConditions = 1 # because V4 has two...
 
