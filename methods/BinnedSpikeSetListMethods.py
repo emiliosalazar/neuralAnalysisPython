@@ -138,7 +138,7 @@ def pcaComputation(listBSS, plot=True):
 def ldaComputation(listBSS, plot=True):
     pass
 
-def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,
+def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,combineConditions = False,
                     crossvalidateNumFolds = 4, xDimTest = [2,5,8], firingRateThresh=0.5, signalDescriptor = ""):
 
     # from classes.GPFA import GPFA
@@ -161,7 +161,7 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
         plotInfo['axScore'] = axScore
         plotInfo['axDim'] = axDim
         numDims, gpfaPrepAllExp = bnSp.gpfa(eng,description,outputPath, signalDescriptor = signalDescriptor,
-                  xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,
+                  xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions,
                   timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
         dimExp.append(numDims)
         gpfaPrepAll.append(gpfaPrepAllExp)

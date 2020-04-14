@@ -616,7 +616,7 @@ class BinnedSpikeSet(np.ndarray):
     # for the end (whatever that may be--say, the delay end), and should be plotted
     # starting -250 ms before
     def gpfa(self, eng, description, outputPath, signalDescriptor = "", xDimTest = [2,5,8], 
-             labelUse = 'stimulusMainLabel', numConds=1, firingRateThresh = 1, balanceDirs = True, baselineSubtract = True,
+             labelUse = 'stimulusMainLabel', numConds=1, combineConds = False, firingRateThresh = 1, balanceDirs = True, baselineSubtract = True,
              crossvalidateNum = 4, timeBeforeAndAfterStart=(0,250), timeBeforeAndAfterEnd=(-250, 0), plotInfo=None):
         from matlab import engine
         from classes.GPFA import GPFA
@@ -687,10 +687,14 @@ class BinnedSpikeSet(np.ndarray):
         
         uniqueTargAngle, trialsPresented = np.unique(newLabels, return_inverse=True)
         
-        initRandSt = np.random.get_state()
-        np.random.seed(0)
-        stimsUse = np.random.randint(0,high=uniqueTargAngle.shape[0],size=numConds)
-        np.random.set_state(initRandSt)
+        if numConds is None:
+            stimsUse = np.arange(uniqueTargAngle.shape[0])
+        else:
+            initRandSt = np.random.get_state()
+            np.random.seed(0)
+            stimsUse = np.random.randint(0,high=uniqueTargAngle.shape[0],size=numConds)
+            stimsUse.sort() # in place sort
+            np.random.set_state(initRandSt)
         # binSpkAllArr = np.empty(len(binnedSpikesUse), dtype=object)
         # for idx, _ in enumerate(binSpkAllArr):
         #     binSpkAllArr[idx] = binnedSpikesUse[idx]
@@ -704,17 +708,23 @@ class BinnedSpikeSet(np.ndarray):
         colorset = self.colorset #np.array([[127,201,127],[190,174,212],[253,192,134],[200,200,153],[56,108,176],[240,2,127],[191,91,23],[102,102,102]])/255
         
         grpSpksNpArr, _ = binnedSpikesUse.groupByLabel(newLabels, labelExtract=uniqueTargAngle[stimsUse,None]) # extract one label...
-        groupedBalancedSpikes = [BinnedSpikeSet(np.concatenate(grpSpksNpArr, axis=0), binSize = grpSpksNpArr[0].binSize)] # grpSpksNpArr
+        if combineConds and (numConds is None or numConds>1):
+            groupedBalancedSpikes = [BinnedSpikeSet(np.concatenate(grpSpksNpArr, axis=0), binSize = grpSpksNpArr[0].binSize)] # grpSpksNpArr
+            condDescriptors = ['s' + '-'.join(['%d' % stN for stN in stimsUse]) + 'Grpd']
+        else:
+            groupedBalancedSpikes = grpSpksNpArr
+            condDescriptors = ['%d' % stN for stN in stimsUse]
+            
         ## Start here
         xDimBestAll = []
         gpfaPrepAll = []
-        for idx, grpSpks in enumerate(groupedBalancedSpikes):
+        for idx, (grpSpks, condDesc) in enumerate(zip(groupedBalancedSpikes,condDescriptors)):
             
             gpfaPrep = GPFA(grpSpks, firingRateThresh=firingRateThresh)
             gpfaPrepAll.append(gpfaPrep)
             for xDim in xDimTest:
                 try:
-                    estParams, seqTrainNew, seqTestNew = gpfaPrep.runGpfaInMatlab(eng=eng, fname=outputPath, runDescriptor = signalDescriptor, crossvalidateNum=crossvalidateNum, xDim=xDim)
+                    estParams, seqTrainNew, seqTestNew = gpfaPrep.runGpfaInMatlab(eng=eng, fname=outputPath, runDescriptor = signalDescriptor, condDescriptor = condDesc, crossvalidateNum=crossvalidateNum, xDim=xDim)
                 except Exception as e:
                     if type(e) is engine.MatlabExecutionError:
                         print(e)
