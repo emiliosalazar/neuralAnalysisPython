@@ -186,7 +186,7 @@ paths = [data[idx]['path'] for idx in dataIndsProcess]
 xDimTest = [2,5,8,12,15]#[2,5,8,12,15]
 firingRateThresh = 0.5
 combineConditions = False
-numStimulusConditions = False # because V4 has two...
+numStimulusConditions = None # because V4 has two...
 
 # # ** inputs for delay start ** #
 # listBSS = binnedSpikesShortStart
@@ -218,5 +218,10 @@ dimsB, gpPrepB = gpfaComputation(
     listBSS, descriptions, paths, signalDescriptor = signalDescriptor,
                 # [listBSS[-1]], [descriptions[-1]], [paths[-1]],
                           timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd = timeBeforeAndAfterEnd,
-                          balanceDirs = True, numStimulusConditions = numStimulusConditions, baselineSubtract = baselineSubtract, 
+                          balanceDirs = True, numStimulusConditions = numStimulusConditions, combineConditions=combineConditions, baselineSubtract = baselineSubtract, 
                           crossvalidateNumFolds = 4, xDimTest = xDimTest, firingRateThresh=firingRateThresh)
+
+#%% now save all the figures
+from methods.GeneralMethods import saveFiguresToPdf
+
+saveFiguresToPdf(pdfname="gpfa")
