@@ -14,7 +14,19 @@ def prepareMatlab(eng=None):
     # import matlab
     # reload(matlab)
     from matlab import engine
-    # print('HELLO')
+    print('HELLO')
+    # k = globals()
+    # print(k.keys())
+    # if "__warningregistry__" in k.keys():
+    #     print(k["__warningregistry__"])
+    # if "__cached__" in k.keys():
+    #     print(k["__cached__"])
+    # import multiprocessing as mp
+    # print(mp.current_process())
+    # print(mp.get_context())
+    import sys
+    print(sys.path)
+    # print(mp.parent_process())
     if eng is not None:
         try:
             eng.workspace
@@ -27,12 +39,12 @@ def prepareMatlab(eng=None):
             matlabCodePath = Path(defaultParams['matlabCodePath'])
             eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
     else:
-        # print('HELLO2')
+        print('HELLO2')
         # print(engine._engines)
         # print(engine._engine_lock)
-        eng = engine.start_matlab()
+        eng = engine.start_matlab("-nodesktop -nodisplay -nojvm")
         
-        # print('HELLO3')
+        print('HELLO3')
         eng.clear('all', nargout=0)
         # add the gpfaEngine path
         defaultParams = loadDefaultParams(defParamBase = ".")
@@ -41,13 +53,13 @@ def prepareMatlab(eng=None):
         
     return eng
 
-def pMat():
+def pMat(mlabEng):
     from matlab.engine import pythonengine
     from matlab.engine import MatlabEngine
     print('yo')
     rah = pythonengine.createMATLABAsync(['-nodesktop'])
     print('sup')
-    ja = pythonengine.getMATLAB(rah)
+    ja = mlabEng(rah)
     print('yup')
     k = MatlabEngine(ja)
     print('bye')
