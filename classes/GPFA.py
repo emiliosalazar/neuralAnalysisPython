@@ -133,14 +133,16 @@ class GPFA:
             for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
                 
                 res.append(poolHere.apply_async(matlabRuns, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, engA)))
-                
-            poolHere.close()
-            poolHere.join()
+            
             # from time import sleep
             # print('blah')
             # sleep(20)
             # print('bleh')
-            resultsByCrossVal = [rs.get() for rs in res]
+            resultsByCrossVal = [rs.get() for rs in res]    
+            
+            poolHere.close()
+            poolHere.join()
+            
             resultsByVar = list(zip(*resultsByCrossVal))
             allEstParams = resultsByVar[0]
             seqsTrainNew = resultsByVar[1]
@@ -198,11 +200,13 @@ class GPFA:
                         for uniqueT in unT:
                             res.append(pl.apply_async(cvalRun, (paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim)))
                             
-                        pl.close()
-                        pl.join()
+                        
                         
                         resultsByCrossVal = [rs.get() for rs in res]
                         resultsByVar = resultsByCrossVal#list(zip(*resultsByCrossVal))
+                        
+                        pl.close()
+                        pl.join()
                         
                         llTemp.extend(resultsByVar)
                     
