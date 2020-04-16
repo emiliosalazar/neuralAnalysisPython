@@ -96,9 +96,9 @@ class GPFA:
         
         fname = fname / "gpfa" / ("run" + str(runDescriptor)) / ("cond" + str(condDescriptor))
         fname.mkdir(parents=True, exist_ok = True)
-        if eng is None:
-            from matlab import engine 
-            eng = engine.start_matlab()
+        # if eng is None:
+        #     from matlab import engine 
+        #     eng = engine.start_matlab()
         
         if not crossvalidateNum:
             seqTrain = self.gpfaSeqDict
@@ -121,29 +121,30 @@ class GPFA:
         seqsTrainNew = []
         seqsTestNew = []
         allEstParams = []
-        for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
-            fnameOutput = fname / ("%s_xDim%02d_cv%02d" % ("gpfa", xDim, cvNum))
-            if not fnameOutput.with_suffix('.mat').exists() or forceNewGpfaRun:
-                eng.workspace['seqTrain'] = sqTrn
-                eng.workspace['seqTest'] = sqTst
-                eng.workspace['binWidth'] = binWidth*1.0
-                eng.workspace['xDim'] = xDim*1.0
-                eng.workspace['fname'] = str(fnameOutput)
-                eng.workspace['segLength'] = segLength*1.0
-                
-                
-                
-                eng.eval("gpfaEngine(" + seqTrainStr + ", " + seqTestStr + ", fname, 'xDim', xDim, 'binWidth', binWidth, 'segLength', segLength)", nargout=0)
+        from multiprocessing import Pool
         
-            eng.evalc("results = load('"+str(fnameOutput)+"')")
-            eng.evalc("results.method='gpfa'") # this is needed for the next step...
-            eng.evalc("[estParams, seqTrain, seqTest] = postprocess(results)")
-            
-            allEstParams.append(mc.convertMatlabDictToNumpy(eng.eval('estParams')))
-            
-            seqsTrainNew.append([mc.convertMatlabDictToNumpy(eng.eval("seqTrain(" + str(seqNum+1) + ")")) for seqNum in range(len(sqTrn))])
-            seqsTestNew.append([mc.convertMatlabDictToNumpy(eng.eval("seqTest(" + str(seqNum+1) + ")")) for seqNum in range(len(sqTst))])
         
+        
+        with Pool() as poolHere:
+            res = []
+            for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
+                
+                res.append(poolHere.apply_async(matlabRuns, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr)))
+                
+            poolHere.close()
+            poolHere.join()
+            # from time import sleep
+            # print('blah')
+            # sleep(20)
+            # print('bleh')
+            resultsByCrossVal = [rs.get() for rs in res]
+            resultsByVar = list(zip(*resultsByCrossVal))
+            allEstParams = resultsByVar[0]
+            seqsTrainNew = resultsByVar[1]
+            seqsTestNew = resultsByVar[2]
+            
+        
+        # print('whowhat?')
         self.dimOutput[xDim] = {}
         self.dimOutput[xDim]['crossvalidateNum'] = crossvalidateNum
         self.dimOutput[xDim]['allEstParams'] = allEstParams
@@ -155,6 +156,10 @@ class GPFA:
     
     def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None):
         from scipy.linalg import block_diag
+        
+        if eng is None:
+            from methods.GeneralMethods import prepareMatlab
+            eng = prepareMatlab()
         
         if approach is "logLikelihood":
             _, allSeqsTest = self.trainAndTestSeq()
@@ -268,8 +273,9 @@ class GPFA:
     
     def makeKBig(self, params, T, covType = 'rbf', eng=None):
         if eng is None:
-            from matlab import engine 
-            eng = engine.start_matlab()
+            from methods.GeneralMethods import prepareMatlab
+            print('what')
+            eng = prepareMatlab()
             
         xDim = params['C'].shape[1]
         
@@ -407,3 +413,39 @@ class GPFA:
         """
         U = np.linalg.cholesky(A)
         return 2 * (np.log(np.diag(U))).sum()
+    
+    
+def matlabRuns(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
+    from methods.GeneralMethods import prepareMatlab
+
+    
+    # eng was input and should be on... but let's check
+    eng = prepareMatlab(None)
+        
+    fnameOutput = fname / ("%s_xDim%02d_cv%02d" % ("gpfa", xDim, cvNum))
+    if not fnameOutput.with_suffix('.mat').exists() or forceNewGpfaRun:
+        eng.workspace['seqTrain'] = sqTrn
+        eng.workspace['seqTest'] = sqTst
+        eng.workspace['binWidth'] = binWidth*1.0
+        eng.workspace['xDim'] = xDim*1.0
+        eng.workspace['fname'] = str(fnameOutput)
+        eng.workspace['segLength'] = segLength*1.0
+        
+        
+        
+        eng.eval("gpfaEngine(" + seqTrainStr + ", " + seqTestStr + ", fname, 'xDim', xDim, 'binWidth', binWidth, 'segLength', segLength)", nargout=0)
+
+    eng.evalc("results = load('"+str(fnameOutput)+"')")
+    eng.evalc("results.method='gpfa'") # this is needed for the next step...
+    eng.evalc("[estParams, seqTrain, seqTest] = postprocess(results)")
+    
+    estParams = mc.convertMatlabDictToNumpy(eng.eval('estParams'))
+    seqsTrainNew = [mc.convertMatlabDictToNumpy(eng.eval("seqTrain(" + str(seqNum+1) + ")")) for seqNum in range(len(sqTrn))]
+    seqsTestNew = [mc.convertMatlabDictToNumpy(eng.eval("seqTest(" + str(seqNum+1) + ")")) for seqNum in range(len(sqTst))]
+    
+    eng.exit()
+    
+    
+    
+    
+    return estParams, seqsTrainNew, seqsTestNew
