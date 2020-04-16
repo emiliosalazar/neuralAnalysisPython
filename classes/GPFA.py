@@ -127,9 +127,12 @@ class GPFA:
         
         with Pool() as poolHere:
             res = []
+            # from matlab.engine import pythonengine
+            # engA = pythonengine.getMATLAB
+            engA = None
             for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
                 
-                res.append(poolHere.apply_async(matlabRuns, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr)))
+                res.append(poolHere.apply_async(matlabRuns, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, engA)))
                 
             poolHere.close()
             poolHere.join()
@@ -155,11 +158,12 @@ class GPFA:
         return allEstParams, seqsTrainNew, seqsTestNew
     
     def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None):
-        from scipy.linalg import block_diag
+        from multiprocessing import Pool
         
-        if eng is None:
-            from methods.GeneralMethods import prepareMatlab
-            eng = prepareMatlab()
+        # if eng is None:
+        #     from methods.GeneralMethods import prepareMatlab
+        #     eng = prepareMatlab()
+        eng = None
         
         if approach is "logLikelihood":
             _, allSeqsTest = self.trainAndTestSeq()
@@ -189,41 +193,18 @@ class GPFA:
                     CRinv  = paramsEst["C"].T @ Rinv;
                     CRinvC = CRinv @ paramsEst["C"];
                     
-                    for uniqueT in unT:
-                        # for later
-                        uniqueT = int(uniqueT)
-                        seqsUse = [seq for seq in seqsTest if seq['T'] == uniqueT]
+                    with Pool() as pl:
+                        res = []
+                        for uniqueT in unT:
+                            res.append(pl.apply_async(cvalRun, (paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim)))
+                            
+                        pl.close()
+                        pl.join()
                         
+                        resultsByCrossVal = [rs.get() for rs in res]
+                        resultsByVar = resultsByCrossVal#list(zip(*resultsByCrossVal))
                         
-                        KAll, KAllInv, logdetKAll = self.makeKBig(paramsEst, uniqueT, eng=eng)
-                        
-                        listCRinvC = [CRinvC for numTms in range(uniqueT)]
-                        blockDiagCRinvC = block_diag(*listCRinvC)
-                        
-                        invM, logdetM = self.invPersymm(KAllInv + blockDiagCRinvC, xDim)
-                        
-                        
-                        # idx = np.arange(start=0, stop=xDim*T, step=xDim)
-                        
-                        # Vsm = np.dstack([invM[idxH + np.arange(xDim),idxH + np.arange(xDim)] for idxH in idx])
-                        # VsmGP = np.dstack([invM[idx+stp,idx+stp] for stp in range(xDim)])
-                        
-                        dif = np.hstack([seq['y'] for seq in seqsUse]) - paramsEst['d']
-                        
-                        term1Mat = CRinv @ dif
-                        term1Mat = term1Mat.reshape((xDim*uniqueT, -1), order = 'F')
-                        
-                        # Thalf = np.ceil(uniqueT/2)
-                        # idx = np.arange(start=0, stop=xDim*Thalf, step=xDim)
-                        
-                        # blkProd = np.vstack([CRinvC @ invM[idxH + np.arange(xDim), :] for idxH in idx])
-                        # blkProd = KAll[:xDim*Thalf, :] @ self.fillPerSymm(np.eye(xDim*Thalf, xDim*T), xDim, T)
-                        
-                        # xsmMat  = self.fillPerSymm(blkProd, xDim, uniqueT) @ term1Mat
-                        
-                        # compute log likelihood
-                        val = -uniqueT * logdetR - logdetKAll - logdetM -yDim * uniqueT * np.log(2*np.pi) 
-                        llTemp.append(len(seqsUse) * val - np.sum(np.sum((Rinv @ dif) * dif)) + np.sum(np.sum((term1Mat.T @ invM) * term1Mat.T)))
+                        llTemp.extend(resultsByVar)
                     
                 # llTemp = np.stack(llTemp)
                 # llTemp = llTemp - np.min(llTemp)
@@ -271,156 +252,128 @@ class GPFA:
             
         return normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore
     
-    def makeKBig(self, params, T, covType = 'rbf', eng=None):
-        if eng is None:
-            from methods.GeneralMethods import prepareMatlab
-            print('what')
-            eng = prepareMatlab()
-            
-        xDim = params['C'].shape[1]
-        
-        idx = np.arange(start=0, stop=xDim*T, step=xDim)
-        KAll = np.zeros((xDim*T, xDim*T))
-        KAllInv = np.zeros_like(KAll)
-        logdetKAll = 0
-        time = np.arange(T)[:,None]
-        timeDiff = time - time.T
-        
-        for dim in range(xDim):
-            if covType is 'rbf':
-                K = (1 - params['eps'][0,dim]) * np.exp(-params["gamma"][0,dim] / 2 * np.power(timeDiff, 2)) + params["eps"][0,dim] * np.eye(T);
-                
-            else:
-                raise Exception("GPFA:CovType", "unknown or unprogrammed covariance type")
-                
-            KAll[(idx+dim)[:,None], idx+dim] = K
-            eng.workspace['K'] = mc.convertNumpyArrayToMatlab(K)
-            eng.evalc("[K_big_inv, logdet_K] = invToeplitz(K);")
-            KAllInv[(idx+dim)[:,None], idx+dim] = mc.convertMatlabArrayToNumpy(eng.eval("K_big_inv"))
-            logdetKAll += mc.convertMatlabArrayToNumpy(eng.eval("logdet_K"))
-        
-        
-        return KAll, KAllInv, logdetKAll
-    
-    # NOTE: these bits of code are grabbed from the Elephant team, which I hadn't
-    # found originally when trying to see if GPFA had been implemented in Python yet >.>
-    def invPersymm(self, M, blk_size):
-        """
-        Inverts a matrix that is block persymmetric.  This function is
-        faster than calling inv(M) directly because it only computes the
-        top half of inv(M).  The bottom half of inv(M) is made up of
-        elements from the top half of inv(M).
-        WARNING: If the input matrix M is not block persymmetric, no
-        error message will be produced and the output of this function will
-        not be meaningful.
-        Parameters
-        ----------
-        M : (blkSize*T, blkSize*T) np.ndarray
-            The block persymmetric matrix to be inverted.
-            Each block is blkSize x blkSize, arranged in a T x T grid.
-        blk_size : int
-            Edge length of one block
-        Returns
-        -------
-        invM : (blkSize*T, blkSize*T) np.ndarray
-            Inverse of M
-        logdet_M : float
-            Log determinant of M
-        """
-        T = int(M.shape[0] / blk_size)
-        Thalf = np.int(np.ceil(T / 2.0))
-        mkr = blk_size * Thalf
-    
-        invA11 = np.linalg.inv(M[:mkr, :mkr])
-        invA11 = (invA11 + invA11.T) / 2
-    
-        # Multiplication of a sparse matrix by a dense matrix is not supported by
-        # SciPy. Making A12 a sparse matrix here  an error later.
-        off_diag_sparse = False
-        if off_diag_sparse:
-            A12 = sp.sparse.csr_matrix(M[:mkr, mkr:])
-        else:
-            A12 = M[:mkr, mkr:]
-    
-        term = invA11.dot(A12)
-        F22 = M[mkr:, mkr:] - A12.T.dot(term)
-    
-        res12 = self.rdiv(-term, F22)
-        res11 = invA11 - res12.dot(term.T)
-        res11 = (res11 + res11.T) / 2
-    
-        # Fill in bottom half of invM by picking elements from res11 and res12
-        invM = self.fillPerSymm(np.hstack([res11, res12]), blk_size, T)
-    
-        logdet_M = -self.logdet(invA11) + self.logdet(F22)
-    
-        return invM, logdet_M
     
     
-    def fillPerSymm(self, p_in, blk_size, n_blocks, blk_size_vert=None):
-        """
-         Fills in the bottom half of a block persymmetric matrix, given the
-         top half.
-         Parameters
-         ----------
-         p_in :  (xDim*Thalf, xDim*T) np.ndarray
-            Top half of block persymmetric matrix, where Thalf = ceil(T/2)
-         blk_size : int
-            Edge length of one block
-         n_blocks : int
-            Number of blocks making up a row of Pin
-         blk_size_vert : int, optional
-            Vertical block edge length if blocks are not square.
-            `blk_size` is assumed to be the horizontal block edge length.
-         Returns
-         -------
-         Pout : (xDim*T, xDim*T) np.ndarray
-            Full block persymmetric matrix
-        """
-        if blk_size_vert is None:
-            blk_size_vert = blk_size
+# NOTE: these bits of code are grabbed from the Elephant team, which I hadn't
+# found originally when trying to see if GPFA had been implemented in Python yet >.>
+def invPersymm(M, blk_size):
+    """
+    Inverts a matrix that is block persymmetric.  This function is
+    faster than calling inv(M) directly because it only computes the
+    top half of inv(M).  The bottom half of inv(M) is made up of
+    elements from the top half of inv(M).
+    WARNING: If the input matrix M is not block persymmetric, no
+    error message will be produced and the output of this function will
+    not be meaningful.
+    Parameters
+    ----------
+    M : (blkSize*T, blkSize*T) np.ndarray
+        The block persymmetric matrix to be inverted.
+        Each block is blkSize x blkSize, arranged in a T x T grid.
+    blk_size : int
+        Edge length of one block
+    Returns
+    -------
+    invM : (blkSize*T, blkSize*T) np.ndarray
+        Inverse of M
+    logdet_M : float
+        Log determinant of M
+    """
+    T = int(M.shape[0] / blk_size)
+    Thalf = np.int(np.ceil(T / 2.0))
+    mkr = blk_size * Thalf
+
+    invA11 = np.linalg.inv(M[:mkr, :mkr])
+    invA11 = (invA11 + invA11.T) / 2
+
+    # Multiplication of a sparse matrix by a dense matrix is not supported by
+    # SciPy. Making A12 a sparse matrix here  an error later.
+    off_diag_sparse = False
+    if off_diag_sparse:
+        A12 = sp.sparse.csr_matrix(M[:mkr, mkr:])
+    else:
+        A12 = M[:mkr, mkr:]
+
+    term = invA11.dot(A12)
+    F22 = M[mkr:, mkr:] - A12.T.dot(term)
+
+    res12 = rdiv(-term, F22)
+    res11 = invA11 - res12.dot(term.T)
+    res11 = (res11 + res11.T) / 2
+
+    # Fill in bottom half of invM by picking elements from res11 and res12
+    invM = fillPerSymm(np.hstack([res11, res12]), blk_size, T)
+
+    logdet_M = -logdet(invA11) + logdet(F22)
+
+    return invM, logdet_M
+
+
+def fillPerSymm(p_in, blk_size, n_blocks, blk_size_vert=None):
+    """
+     Fills in the bottom half of a block persymmetric matrix, given the
+     top half.
+     Parameters
+     ----------
+     p_in :  (xDim*Thalf, xDim*T) np.ndarray
+        Top half of block persymmetric matrix, where Thalf = ceil(T/2)
+     blk_size : int
+        Edge length of one block
+     n_blocks : int
+        Number of blocks making up a row of Pin
+     blk_size_vert : int, optional
+        Vertical block edge length if blocks are not square.
+        `blk_size` is assumed to be the horizontal block edge length.
+     Returns
+     -------
+     Pout : (xDim*T, xDim*T) np.ndarray
+        Full block persymmetric matrix
+    """
+    if blk_size_vert is None:
+        blk_size_vert = blk_size
+
+    Nh = blk_size * n_blocks
+    Nv = blk_size_vert * n_blocks
+    Thalf = np.int(np.floor(n_blocks / 2.0))
+    THalf = np.int(np.ceil(n_blocks / 2.0))
+
+    Pout = np.empty((blk_size_vert * n_blocks, blk_size * n_blocks))
+    Pout[:blk_size_vert * THalf, :] = p_in
+    for i in range(Thalf):
+        for j in range(n_blocks):
+            Pout[Nv - (i + 1) * blk_size_vert:Nv - i * blk_size_vert,
+                 Nh - (j + 1) * blk_size:Nh - j * blk_size] \
+                = p_in[i * blk_size_vert:(i + 1) *
+                       blk_size_vert,
+                       j * blk_size:(j + 1) * blk_size]
+
+    return Pout
+
+def rdiv(a, b):
+    """
+    Returns the solution to x b = a. Equivalent to MATLAB right matrix
+    division: a / b
+    """
+    return np.linalg.solve(b.T, a.T).T
+
+def logdet(A):
+    """
+    log(det(A)) where A is positive-definite.
+    This is faster and more stable than using log(det(A)).
+    Written by Tom Minka
+    (c) Microsoft Corporation. All rights reserved.
+    """
+    U = np.linalg.cholesky(A)
+    return 2 * (np.log(np.diag(U))).sum()
     
-        Nh = blk_size * n_blocks
-        Nv = blk_size_vert * n_blocks
-        Thalf = np.int(np.floor(n_blocks / 2.0))
-        THalf = np.int(np.ceil(n_blocks / 2.0))
     
-        Pout = np.empty((blk_size_vert * n_blocks, blk_size * n_blocks))
-        Pout[:blk_size_vert * THalf, :] = p_in
-        for i in range(Thalf):
-            for j in range(n_blocks):
-                Pout[Nv - (i + 1) * blk_size_vert:Nv - i * blk_size_vert,
-                     Nh - (j + 1) * blk_size:Nh - j * blk_size] \
-                    = p_in[i * blk_size_vert:(i + 1) *
-                           blk_size_vert,
-                           j * blk_size:(j + 1) * blk_size]
-    
-        return Pout
-    
-    def rdiv(self, a, b):
-        """
-        Returns the solution to x b = a. Equivalent to MATLAB right matrix
-        division: a / b
-        """
-        return np.linalg.solve(b.T, a.T).T
-    
-    def logdet(self, A):
-        """
-        log(det(A)) where A is positive-definite.
-        This is faster and more stable than using log(det(A)).
-        Written by Tom Minka
-        (c) Microsoft Corporation. All rights reserved.
-        """
-        U = np.linalg.cholesky(A)
-        return 2 * (np.log(np.diag(U))).sum()
-    
-    
-def matlabRuns(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
-    from methods.GeneralMethods import prepareMatlab
+def matlabRuns(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, engA):
+    from methods.GeneralMethods import pMat, prepareMatlab
 
     
     # eng was input and should be on... but let's check
     eng = prepareMatlab(None)
+    # eng = pMat(engA)
         
     fnameOutput = fname / ("%s_xDim%02d_cv%02d" % ("gpfa", xDim, cvNum))
     if not fnameOutput.with_suffix('.mat').exists() or forceNewGpfaRun:
@@ -449,3 +402,75 @@ def matlabRuns(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segL
     
     
     return estParams, seqsTrainNew, seqsTestNew
+
+def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=None):
+    from scipy.linalg import block_diag
+    
+    if eng is None:
+        from methods.GeneralMethods import prepareMatlab
+        print('what')
+        eng = prepareMatlab()
+    uniqueT = int(uniqueT)
+    seqsUse = [seq for seq in seqsTest if seq['T'] == uniqueT]
+    
+    KAll, KAllInv, logdetKAll = makeKBig(paramsEst, uniqueT, eng=eng)
+    
+    listCRinvC = [CRinvC for numTms in range(uniqueT)]
+    blockDiagCRinvC = block_diag(*listCRinvC)
+    
+    invM, logdetM = invPersymm(KAllInv + blockDiagCRinvC, xDim)
+    
+    
+    # idx = np.arange(start=0, stop=xDim*T, step=xDim)
+    
+    # Vsm = np.dstack([invM[idxH + np.arange(xDim),idxH + np.arange(xDim)] for idxH in idx])
+    # VsmGP = np.dstack([invM[idx+stp,idx+stp] for stp in range(xDim)])
+    
+    dif = np.hstack([seq['y'] for seq in seqsUse]) - paramsEst['d']
+    
+    term1Mat = CRinv @ dif
+    term1Mat = term1Mat.reshape((xDim*uniqueT, -1), order = 'F')
+    
+    # Thalf = np.ceil(uniqueT/2)
+    # idx = np.arange(start=0, stop=xDim*Thalf, step=xDim)
+    
+    # blkProd = np.vstack([CRinvC @ invM[idxH + np.arange(xDim), :] for idxH in idx])
+    # blkProd = KAll[:xDim*Thalf, :] @ self.fillPerSymm(np.eye(xDim*Thalf, xDim*T), xDim, T)
+    
+    # xsmMat  = self.fillPerSymm(blkProd, xDim, uniqueT) @ term1Mat
+    
+    # compute log likelihood
+    val = -uniqueT * logdetR - logdetKAll - logdetM -yDim * uniqueT * np.log(2*np.pi) 
+    ll = len(seqsUse) * val - np.sum(np.sum((Rinv @ dif) * dif)) + np.sum(np.sum((term1Mat.T @ invM) * term1Mat.T))
+    return ll
+
+def makeKBig(params, T, covType = 'rbf', eng=None):
+    if eng is None:
+        from methods.GeneralMethods import prepareMatlab
+        print('what2')
+        eng = prepareMatlab()
+        
+    xDim = params['C'].shape[1]
+    
+    idx = np.arange(start=0, stop=xDim*T, step=xDim)
+    KAll = np.zeros((xDim*T, xDim*T))
+    KAllInv = np.zeros_like(KAll)
+    logdetKAll = 0
+    time = np.arange(T)[:,None]
+    timeDiff = time - time.T
+    
+    for dim in range(xDim):
+        if covType is 'rbf':
+            K = (1 - params['eps'][0,dim]) * np.exp(-params["gamma"][0,dim] / 2 * np.power(timeDiff, 2)) + params["eps"][0,dim] * np.eye(T);
+            
+        else:
+            raise Exception("GPFA:CovType", "unknown or unprogrammed covariance type")
+            
+        KAll[(idx+dim)[:,None], idx+dim] = K
+        eng.workspace['K'] = mc.convertNumpyArrayToMatlab(K)
+        eng.evalc("[K_big_inv, logdet_K] = invToeplitz(K);")
+        KAllInv[(idx+dim)[:,None], idx+dim] = mc.convertMatlabArrayToNumpy(eng.eval("K_big_inv"))
+        logdetKAll += mc.convertMatlabArrayToNumpy(eng.eval("logdet_K"))
+    
+    
+    return KAll, KAllInv, logdetKAll
