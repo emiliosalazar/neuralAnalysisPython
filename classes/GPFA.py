@@ -132,7 +132,7 @@ class GPFA:
             engA = None
             for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
                 
-                res.append(poolHere.apply_async(matlabRuns, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, engA)))
+                res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr)))
             
             # from time import sleep
             # print('blah')
@@ -180,35 +180,18 @@ class GPFA:
             for dimMax, paramsGpfa in self.dimOutput.items():
                 llTemp = []
                 
-                for paramsEst, seqsTest in zip(paramsGpfa['allEstParams'], allSeqsTest):
-                    unT, seqWithT = np.unique(np.array([seq['T'] for seq in seqsTest]), return_inverse=True)
+                with Pool() as plWrap:
+                    res = []
+                    for cvNum, (paramsEst, seqsTest) in enumerate(zip(paramsGpfa['allEstParams'], allSeqsTest)):
+                        res.append(plWrap.apply_async(cvalWrap, (seqsTest, paramsEst, cvNum+1))
+                        
+                    resultsByCrossVal = [rs.get() for rs in res]
+                    
+                    resultsByVar = list(zip(*resultsByCrossVal))
+                    
+                    llTemp = resultsByVar[0]
                 
-                    yDim, xDim = paramsEst['C'].shape
                     
-                    if paramsEst['notes']['RforceDiagonal']:
-                        diagR = np.diag(paramsEst['R'])
-                        Rinv = np.diag(1/diagR)
-                        logdetR = np.sum(np.log(diagR))
-                    else:
-                        raise Exception("GPFA:RforceDiagonal", "Dunno what to do if the diagonal's not forced...")
-                        
-                    CRinv  = paramsEst["C"].T @ Rinv;
-                    CRinvC = CRinv @ paramsEst["C"];
-                    
-                    with Pool() as pl:
-                        res = []
-                        for uniqueT in unT:
-                            res.append(pl.apply_async(cvalRun, (paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim)))
-                            
-                        
-                        
-                        resultsByCrossVal = [rs.get() for rs in res]
-                        resultsByVar = resultsByCrossVal#list(zip(*resultsByCrossVal))
-                        
-                        pl.close()
-                        pl.join()
-                        
-                        llTemp.extend(resultsByVar)
                     
                 # llTemp = np.stack(llTemp)
                 # llTemp = llTemp - np.min(llTemp)
@@ -371,9 +354,10 @@ def logdet(A):
     return 2 * (np.log(np.diag(U))).sum()
     
     
-def matlabRuns(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, engA):
+def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
     from methods.GeneralMethods import pMat, prepareMatlab
 
+    print('Running GPFA crossvalidation #%d' % cvNum+1)
     
     # eng was input and should be on... but let's check
     eng = prepareMatlab(None)
@@ -403,9 +387,36 @@ def matlabRuns(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segL
     eng.exit()
     
     
-    
+    print('Finished GPFA crossvalidation #%d' % cvNum+1)
     
     return estParams, seqsTrainNew, seqsTestNew
+
+def cvalWrap(seqsTest, paramsEst, cvNum):
+    print('Computing LL of crossvalidation #%d' % cvNum)
+    from methods.GeneralMethods import prepareMatlab
+    eng = prepareMatlab()
+    
+    unT, seqWithT = np.unique(np.array([seq['T'] for seq in seqsTest]), return_inverse=True)
+                
+    yDim, xDim = paramsEst['C'].shape
+    
+    if paramsEst['notes']['RforceDiagonal']:
+        diagR = np.diag(paramsEst['R'])
+        Rinv = np.diag(1/diagR)
+        logdetR = np.sum(np.log(diagR))
+    else:
+        raise Exception("GPFA:RforceDiagonal", "Dunno what to do if the diagonal's not forced...")
+        
+    CRinv  = paramsEst["C"].T @ Rinv;
+    CRinvC = CRinv @ paramsEst["C"];
+    
+    llT = []
+    for uniqueT in unT:
+        llT.append(cvalRun(paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=eng))
+        
+    print('LL of crossvalidation #%d computed' % cvNum)
+    
+    return llT
 
 def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=None):
     from scipy.linalg import block_diag
@@ -413,7 +424,7 @@ def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yD
     if eng is None:
         from methods.GeneralMethods import prepareMatlab
         print('what')
-        eng = prepareMatlab()
+        
     uniqueT = int(uniqueT)
     seqsUse = [seq for seq in seqsTest if seq['T'] == uniqueT]
     
