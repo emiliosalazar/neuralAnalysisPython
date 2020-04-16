@@ -183,7 +183,7 @@ class GPFA:
                 with Pool() as plWrap:
                     res = []
                     for cvNum, (paramsEst, seqsTest) in enumerate(zip(paramsGpfa['allEstParams'], allSeqsTest)):
-                        res.append(plWrap.apply_async(cvalWrap, (seqsTest, paramsEst, cvNum+1))
+                        res.append(plWrap.apply_async(cvalWrap, (seqsTest, paramsEst, cvNum+1)))
                         
                     resultsByCrossVal = [rs.get() for rs in res]
                     
@@ -357,7 +357,7 @@ def logdet(A):
 def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
     from methods.GeneralMethods import pMat, prepareMatlab
 
-    print('Running GPFA crossvalidation #%d' % cvNum+1)
+    print('Running GPFA crossvalidation #%d' % (cvNum+1))
     
     # eng was input and should be on... but let's check
     eng = prepareMatlab(None)
@@ -387,7 +387,7 @@ def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, se
     eng.exit()
     
     
-    print('Finished GPFA crossvalidation #%d' % cvNum+1)
+    print('Finished GPFA crossvalidation #%d' % (cvNum+1))
     
     return estParams, seqsTrainNew, seqsTestNew
 
