@@ -14,7 +14,7 @@ def prepareMatlab(eng=None):
     # import matlab
     # reload(matlab)
     from matlab import engine
-    print('HELLO')
+    print('Matlab imported')
     # k = globals()
     # print(k.keys())
     # if "__warningregistry__" in k.keys():
@@ -24,8 +24,8 @@ def prepareMatlab(eng=None):
     # import multiprocessing as mp
     # print(mp.current_process())
     # print(mp.get_context())
-    import sys
-    print(sys.path)
+    # import sys
+    # print(sys.path)
     # print(mp.parent_process())
     if eng is not None:
         try:
@@ -39,12 +39,12 @@ def prepareMatlab(eng=None):
             matlabCodePath = Path(defaultParams['matlabCodePath'])
             eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
     else:
-        print('HELLO2')
+        # print('HELLO2')
         # print(engine._engines)
         # print(engine._engine_lock)
         eng = engine.start_matlab("-nodesktop -nodisplay -nojvm")
         
-        print('HELLO3')
+        print('Matlab started')
         eng.clear('all', nargout=0)
         # add the gpfaEngine path
         defaultParams = loadDefaultParams(defParamBase = ".")
