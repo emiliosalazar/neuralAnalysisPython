@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Apr 15 11:12:18 2020
+
+@author: emilio
+"""
+import functools
+from multiprocessing import pool
+
+def parallelize(func):
+    @functools.wraps(func)
+    def parallelWrapper(*args, **kwargs):
+        
+        pass
+    
+    return parallelWrapper

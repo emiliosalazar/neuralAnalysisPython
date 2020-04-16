@@ -12,6 +12,8 @@ from classes.Dataset import Dataset
 
 from pathlib import Path
 
+import numpy as np
+
 defaultParams = loadDefaultParams(defParamBase = ".")
 dataPath = defaultParams['dataPath']
 
@@ -49,25 +51,25 @@ data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
 
+data = np.asarray(data) # to allow fancy indexing
 #%% process data
 processedDataMat = 'processedData.mat'
 
 # dataset = [ [] for _ in range(len(data))]
-cosTuningCurves = []
-dataIndsProcess = [1,4,7]
-datasets = []
-for ind in dataIndsProcess:
+dataUseLogical = np.zeros(len(data), dtype='bool')
+dataIndsProcess = np.array([1,4,7])
+dataUseLogical[dataIndsProcess] = True
+
+for dataUse in data[dataUseLogical]:
 # for ind, dataUse in enumerate(data):
 #    dataUse = data[1]
-    dataUse = data[ind]
+    # dataUse = data[ind]
     dataMatPath = dataUse['path'] / processedDataMat
     
     print('processing data set ' + dataUse['description'])
     datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = [31,0])
-    data[ind]['dataset'] = datasetHere
-    datasets.append(datasetHere)
+    dataUse['dataset'] = datasetHere
     
-    cosTuningCurves.append(datasetHere.computeCosTuningCurves())
     
 #%% get desired time segment
 from classes.BinnedSpikeSet import BinnedSpikeSet
@@ -179,6 +181,8 @@ binnedSpikesShortStartOffshift = genBSLAroundDelay(data,
 
 #%% run GPFA
 from methods.BinnedSpikeSetListMethods import gpfaComputation
+# import multiprocessing as mp
+# mp.set_start_method('fork')
 
 descriptions = [data[idx]['description'] for idx in dataIndsProcess]
 paths = [data[idx]['path'] for idx in dataIndsProcess]

@@ -9,8 +9,12 @@ def loadDefaultParams(defParamName = "paramDefs.txt", defParamBase="."):
     return json.load(defParamFile.open())
 
 def prepareMatlab(eng=None):
+    # print('HI')
+    # from importlib import reload
+    # import matlab
+    # reload(matlab)
     from matlab import engine
-     
+    # print('HELLO')
     if eng is not None:
         try:
             eng.workspace
@@ -23,7 +27,12 @@ def prepareMatlab(eng=None):
             matlabCodePath = Path(defaultParams['matlabCodePath'])
             eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
     else:
+        # print('HELLO2')
+        # print(engine._engines)
+        # print(engine._engine_lock)
         eng = engine.start_matlab()
+        
+        # print('HELLO3')
         eng.clear('all', nargout=0)
         # add the gpfaEngine path
         defaultParams = loadDefaultParams(defParamBase = ".")
@@ -31,6 +40,20 @@ def prepareMatlab(eng=None):
         eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
         
     return eng
+
+def pMat():
+    from matlab.engine import pythonengine
+    from matlab.engine import MatlabEngine
+    print('yo')
+    rah = pythonengine.createMATLABAsync(['-nodesktop'])
+    print('sup')
+    ja = pythonengine.getMATLAB(rah)
+    print('yup')
+    k = MatlabEngine(ja)
+    print('bye')
+    
+    return k
+    
 
 def saveFiguresToPdf(pdfname=None,analysisDescription = None,figNumsToSave=None):
     from matplotlib.backends.backend_pdf import PdfPages

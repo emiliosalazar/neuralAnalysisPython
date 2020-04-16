@@ -621,14 +621,12 @@ class BinnedSpikeSet(np.ndarray):
         from matlab import engine
         from classes.GPFA import GPFA
         from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
-        
+        from methods.GeneralMethods import prepareMatlab
+                
+
         # eng was input and should be on... but let's check
-        try:
-            eng.workspace
-        except (engine.RejectedExecutionError, NameError) as e:
-            eng = engine.start_matlab()
-        finally:
-            eng.clear('all', nargout=0)
+        # eng = prepareMatlab(eng)
+        eng = None;
             
         # dataInd = -2
         # for dataInd in range(len(binnedSpikesAll)):
@@ -731,7 +729,8 @@ class BinnedSpikeSet(np.ndarray):
                         continue
                     else:
                         raise(e)
-
+                        
+        for idx, gpfaPrep in enumerate(gpfaPrepAll):
             cvApproach = "logLikelihood"
             normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(eng=eng, approach = cvApproach)
             # best xDim is our lowest error from the normalGpfaScore... for now...

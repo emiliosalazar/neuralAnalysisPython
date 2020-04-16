@@ -12,6 +12,7 @@ are better set out as a class that contains lists of these... but methinks not
 import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from matplotlib import pyplot as plt
+# from decorators.ParallelProcessingDecorators import parallelize
 
 def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelayStart, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeDelay=251, furthestTimeAfterDelay=251, setStartToDelayEnd = False, setEndToDelayStart = False):
     # return binned spikes
@@ -140,12 +141,13 @@ def ldaComputation(listBSS, plot=True):
 
 def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,combineConditions = False,
                     crossvalidateNumFolds = 4, xDimTest = [2,5,8], firingRateThresh=0.5, signalDescriptor = ""):
-
+    
     # from classes.GPFA import GPFA
     from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
-    from methods.GeneralMethods import loadDefaultParams, prepareMatlab
+    from methods.GeneralMethods import prepareMatlab
+    from multiprocessing import pool
     
-    eng = prepareMatlab()
+    eng = None #prepareMatlab()
     
     
    
@@ -157,14 +159,24 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
         
     dimExp = []
     gpfaPrepAll = []
+    # with pool.Pool() as pool:
+    #     results = []
     for bnSp, description, outputPath, axScore, axDim in zip(listBSS, descriptions, outputPaths, axs[0, :].flat, axs[1,:].flat):
+        
         plotInfo['axScore'] = axScore
         plotInfo['axDim'] = axDim
+         # results.append(pool.apply_async(bnSp.gpfa, (eng,description,outputPath), dict(signalDescriptor = signalDescriptor,
+         #          xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions,
+         #          timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)))
         numDims, gpfaPrepAllExp = bnSp.gpfa(eng,description,outputPath, signalDescriptor = signalDescriptor,
                   xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions,
                   timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
         dimExp.append(numDims)
         gpfaPrepAll.append(gpfaPrepAllExp)
+        # 
+        # resGrouped = list(zip(*results))
+        # dimExp = list(resGrouped[0])
+        # gpfaPrepAll = list(resGrouped[1])
         
     axScore.legend()
     
