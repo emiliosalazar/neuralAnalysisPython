@@ -14,7 +14,7 @@ def prepareMatlab(eng=None):
     # import matlab
     # reload(matlab)
     from matlab import engine
-    print('Matlab imported')
+    # print('Matlab imported')
     # k = globals()
     # print(k.keys())
     # if "__warningregistry__" in k.keys():
