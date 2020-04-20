@@ -204,9 +204,9 @@ class BinnedSpikeSet(np.ndarray):
     def groupByLabel(self, labels, labelExtract=None):
         unq, unqCnts = np.unique(labels, return_counts=True)
         if labelExtract is None:
-            groupedSpikes = [self[labels.squeeze()==lbl, :, :] for lbl in unq]
+            groupedSpikes = [self[labels.squeeze()==lbl] for lbl in unq]
         else:
-            groupedSpikes = [self[labels.squeeze()==lbl, :, :] for lbl in labelExtract]
+            groupedSpikes = [self[labels.squeeze()==lbl] for lbl in labelExtract]
             unq = labelExtract
             
         
@@ -649,38 +649,55 @@ class BinnedSpikeSet(np.ndarray):
 
         # np.random.set_state(initRandSt)
         
+        if type(self) is list:
+            bnSpksCheck = np.concatenate(self, axis=1)[None, :, :].view(BinnedSpikeSet)
+            bnSpksCheck.labels[labelUse] = np.stack([bnSp.labels[labelUse] for bnSp in self])
+            binSize = self[0].binSize
+            colorset = self[0].colorset
+        else:
+            bnSpksCheck = self
+            binSize = self.binSize
+            colorset = self.colorset
+        
         if timeBeforeAndAfterStart is not None:
-            tmValsStart = np.arange(timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], self.binSize)
+            tmValsStart = np.arange(timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
         else:
             tmValsStart = np.ndarray((0,0))
             
         if timeBeforeAndAfterEnd is not None:
-            tmValsEnd = np.arange(timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], self.binSize)  
+            tmValsEnd = np.arange(timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
         else:
             tmValsEnd = np.ndarray((0,0))
         
-        _, trlIndsUseFR = self.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
-        binnedSpikeHighFR = self[:,trlIndsUseFR,:]
+        _, chIndsUseFR = bnSpksCheck.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
+        # binnedSpikeHighFR = self[:,chIndsUseFR,:]
         
         if balanceDirs:
-            trlIndsUseLabel = binnedSpikeHighFR.balancedTrialInds(labels=binnedSpikeHighFR.labels[labelUse])
-            binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]#.view(np.ndarray)
+            trlIndsUseLabel = bnSpksCheck.balancedTrialInds(labels=bnSpksCheck.labels[labelUse])
+            # binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]#.view(np.ndarray)
         else:
-            binnedSpikesUse = binnedSpikeHighFR
+            trlIndsUseLabel = range(len(bnSpksCheck))
+            # binnedSpikesUse = binnedSpikeHighFR
         # binnedSpikesBalanced = binnedSpikesBalanced.view(BinnedSpikeSet)
         # binnedSpikesBalanced = [self[trl] for trl in trlIndsUse] # FOR LATER
         
-        
-        newLabels = binnedSpikesUse.labels[labelUse]
-        
-        
-        if baselineSubtract:
-            binnedSpikesUse = binnedSpikesUse.baselineSubtract(labels = newLabels)
-            firingRateThresh = -1
-        # binnedSpikesBalanced.labels[labelUse] = newLabels
-        # binnedSpikesBalanced.binSize = self.binSize
-        # binnedSpikesBalanced.start = self.start
-        # binnedSpikesBalanced.end = self.end
+        if type(self) is list:
+            binnedSpikeHighFR = [bnSp[chIndsUseFR, :] for bnSp in self]
+            binnedSpikesUse = np.empty(len(binnedSpikeHighFR), dtype='object')
+            binnedSpikesUse[:] = binnedSpikeHighFR
+            binnedSpikesUse = binnedSpikesUse[trlIndsUseLabel]
+            binnedSpikesUse = BinnedSpikeSet(binnedSpikesUse, binSize = binSize)
+            newLabels = np.stack([bnSp.labels[labelUse] for bnSp in binnedSpikesUse])
+            binnedSpikesUse.labels[labelUse] = newLabels
+            if baselineSubtract:
+                raise(Exception("Can't baseline subtract trials of unequal size!"))
+        else:
+            binnedSpikeHighFR = self[:,chIndsUseFR,:]
+            binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
+            newLabels = binnedSpikesUse.labels[labelUse]
+            if baselineSubtract:
+                binnedSpikesUse = binnedSpikesUse.baselineSubtract(labels = newLabels)
+                firingRateThresh = -1
         
         
         uniqueTargAngle, trialsPresented = np.unique(newLabels, return_inverse=True)
@@ -703,7 +720,7 @@ class BinnedSpikeSet(np.ndarray):
         
         uniqueTargAngleDeg = uniqueTargAngle*180/np.pi
         
-        colorset = self.colorset #np.array([[127,201,127],[190,174,212],[253,192,134],[200,200,153],[56,108,176],[240,2,127],[191,91,23],[102,102,102]])/255
+        
         
         grpSpksNpArr, _ = binnedSpikesUse.groupByLabel(newLabels, labelExtract=uniqueTargAngle[stimsUse,None]) # extract one label...
         if combineConds and (numConds is None or numConds>1):

@@ -168,7 +168,9 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
          # results.append(pool.apply_async(bnSp.gpfa, (eng,description,outputPath), dict(signalDescriptor = signalDescriptor,
          #          xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions,
          #          timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)))
-        numDims, gpfaPrepAllExp = bnSp.gpfa(eng,description,outputPath, signalDescriptor = signalDescriptor,
+        
+   
+        numDims, gpfaPrepAllExp = BinnedSpikeSet.gpfa(bnSp, eng,description,outputPath, signalDescriptor = signalDescriptor,
                   xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions,
                   timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
         dimExp.append(numDims)
