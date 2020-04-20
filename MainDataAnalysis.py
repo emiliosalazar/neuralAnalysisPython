@@ -28,35 +28,35 @@ import os
 
 data = []
 data.append({'description': 'Earl 2019-03-18\nM1 - MGR',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/memoryGuidedReach/Earl/2019/03/18/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedReach/Earl/2019/03/18/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Erinn'});
 data.append({'description': 'Earl 2019-03-22\nM1 - MGR',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/memoryGuidedReach/Earl/2019/03/22/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedReach/Earl/2019/03/22/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Erinn'});
 data.append({'description': 'Pepe A1 2018-07-14\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/memoryGuidedSaccade/Pepe/2018/07/14/Array1/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Pepe/2018/07/14/Array1/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Yuyan'});
 data.append({'description': 'Pepe A2 2018-07-14\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/memoryGuidedSaccade/Pepe/2018/07/14/Array2/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Pepe/2018/07/14/Array2/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Yuyan'});
 data.append({'description': 'Wakko A1 2018-02-11\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/memoryGuidedSaccade/Wakko/2018/02/11/Array1/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Wakko/2018/02/11/Array1/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Yuyan'});
 data.append({'description': 'Wakko A2 2018-02-11\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/memoryGuidedSaccade/Wakko/2018/02/11/Array2/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Wakko/2018/02/11/Array2/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Yuyan'});
 data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/cuedAttention/Pepe/2016/02/02/Array1_PFC/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/cuedAttention/Pepe/2016/02/02/Array1_PFC/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
-              'path': Path('/Users/emilio/Documents/BatistaLabData/cuedAttention/Pepe/2016/02/02/Array2_V4/'),
+              'path': Path('/Users/emilio/Documents/PostdocData/cuedAttention/Pepe/2016/02/02/Array2_V4/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
 #%%

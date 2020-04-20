@@ -181,8 +181,10 @@ binnedSpikesShortStartOffshift = genBSLAroundDelay(data,
 
 #%% run GPFA
 from methods.BinnedSpikeSetListMethods import gpfaComputation
-# import multiprocessing as mp
-# mp.set_start_method('fork')
+
+# if __name__ == '__main__':
+#     import multiprocessing as mp
+#     mp.set_start_method('forkserver')
 
 descriptions = [data[idx]['description'] for idx in dataIndsProcess]
 paths = [data[idx]['path'] for idx in dataIndsProcess]

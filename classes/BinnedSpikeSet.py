@@ -734,10 +734,11 @@ class BinnedSpikeSet(np.ndarray):
         xDimBestAll = []
         gpfaPrepAll = []
         for idx, (grpSpks, condDesc) in enumerate(zip(groupedBalancedSpikes,condDescriptors)):
-            
+            print("** Training GPFA for condition %d/%d **" % (idx+1, len(groupedBalancedSpikes)))
             gpfaPrep = GPFA(grpSpks, firingRateThresh=firingRateThresh)
             gpfaPrepAll.append(gpfaPrep)
-            for xDim in xDimTest:
+            for idxXdim, xDim in enumerate(xDimTest):
+                print("Testing dimensionality %d. Left to test: " % xDim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
                 try:
                     estParams, seqTrainNew, seqTestNew = gpfaPrep.runGpfaInMatlab(eng=eng, fname=outputPath, runDescriptor = signalDescriptor, condDescriptor = condDesc, crossvalidateNum=crossvalidateNum, xDim=xDim)
                 except Exception as e:
@@ -746,8 +747,10 @@ class BinnedSpikeSet(np.ndarray):
                         continue
                     else:
                         raise(e)
+            print("GPFA training for condition %d/%d done", (idx+1, len(groupedBalancedSpikes)))
                         
         for idx, gpfaPrep in enumerate(gpfaPrepAll):
+            print("** Crossvalidating and plotting GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
             cvApproach = "logLikelihood"
             normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(eng=eng, approach = cvApproach)
             # best xDim is our lowest error from the normalGpfaScore... for now...
@@ -817,18 +820,46 @@ class BinnedSpikeSet(np.ndarray):
                         if tmValsStart.size:
                             axStart3d.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]], sq['xorth'][2,:tmValsStart.shape[0]],
                                    color=colorset[idx,:], linewidth=0.4)
+                            axStart3d.plot(sq['xorth'][0,0], sq['xorth'][1,0], sq['xorth'][2,0], 'o',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axStart3d.plot(sq['xorth'][0,tmValsStart.shape[0]-1], sq['xorth'][1,tmValsStart.shape[0]-1], sq['xorth'][2,tmValsStart.shape[0]-1], '>',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsStart) < 0 and np.max(tmValsStart) > 0:
+                                alignX = np.interp(0, tmValsStart, sq['xorth'][0,:tmValsStart.shape[0]])
+                                alignY = np.interp(0, tmValsStart, sq['xorth'][1,:tmValsStart.shape[0]])
+                                alignZ = np.interp(0, tmValsStart, sq['xorth'][2,:tmValsStart.shape[0]])
+                                axStart3d.plot(alignX, alignY, alignZ, '*', label = 'delay start alignment')
+                            else:
+                                axStart3d.plot(np.nan, '*', label = 'alignment point outside trajectory')
+                            
                             axStart3d.set_title('Start')
                             axStart3d.set_xlabel('gpfa 1')
-                            axStart3d.set_xlabel('gpfa 2')
-                            axStart3d.set_xlabel('gpfa 3')
+                            axStart3d.set_ylabel('gpfa 2')
+                            axStart3d.set_zlabel('gpfa 3')
                         
                         if tmValsEnd.size:
                             axEnd3d.plot(sq['xorth'][0,-tmValsEnd.shape[0]:], sq['xorth'][1,-tmValsEnd.shape[0]:], sq['xorth'][2,-tmValsEnd.shape[0]:],
                                        color=colorset[idx,:], linewidth=0.4)
+                            axStart3d.plot(sq['xorth'][0,-tmValsEnd.shape[0]], sq['xorth'][1,-tmValsEnd.shape[0]], sq['xorth'][2,-tmValsEnd.shape[0]], 'o',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axStart3d.plot(sq['xorth'][0,-1], sq['xorth'][1,-1], sq['xorth'][2,-1], '>',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsEnd) < 0 and np.max(tmValsEnd) > 0:
+                                alignX = np.interp(0, tmValsEnd, sq['xorth'][0,-tmValsEnd.shape[0]:])
+                                alignY = np.interp(0, tmValsEnd, sq['xorth'][1,-tmValsEnd.shape[0]:])
+                                alignZ = np.interp(0, tmValsEnd, sq['xorth'][2,-tmValsEnd.shape[0]:])
+                                axStart3d.plot(alignX, alignY, alignZ, '*', label = 'delay start alignment')
+                            else:
+                                axStart3d.plot(np.nan, '*', label = 'alignment point outside trajectory')
+                            
                             axEnd3d.set_title('End')
                             axEnd3d.set_xlabel('gpfa 1')
-                            axEnd3d.set_xlabel('gpfa 2')
-                            axEnd3d.set_xlabel('gpfa 3')
+                            axEnd3d.set_ylabel('gpfa 2')
+                            axEnd3d.set_zlabel('gpfa 3')
                         
                         axAll3d.plot(sq['xorth'][0,:], sq['xorth'][1,:], sq['xorth'][2,:],
                                    color=colorset[idx,:], linewidth=0.4)
@@ -840,16 +871,32 @@ class BinnedSpikeSet(np.ndarray):
                                    color=colorset[idx,:], linewidth=0.4)
                             axStart3d.set_title('Start')
                             axStart3d.set_xlabel('gpfa 1')
-                            axStart3d.set_xlabel('gpfa 2')
-                            axStart3d.set_xlabel('gpfa 3')
+                            axStart3d.set_ylabel('gpfa 2')
+                            axStart3d.set_zlabel('gpfa 3')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsStart) < 0 and np.max(tmValsStart) > 0:
+                                alignX = np.interp(0, tmValsStart, sq['xorth'][0,:tmValsStart.shape[0]])
+                                alignY = np.interp(0, tmValsStart, sq['xorth'][1,:tmValsStart.shape[0]])
+                                axStart3d.plot(alignX, alignY, '*', label = 'delay start alignment')
+                            else:
+                                axStart3d.plot(np.nan, '*', label = 'alignment point outside trajectory')
                         
                         if tmValsEnd.size:
                             axEnd3d.plot(sq['xorth'][0,-tmValsEnd.shape[0]:], sq['xorth'][1,-tmValsEnd.shape[0]:],
                                        color=colorset[idx,:], linewidth=0.4)
                             axEnd3d.set_title('End')
                             axEnd3d.set_xlabel('gpfa 1')
-                            axEnd3d.set_xlabel('gpfa 2')
-                            axEnd3d.set_xlabel('gpfa 3')
+                            axEnd3d.set_ylabel('gpfa 2')
+                            axEnd3d.set_zlabel('gpfa 3')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsEnd) < 0 and np.max(tmValsEnd) > 0:
+                                alignX = np.interp(0, tmValsEnd, sq['xorth'][0,-tmValsEnd.shape[0]:])
+                                alignY = np.interp(0, tmValsEnd, sq['xorth'][1,-tmValsEnd.shape[0]:])
+                                axStart3d.plot(alignX, alignY, '*', label = 'delay start alignment')
+                            else:
+                                axStart3d.plot(np.nan, '*', label = 'alignment point outside trajectory')
                         
                         axAll3d.plot(sq['xorth'][0,:], sq['xorth'][1,:],
                                    color=colorset[idx,:], linewidth=0.4)
