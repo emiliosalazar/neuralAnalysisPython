@@ -204,16 +204,22 @@ numStimulusConditions = None # because V4 has two...
 # timeBeforeAndAfterEnd = (-furthestForward, 0)
 # baselineSubtract = True
 # signalDescriptor = "last%dMsDelayFRThresh%0.2f%sCondNum%d" % (furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "", numStimulusConditions)
-# ** inputs for delay offshifted ** #
-listBSS = binnedSpikesShortStartOffshift
-# listConcatBSS = [np.concatenate(bnSp, axis=1).view(BinnedSpikeSet)[None,:,:] for bnSp in listBSS]
-# chansGoodBSS = [bnSp.channelsAboveThresholdFiringRate(firingRateThresh)[1] for bnSp in listConcatBSS]
-# listBSS = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSS, listConcatBSS)]
-# listBSS = [bnSp[:,chK,:] for bnSp, chK in zip(listBSS, chansGoodBSS)]
-timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
-timeBeforeAndAfterEnd = None
+# # ** inputs for delay offshifted ** #
+# listBSS = binnedSpikesShortStartOffshift
+# # listConcatBSS = [np.concatenate(bnSp, axis=1).view(BinnedSpikeSet)[None,:,:] for bnSp in listBSS]
+# # chansGoodBSS = [bnSp.channelsAboveThresholdFiringRate(firingRateThresh)[1] for bnSp in listConcatBSS]
+# # listBSS = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSS, listConcatBSS)]
+# # listBSS = [bnSp[:,chK,:] for bnSp, chK in zip(listBSS, chansGoodBSS)]
+# timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
+# timeBeforeAndAfterEnd = None
+# baselineSubtract = True
+# signalDescriptor = "first%dMsDelayOffshift%dMsFRThresh%0.2f%s" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "")
+# ** inputs for beginning and end ** #
+listBSS = binnedSpikesAll
+timeBeforeAndAfterStart = (-furthestBack, furthestForward)
+timeBeforeAndAfterEnd = (-furthestBack, furthestForward)
 baselineSubtract = True
-signalDescriptor = "first%dMsDelayOffshift%dMsFRThresh%0.2f%s" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "")
+signalDescriptor = "delayStart%d-%dMsdelayEnd%d-%dMsFRThresh%0.2f%s" % (furthestBack, furthestForward, furthestBack, furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "")
 
 
 
