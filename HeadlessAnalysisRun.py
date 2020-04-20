@@ -218,7 +218,7 @@ numStimulusConditions = None # because V4 has two...
 listBSS = binnedSpikesAll
 timeBeforeAndAfterStart = (-furthestBack, furthestForward)
 timeBeforeAndAfterEnd = (-furthestBack, furthestForward)
-baselineSubtract = True
+baselineSubtract = False
 signalDescriptor = "delayStart%d-%dMsdelayEnd%d-%dMsFRThresh%0.2f%s" % (furthestBack, furthestForward, furthestBack, furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "")
 
 
