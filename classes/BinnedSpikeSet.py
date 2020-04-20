@@ -734,10 +734,11 @@ class BinnedSpikeSet(np.ndarray):
         xDimBestAll = []
         gpfaPrepAll = []
         for idx, (grpSpks, condDesc) in enumerate(zip(groupedBalancedSpikes,condDescriptors)):
-            
+            print("** Training GPFA for condition %d/%d **" % (idx+1, len(groupedBalancedSpikes)))
             gpfaPrep = GPFA(grpSpks, firingRateThresh=firingRateThresh)
             gpfaPrepAll.append(gpfaPrep)
-            for xDim in xDimTest:
+            for idxXdim, xDim in enumerate(xDimTest):
+                print("Testing dimensionality %d. Left to test: " % xDim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
                 try:
                     estParams, seqTrainNew, seqTestNew = gpfaPrep.runGpfaInMatlab(eng=eng, fname=outputPath, runDescriptor = signalDescriptor, condDescriptor = condDesc, crossvalidateNum=crossvalidateNum, xDim=xDim)
                 except Exception as e:
@@ -746,8 +747,10 @@ class BinnedSpikeSet(np.ndarray):
                         continue
                     else:
                         raise(e)
+            print("GPFA training for condition %d/%d done", (idx+1, len(groupedBalancedSpikes)))
                         
         for idx, gpfaPrep in enumerate(gpfaPrepAll):
+            print("** Crossvalidating and plotting GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
             cvApproach = "logLikelihood"
             normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(eng=eng, approach = cvApproach)
             # best xDim is our lowest error from the normalGpfaScore... for now...
@@ -803,57 +806,181 @@ class BinnedSpikeSet(np.ndarray):
                 axesEnd = []
                 axVals = np.empty((0,4))
                 figSep = plt.figure()
-                if xDimBest>1:
-                    fig3 = plt.figure()
-                    axStart3d = plt.subplot(1,3,1,projection='3d')
-                    axEnd3d = plt.subplot(1,3,2,projection='3d')
-                    axAll3d = plt.subplot(1,3,3,projection='3d')
-                plt.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
+                figSep.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
+                if xDimBest>2:
+                    figTraj = plt.figure()
+                    axStartTraj = plt.subplot(1,3,1,projection='3d')
+                    axEndTraj = plt.subplot(1,3,2,projection='3d')
+                    axAllTraj = plt.subplot(1,3,3,projection='3d')
+                    figTraj.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
+                elif xDimBest>1:
+                    figTraj = plt.figure()
+                    axStartTraj = plt.subplot(1,3,1)
+                    axEndTraj = plt.subplot(1,3,2)
+                    axAllTraj = plt.subplot(1,3,3)
+                    figTraj.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
                 
                 for sq in seqTestUse:
                     
                     if xDimBest>2:
-                        plt.figure(fig3.number)
+                        plt.figure(figTraj.number)
                         if tmValsStart.size:
-                            axStart3d.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]], sq['xorth'][2,:tmValsStart.shape[0]],
+                            axStartTraj.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]], sq['xorth'][2,:tmValsStart.shape[0]],
                                    color=colorset[idx,:], linewidth=0.4)
-                            axStart3d.set_title('Start')
-                            axStart3d.set_xlabel('gpfa 1')
-                            axStart3d.set_xlabel('gpfa 2')
-                            axStart3d.set_xlabel('gpfa 3')
+                            axStartTraj.plot(sq['xorth'][0,0], sq['xorth'][1,0], sq['xorth'][2,0], 'o',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axStartTraj.plot(sq['xorth'][0,tmValsStart.shape[0]-1], sq['xorth'][1,tmValsStart.shape[0]-1], sq['xorth'][2,tmValsStart.shape[0]-1], '>',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsStart) < 0 and np.max(tmValsStart) > 0:
+                                alignX = np.interp(0, tmValsStart, sq['xorth'][0,:tmValsStart.shape[0]])
+                                alignY = np.interp(0, tmValsStart, sq['xorth'][1,:tmValsStart.shape[0]])
+                                alignZ = np.interp(0, tmValsStart, sq['xorth'][2,:tmValsStart.shape[0]])
+                                axStartTraj.plot([alignX], [alignY], [alignZ], '*', color='green', label = 'delay start alignment')
+                            else:
+                                axStartTraj.plot([np.nan], [np.nan], '*', color='green', label = 'alignment start outside trajectory')
+                            
+                            axStartTraj.set_title('Start')
+                            axStartTraj.set_xlabel('gpfa 1')
+                            axStartTraj.set_ylabel('gpfa 2')
+                            axStartTraj.set_zlabel('gpfa 3')
                         
                         if tmValsEnd.size:
-                            axEnd3d.plot(sq['xorth'][0,-tmValsEnd.shape[0]:], sq['xorth'][1,-tmValsEnd.shape[0]:], sq['xorth'][2,-tmValsEnd.shape[0]:],
+                            axEndTraj.plot(sq['xorth'][0,-tmValsEnd.shape[0]:], sq['xorth'][1,-tmValsEnd.shape[0]:], sq['xorth'][2,-tmValsEnd.shape[0]:],
                                        color=colorset[idx,:], linewidth=0.4)
-                            axEnd3d.set_title('End')
-                            axEnd3d.set_xlabel('gpfa 1')
-                            axEnd3d.set_xlabel('gpfa 2')
-                            axEnd3d.set_xlabel('gpfa 3')
+                            axEndTraj.plot(sq['xorth'][0,-tmValsEnd.shape[0]], sq['xorth'][1,-tmValsEnd.shape[0]], sq['xorth'][2,-tmValsEnd.shape[0]], 'o',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axEndTraj.plot(sq['xorth'][0,-1], sq['xorth'][1,-1], sq['xorth'][2,-1], '>',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsEnd) < 0 and np.max(tmValsEnd) > 0:
+                                alignX = np.interp(0, tmValsEnd, sq['xorth'][0,-tmValsEnd.shape[0]:])
+                                alignY = np.interp(0, tmValsEnd, sq['xorth'][1,-tmValsEnd.shape[0]:])
+                                alignZ = np.interp(0, tmValsEnd, sq['xorth'][2,-tmValsEnd.shape[0]:])
+                                axEndTraj.plot([alignX], [alignY], [alignZ], '*', color='red', label = 'delay end alignment')
+                            else:
+                                axEndTraj.plot([np.nan], [np.nan], '*', color='red', label = 'alignment end outside trajectory')
+                            
+                            axEndTraj.set_title('End')
+                            axEndTraj.set_xlabel('gpfa 1')
+                            axEndTraj.set_ylabel('gpfa 2')
+                            axEndTraj.set_zlabel('gpfa 3')
+                            
+                        if tmValsStart.size and tmValsEnd.size:
+                            axAllTraj.plot(sq['xorth'][0,:], sq['xorth'][1,:], sq['xorth'][2,:],
+                                       color=colorset[idx,:], linewidth=0.4)
+                            axAllTraj.plot(sq['xorth'][0,0], sq['xorth'][1,0], sq['xorth'][2,0], 'o',
+                                       color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axAllTraj.plot(sq['xorth'][0,-1], sq['xorth'][1,-1], sq['xorth'][2,-1], '>',
+                                       color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            
+                            
+                            # marking the alginment points here
+                            # the binSize and start are detailed here, so we can find the rest of time
+                            lenT = sq['xorth'].shape[1]
+                            allTimesAlignStart = np.arange(tmValsStart[0], tmValsStart[0]+binSize*lenT, binSize)
+                            if np.min(allTimesAlignStart) < 0 and np.max(allTimesAlignStart) > 0:
+                                alignXStart = np.interp(0, allTimesAlignStart, sq['xorth'][0,:])
+                                alignYStart = np.interp(0, allTimesAlignStart, sq['xorth'][1,:])
+                                alignZStart = np.interp(0, allTimesAlignStart, sq['xorth'][2,:])
+                                axAllTraj.plot([alignXStart], [alignYStart], [alignZStart], '*', color='green', label = 'delay start alignment')
+                            else:
+                                axAllTraj.plot([np.nan], [np.nan], '*', color='green', label = 'alignment start outside trajectory')
+                                
+                            # gotta play some with the end to make sure 0 is aligned from the end as in tmValsEnd
+                            allTimesAlignEnd = np.arange(tmValsEnd[-1]-binSize*(lenT-1), tmValsEnd[-1]+binSize/10, binSize)
+                            if np.min(allTimesAlignEnd) < 0 and np.max(allTimesAlignEnd) > 0:
+                                alignXEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][0,:])
+                                alignYEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][1,:])
+                                alignZEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][2,:])
+                                axAllTraj.plot([alignXEnd], [alignYEnd], [alignZEnd], '*', color='red', label = 'delay end alignment')
+                            else:
+                                axAllTraj.plot([np.nan], [np.nan], '*', color='red', label = 'alignment end outside trajectory')
+                                
+                                    
+                            
+                            axAllTraj.set_title('All')
+                            axAllTraj.set_xlabel('gpfa 1')
+                            axAllTraj.set_ylabel('gpfa 2')
                         
-                        axAll3d.plot(sq['xorth'][0,:], sq['xorth'][1,:], sq['xorth'][2,:],
-                                   color=colorset[idx,:], linewidth=0.4)
-                        axAll3d.set_title('All')
+                            
+                            axAllTraj.set_title('All')
                     elif xDimBest>1:
-                        plt.figure(fig3.number)
+                        plt.figure(figTraj.number)
                         if tmValsStart.size:
-                            axStart3d.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]],
+                            axStartTraj.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]],
                                    color=colorset[idx,:], linewidth=0.4)
-                            axStart3d.set_title('Start')
-                            axStart3d.set_xlabel('gpfa 1')
-                            axStart3d.set_xlabel('gpfa 2')
-                            axStart3d.set_xlabel('gpfa 3')
+                            axStartTraj.plot(sq['xorth'][0,0], sq['xorth'][1,0], 'o',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axStartTraj.plot(sq['xorth'][0,tmValsStart.shape[0]-1], sq['xorth'][1,tmValsStart.shape[0]-1], '>',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            axStartTraj.set_title('Start')
+                            axStartTraj.set_xlabel('gpfa 1')
+                            axStartTraj.set_ylabel('gpfa 2')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsStart) < 0 and np.max(tmValsStart) > 0:
+                                alignX = np.interp(0, tmValsStart, sq['xorth'][0,:tmValsStart.shape[0]])
+                                alignY = np.interp(0, tmValsStart, sq['xorth'][1,:tmValsStart.shape[0]])
+                                axStartTraj.plot(alignX, alignY, '*', color='green', label = 'delay start alignment')
+                            else:
+                                axStartTraj.plot(np.nan, '*', color='green', label = 'alignment start outside trajectory')
                         
                         if tmValsEnd.size:
-                            axEnd3d.plot(sq['xorth'][0,-tmValsEnd.shape[0]:], sq['xorth'][1,-tmValsEnd.shape[0]:],
+                            axEndTraj.plot(sq['xorth'][0,-tmValsEnd.shape[0]:], sq['xorth'][1,-tmValsEnd.shape[0]:],
                                        color=colorset[idx,:], linewidth=0.4)
-                            axEnd3d.set_title('End')
-                            axEnd3d.set_xlabel('gpfa 1')
-                            axEnd3d.set_xlabel('gpfa 2')
-                            axEnd3d.set_xlabel('gpfa 3')
+                            axEndTraj.plot(sq['xorth'][0,-tmValsEnd.shape[0]], sq['xorth'][1,-tmValsEnd.shape[0]], 'o',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axEndTraj.plot(sq['xorth'][0,-1], sq['xorth'][1,-1], '>',
+                                   color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            
+                            axEndTraj.set_title('End')
+                            axEndTraj.set_xlabel('gpfa 1')
+                            axEndTraj.set_ylabel('gpfa 2')
+                            
+                            # marking the alginment point here
+                            if np.min(tmValsEnd) < 0 and np.max(tmValsEnd) > 0:
+                                alignX = np.interp(0, tmValsEnd, sq['xorth'][0,-tmValsEnd.shape[0]:])
+                                alignY = np.interp(0, tmValsEnd, sq['xorth'][1,-tmValsEnd.shape[0]:])
+                                axEndTraj.plot(alignX, alignY, '*', color='red', label = 'delay end alignment')
+                            else:
+                                axEndTraj.plot(np.nan, '*', color='red', label = 'alignment end outside trajectory')
                         
-                        axAll3d.plot(sq['xorth'][0,:], sq['xorth'][1,:],
-                                   color=colorset[idx,:], linewidth=0.4)
-                        axAll3d.set_title('All')
+                        if tmValsStart.size and tmValsEnd.size:
+                            axAllTraj.plot(sq['xorth'][0,:], sq['xorth'][1,:],
+                                       color=colorset[idx,:], linewidth=0.4)
+                            axAllTraj.plot(sq['xorth'][0,0], sq['xorth'][1,0], 'o',
+                                       color=colorset[idx,:], linewidth=0.4, label='traj start')
+                            axAllTraj.plot(sq['xorth'][0,-1], sq['xorth'][1,-1], '>',
+                                       color=colorset[idx,:], linewidth=0.4, label='traj end')
+                            
+                            # marking the alginment points here
+                            # the binSize and start are detailed here, so we can find the rest of time
+                            lenT = sq['xorth'].shape[1]
+                            allTimesAlignStart = np.arange(tmValsStart[0], tmValsStart[0]+binSize*lenT, binSize)
+                            if np.min(allTimesAlignStart) < 0 and np.max(allTimesAlignStart) > 0:
+                                alignXStart = np.interp(0, allTimesAlignStart, sq['xorth'][0,:])
+                                alignYStart = np.interp(0, allTimesAlignStart, sq['xorth'][1,:])
+                                axAllTraj.plot(alignXStart, alignYStart, '*', color='green', label = 'delay start alignment')
+                            else:
+                                axAllTraj.plot(np.nan, '*', color='green', label = 'alignment start outside trajectory')
+                                
+                            # gotta play some with the end to make sure 0 is aligned from the end as in tmValsEnd
+                            allTimesAlignEnd = np.arange(tmValsEnd[-1]-binSize*(lenT-1), tmValsEnd[-1]+binSize/10, binSize)
+                            if np.min(allTimesAlignEnd) < 0 and np.max(allTimesAlignEnd) > 0:
+                                alignXEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][0,:])
+                                alignYEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][1,:])
+                                axAllTraj.plot(alignXEnd, alignYEnd, '*', color='red', label = 'delay end alignment')
+                            else:
+                                axAllTraj.plot(np.nan, '*', color='red', label = 'alignment end outside trajectory')
+                                
+                                    
+                            
+                            axAllTraj.set_title('All')
+                            axAllTraj.set_xlabel('gpfa 1')
+                            axAllTraj.set_ylabel('gpfa 2')
                     
                     if True:
                         pltNum = 1

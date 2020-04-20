@@ -163,6 +163,7 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
     #     results = []
     for bnSp, description, outputPath, axScore, axDim in zip(listBSS, descriptions, outputPaths, axs[0, :].flat, axs[1,:].flat):
         
+        print("*** Running GPFA for " + description.replace('\n', ' ') + " ***")
         plotInfo['axScore'] = axScore
         plotInfo['axDim'] = axDim
          # results.append(pool.apply_async(bnSp.gpfa, (eng,description,outputPath), dict(signalDescriptor = signalDescriptor,
