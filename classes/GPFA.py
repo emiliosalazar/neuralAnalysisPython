@@ -177,26 +177,19 @@ class GPFA:
             
             
             
-            for dimMax, paramsGpfa in self.dimOutput.items():
-                llTemp = []
-                
-                with Pool() as plWrap:
-                    res = []
-                    for cvNum, (paramsEst, seqsTest) in enumerate(zip(paramsGpfa['allEstParams'], allSeqsTest)):
-                        res.append(plWrap.apply_async(cvalWrap, (seqsTest, paramsEst, cvNum+1)))
+            with Pool() as plWrap:
+                res = []
+                for dimMax, paramsGpfa in self.dimOutput.items():
+                    res.append(plWrap.apply_async(cvalSuperWrap, (paramsGpfa, allSeqsTest)))
+                    
+                resultsByDim = [rs.get() for rs in res]
+                # resultsByVar = list(zip(*resultsByDim))
                         
-                    resultsByCrossVal = [rs.get() for rs in res]
-                    
-                    resultsByVar = list(zip(*resultsByCrossVal))
-                    
-                    llTemp = resultsByVar[0]
-                
-                    
-                    
-                # llTemp = np.stack(llTemp)
-                # llTemp = llTemp - np.min(llTemp)
-                # llTemp = llTemp/np.max(llTemp)
-                ll[dimMax] = np.stack(llTemp)#np.mean(np.stack(llTemp))
+                ll = {dim : np.stack(llDim) for dim, llDim in zip(self.dimOutput.keys(), resultsByDim)}        
+                    # llTemp = np.stack(llTemp)
+                    # llTemp = llTemp - np.min(llTemp)
+                    # llTemp = llTemp/np.max(llTemp)
+                    # ll[dimMax] = np.stack(llTemp)#np.mean(np.stack(llTemp))
                 # llErr[dimMax] = np.std(np.stack(llTemp))
                     
             reducedGpfaScore = np.stack([np.nan])
@@ -391,10 +384,19 @@ def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, se
     
     return estParams, seqsTrainNew, seqsTestNew
 
-def cvalWrap(seqsTest, paramsEst, cvNum):
-    print('Computing LL of crossvalidation #%d' % cvNum)
+def cvalSuperWrap(paramsGpfa, allSeqsTest):
+    llTemp = []
     from methods.GeneralMethods import prepareMatlab
     eng = prepareMatlab()
+                    
+    for cvNum, (paramsEst, seqsTest) in enumerate(zip(paramsGpfa['allEstParams'], allSeqsTest)):
+        llTemp.append(cvalWrap(seqsTest, paramsEst, cvNum+1, eng))
+        
+    return llTemp
+
+def cvalWrap(seqsTest, paramsEst, cvNum, eng):
+    print('Computing LL of crossvalidation #%d' % cvNum)
+    
     
     unT, seqWithT = np.unique(np.array([seq['T'] for seq in seqsTest]), return_inverse=True)
                 
@@ -413,7 +415,8 @@ def cvalWrap(seqsTest, paramsEst, cvNum):
     llT = []
     for uniqueT in unT:
         llT.append(cvalRun(paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=eng))
-        
+       
+    llT = np.sum(llT)/2 # following Matlab GPFA code, but unsure why there's a divide-by-2 here...
     print('LL of crossvalidation #%d computed' % cvNum)
     
     return llT
