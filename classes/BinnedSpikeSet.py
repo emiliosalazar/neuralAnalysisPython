@@ -747,7 +747,7 @@ class BinnedSpikeSet(np.ndarray):
                         continue
                     else:
                         raise(e)
-            print("GPFA training for condition %d/%d done", (idx+1, len(groupedBalancedSpikes)))
+            print("GPFA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
                         
         for idx, gpfaPrep in enumerate(gpfaPrepAll):
             print("** Crossvalidating and plotting GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
@@ -827,9 +827,9 @@ class BinnedSpikeSet(np.ndarray):
                         if tmValsStart.size:
                             axStartTraj.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]], sq['xorth'][2,:tmValsStart.shape[0]],
                                    color=colorset[idx,:], linewidth=0.4)
-                            axStartTraj.plot(sq['xorth'][0,0], sq['xorth'][1,0], sq['xorth'][2,0], 'o',
+                            axStartTraj.plot([sq['xorth'][0,0]], [sq['xorth'][1,0]], [sq['xorth'][2,0]], 'o',
                                    color=colorset[idx,:], linewidth=0.4, label='traj start')
-                            axStartTraj.plot(sq['xorth'][0,tmValsStart.shape[0]-1], sq['xorth'][1,tmValsStart.shape[0]-1], sq['xorth'][2,tmValsStart.shape[0]-1], '>',
+                            axStartTraj.plot([sq['xorth'][0,tmValsStart.shape[0]-1]], [sq['xorth'][1,tmValsStart.shape[0]-1]], [sq['xorth'][2,tmValsStart.shape[0]-1]], '>',
                                    color=colorset[idx,:], linewidth=0.4, label='traj end')
                             
                             # marking the alginment point here
@@ -849,9 +849,9 @@ class BinnedSpikeSet(np.ndarray):
                         if tmValsEnd.size:
                             axEndTraj.plot(sq['xorth'][0,-tmValsEnd.shape[0]:], sq['xorth'][1,-tmValsEnd.shape[0]:], sq['xorth'][2,-tmValsEnd.shape[0]:],
                                        color=colorset[idx,:], linewidth=0.4)
-                            axEndTraj.plot(sq['xorth'][0,-tmValsEnd.shape[0]], sq['xorth'][1,-tmValsEnd.shape[0]], sq['xorth'][2,-tmValsEnd.shape[0]], 'o',
+                            axEndTraj.plot([sq['xorth'][0,-tmValsEnd.shape[0]]], [sq['xorth'][1,-tmValsEnd.shape[0]]], [sq['xorth'][2,-tmValsEnd.shape[0]]], 'o',
                                    color=colorset[idx,:], linewidth=0.4, label='traj start')
-                            axEndTraj.plot(sq['xorth'][0,-1], sq['xorth'][1,-1], sq['xorth'][2,-1], '>',
+                            axEndTraj.plot([sq['xorth'][0,-1]], [sq['xorth'][1,-1]], [sq['xorth'][2,-1]], '>',
                                    color=colorset[idx,:], linewidth=0.4, label='traj end')
                             
                             # marking the alginment point here
@@ -871,9 +871,9 @@ class BinnedSpikeSet(np.ndarray):
                         if tmValsStart.size and tmValsEnd.size:
                             axAllTraj.plot(sq['xorth'][0,:], sq['xorth'][1,:], sq['xorth'][2,:],
                                        color=colorset[idx,:], linewidth=0.4)
-                            axAllTraj.plot(sq['xorth'][0,0], sq['xorth'][1,0], sq['xorth'][2,0], 'o',
+                            axAllTraj.plot([sq['xorth'][0,0]], [sq['xorth'][1,0]], [sq['xorth'][2,0]], 'o',
                                        color=colorset[idx,:], linewidth=0.4, label='traj start')
-                            axAllTraj.plot(sq['xorth'][0,-1], sq['xorth'][1,-1], sq['xorth'][2,-1], '>',
+                            axAllTraj.plot([sq['xorth'][0,-1]], [sq['xorth'][1,-1]], [sq['xorth'][2,-1]], '>',
                                        color=colorset[idx,:], linewidth=0.4, label='traj end')
                             
                             
