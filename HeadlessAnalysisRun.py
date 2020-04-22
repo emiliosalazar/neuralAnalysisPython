@@ -27,21 +27,21 @@ data.append({'description': 'Earl 2019-03-22\nM1 - MGR',
               'delayStartStateName': 'Delay Period',
               'processor': 'Erinn'});
 data.append({'description': 'Pepe A1 2018-07-14\nPFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Pepe A2 2018-07-14\nPFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Wakko A1 2018-02-11\nPFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Wakko A2 2018-02-11\nPFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
               'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_PFC/'),
               'delayStartStateName': 'Blank Before',
@@ -220,7 +220,7 @@ numStimulusConditions = None # because V4 has two...
 listBSS = binnedSpikesAll
 timeBeforeAndAfterStart = (-furthestBack, furthestForward)
 timeBeforeAndAfterEnd = (-furthestBack, furthestForward)
-baselineSubtract = True
+baselineSubtract = False
 signalDescriptor = "delayStart%d-%dMsdelayEnd%d-%dMsFRThresh%0.2f%s" % (furthestBack, furthestForward, furthestBack, furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "")
 
 

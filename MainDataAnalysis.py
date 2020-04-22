@@ -6,6 +6,7 @@ Created on Sat Jan 25 15:37:02 2020
 
 @author: emilio
 """
+# NOTE: Changed /Users/emilio/anaconda3/lib/python3.7/site-packages/matlab/engine/basefuture.py _send_bytes to python 3.8 version
 from MatFileMethods import LoadMatFile#, QuashStructure
 import numpy as np
 from matplotlib import pyplot as plt
@@ -21,73 +22,68 @@ except ModuleNotFoundError as e:
 #from plotWindow.plotWindow import plotWindow
 
 from classes.Dataset import Dataset
+from methods.GeneralMethods import loadDefaultParams
 
 from pathlib import Path
 
 import os
 
+defaultParams = loadDefaultParams(defParamBase = ".")
+dataPath = defaultParams['dataPath']
+
 data = []
 data.append({'description': 'Earl 2019-03-18\nM1 - MGR',
-              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedReach/Earl/2019/03/18/'),
+              'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/18/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Erinn'});
 data.append({'description': 'Earl 2019-03-22\nM1 - MGR',
-              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedReach/Earl/2019/03/22/'),
+              'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/22/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Erinn'});
 data.append({'description': 'Pepe A1 2018-07-14\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Pepe/2018/07/14/Array1/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Pepe A2 2018-07-14\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Pepe/2018/07/14/Array2/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Wakko A1 2018-02-11\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Wakko/2018/02/11/Array1/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Wakko A2 2018-02-11\nPFC - MGS',
-              'path': Path('/Users/emilio/Documents/PostdocData/memoryGuidedSaccade/Wakko/2018/02/11/Array2/'),
-              'delayStartStateName': 'Delay Period',
-              'processor': 'Yuyan'});
+              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
+              'delayStartStateName': 'TARG_OFF',
+              'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
-              'path': Path('/Users/emilio/Documents/PostdocData/cuedAttention/Pepe/2016/02/02/Array1_PFC/'),
+              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_PFC/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
-              'path': Path('/Users/emilio/Documents/PostdocData/cuedAttention/Pepe/2016/02/02/Array2_V4/'),
+              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_V4/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
-#%%
+
+data = np.asarray(data) # to allow fancy indexing
+#%% process data
 processedDataMat = 'processedData.mat'
 
 # dataset = [ [] for _ in range(len(data))]
-cosTuningCurves = []
-dataIndsProcess = [1,4,7]
-datasets = []
-for ind in dataIndsProcess:
+dataUseLogical = np.zeros(len(data), dtype='bool')
+dataIndsProcess = np.array([4])#np.array([1,4,7])
+dataUseLogical[dataIndsProcess] = True
+
+for dataUse in data[dataUseLogical]:
 # for ind, dataUse in enumerate(data):
 #    dataUse = data[1]
-    dataUse = data[ind]
+    # dataUse = data[ind]
     dataMatPath = dataUse['path'] / processedDataMat
     
     print('processing data set ' + dataUse['description'])
     datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = [31,0])
-    data[ind]['dataset'] = datasetHere
-    datasets.append(datasetHere)
+    dataUse['dataset'] = datasetHere
     
-    cosTuningCurves.append(datasetHere.computeCosTuningCurves())
-    #dataset.plotTuningCurves()
-    
-# datasetSuccess = []
-# datasetSuccessNoCatch = []
-# for dset in dataset:
-#     dsetSuccess = dset.successfulTrials()
-#     datasetSuccess.append(dsetSuccess)
-#     dsetSuccessNoCatch = dsetSuccess.trialsWithoutCatch()
-#     datasetSuccessNoCatch.append(dsetSuccessNoCatch)
-
 #%%
 # return binned spikes
 from classes.BinnedSpikeSet import BinnedSpikeSet
