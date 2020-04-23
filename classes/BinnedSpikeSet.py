@@ -666,14 +666,14 @@ class BinnedSpikeSet(np.ndarray):
             colorset = self.colorset
         
         if timeBeforeAndAfterStart is not None:
-            tmValsStart = np.arange(timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
+            tmValsStartBest = np.arange(timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
         else:
-            tmValsStart = np.ndarray((0,0))
+            tmValsStartBest = np.ndarray((0,0))
             
         if timeBeforeAndAfterEnd is not None:
-            tmValsEnd = np.arange(timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
+            tmValsEndBest = np.arange(timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
         else:
-            tmValsEnd = np.ndarray((0,0))
+            tmValsEndBest = np.ndarray((0,0))
         
         _, chIndsUseFR = bnSpksCheck.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
         # binnedSpikeHighFR = self[:,chIndsUseFR,:]
@@ -804,7 +804,7 @@ class BinnedSpikeSet(np.ndarray):
                 
                 
                 rowsPlt = 2
-                if tmValsStart.size and tmValsEnd.size:
+                if tmValsStartBest.size and tmValsEndBest.size:
                     colsPlt = np.ceil(xDimBest/rowsPlt)*2 # align to start and to end...
                 else:
                     colsPlt = np.ceil(xDimBest/rowsPlt) # aligning to only one of them...
@@ -826,20 +826,32 @@ class BinnedSpikeSet(np.ndarray):
                     axAllTraj = plt.subplot(1,3,3)
                     figTraj.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
                 
-                for sq in seqTestUse:
-                    
+                for sq, tstInd in zip(seqTestUse,gpfaPrep.testInds[0]):
+                    if tmValsStartBest.size:
+                        startZeroBin = groupedBalancedSpikes[idx][tstInd].alignmentBins[0]
+                        fstBin = 0
+                        tmBeforeStartZero = (fstBin-startZeroBin)*binSize
+                        tmValsStart = tmValsStartBest[tmValsStartBest>=tmBeforeStartZero]
+                        
+                    if tmValsEndBest.size:
+                        # Only plot what we have data for...
+                        endZeroBin = groupedBalancedSpikes[idx][tstInd].alignmentBins[1]
+                        lastBin = groupedBalancedSpikes[idx][tstInd].shape[1] # note: same as sq['xorth'].shape[1]
+                        timeAfterEndZero = (lastBin-endZeroBin)*binSize
+                        tmValsEnd = tmValsEndBest[tmValsEndBest<timeAfterEndZero]
+                        
                     if xDimBest>2:
                         plt.figure(figTraj.number)
                         if tmValsStart.size:
                             axStartTraj.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]], sq['xorth'][2,:tmValsStart.shape[0]],
-                                   color=colorset[idx,:], linewidth=0.4)
+                                   color=colorset[idx,:], linewidth=0.4)                            
                             axStartTraj.plot([sq['xorth'][0,0]], [sq['xorth'][1,0]], [sq['xorth'][2,0]], 'o',
                                    color=colorset[idx,:], linewidth=0.4, label='traj start')
                             axStartTraj.plot([sq['xorth'][0,tmValsStart.shape[0]-1]], [sq['xorth'][1,tmValsStart.shape[0]-1]], [sq['xorth'][2,tmValsStart.shape[0]-1]], '>',
                                    color=colorset[idx,:], linewidth=0.4, label='traj end')
                             
                             # marking the alginment point here
-                            if np.min(tmValsStart) < 0 and np.max(tmValsStart) > 0:
+                            if np.min(tmValsStart) <= 0 and np.max(tmValsStart) >= 0:
                                 alignX = np.interp(0, tmValsStart, sq['xorth'][0,:tmValsStart.shape[0]])
                                 alignY = np.interp(0, tmValsStart, sq['xorth'][1,:tmValsStart.shape[0]])
                                 alignZ = np.interp(0, tmValsStart, sq['xorth'][2,:tmValsStart.shape[0]])
@@ -861,7 +873,7 @@ class BinnedSpikeSet(np.ndarray):
                                    color=colorset[idx,:], linewidth=0.4, label='traj end')
                             
                             # marking the alginment point here
-                            if np.min(tmValsEnd) < 0 and np.max(tmValsEnd) > 0:
+                            if np.min(tmValsEnd) <= 0 and np.max(tmValsEnd) >= 0:
                                 alignX = np.interp(0, tmValsEnd, sq['xorth'][0,-tmValsEnd.shape[0]:])
                                 alignY = np.interp(0, tmValsEnd, sq['xorth'][1,-tmValsEnd.shape[0]:])
                                 alignZ = np.interp(0, tmValsEnd, sq['xorth'][2,-tmValsEnd.shape[0]:])
@@ -887,7 +899,7 @@ class BinnedSpikeSet(np.ndarray):
                             # the binSize and start are detailed here, so we can find the rest of time
                             lenT = sq['xorth'].shape[1]
                             allTimesAlignStart = np.arange(tmValsStart[0], tmValsStart[0]+binSize*lenT, binSize)
-                            if np.min(allTimesAlignStart) < 0 and np.max(allTimesAlignStart) > 0:
+                            if np.min(allTimesAlignStart) <= 0 and np.max(allTimesAlignStart) >= 0:
                                 alignXStart = np.interp(0, allTimesAlignStart, sq['xorth'][0,:])
                                 alignYStart = np.interp(0, allTimesAlignStart, sq['xorth'][1,:])
                                 alignZStart = np.interp(0, allTimesAlignStart, sq['xorth'][2,:])
@@ -897,7 +909,7 @@ class BinnedSpikeSet(np.ndarray):
                                 
                             # gotta play some with the end to make sure 0 is aligned from the end as in tmValsEnd
                             allTimesAlignEnd = np.arange(tmValsEnd[-1]-binSize*(lenT-1), tmValsEnd[-1]+binSize/10, binSize)
-                            if np.min(allTimesAlignEnd) < 0 and np.max(allTimesAlignEnd) > 0:
+                            if np.min(allTimesAlignEnd) <= 0 and np.max(allTimesAlignEnd) >= 0:
                                 alignXEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][0,:])
                                 alignYEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][1,:])
                                 alignZEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][2,:])
@@ -927,7 +939,7 @@ class BinnedSpikeSet(np.ndarray):
                             axStartTraj.set_ylabel('gpfa 2')
                             
                             # marking the alginment point here
-                            if np.min(tmValsStart) < 0 and np.max(tmValsStart) > 0:
+                            if np.min(tmValsStart) <= 0 and np.max(tmValsStart) >= 0:
                                 alignX = np.interp(0, tmValsStart, sq['xorth'][0,:tmValsStart.shape[0]])
                                 alignY = np.interp(0, tmValsStart, sq['xorth'][1,:tmValsStart.shape[0]])
                                 axStartTraj.plot(alignX, alignY, '*', color='green', label = 'delay start alignment')
@@ -947,7 +959,7 @@ class BinnedSpikeSet(np.ndarray):
                             axEndTraj.set_ylabel('gpfa 2')
                             
                             # marking the alginment point here
-                            if np.min(tmValsEnd) < 0 and np.max(tmValsEnd) > 0:
+                            if np.min(tmValsEnd) <= 0 and np.max(tmValsEnd) >= 0:
                                 alignX = np.interp(0, tmValsEnd, sq['xorth'][0,-tmValsEnd.shape[0]:])
                                 alignY = np.interp(0, tmValsEnd, sq['xorth'][1,-tmValsEnd.shape[0]:])
                                 axEndTraj.plot(alignX, alignY, '*', color='red', label = 'delay end alignment')
@@ -966,7 +978,7 @@ class BinnedSpikeSet(np.ndarray):
                             # the binSize and start are detailed here, so we can find the rest of time
                             lenT = sq['xorth'].shape[1]
                             allTimesAlignStart = np.arange(tmValsStart[0], tmValsStart[0]+binSize*lenT, binSize)
-                            if np.min(allTimesAlignStart) < 0 and np.max(allTimesAlignStart) > 0:
+                            if np.min(allTimesAlignStart) <= 0 and np.max(allTimesAlignStart) >= 0:
                                 alignXStart = np.interp(0, allTimesAlignStart, sq['xorth'][0,:])
                                 alignYStart = np.interp(0, allTimesAlignStart, sq['xorth'][1,:])
                                 axAllTraj.plot(alignXStart, alignYStart, '*', color='green', label = 'delay start alignment')
@@ -975,7 +987,7 @@ class BinnedSpikeSet(np.ndarray):
                                 
                             # gotta play some with the end to make sure 0 is aligned from the end as in tmValsEnd
                             allTimesAlignEnd = np.arange(tmValsEnd[-1]-binSize*(lenT-1), tmValsEnd[-1]+binSize/10, binSize)
-                            if np.min(allTimesAlignEnd) < 0 and np.max(allTimesAlignEnd) > 0:
+                            if np.min(allTimesAlignEnd) <= 0 and np.max(allTimesAlignEnd) >= 0:
                                 alignXEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][0,:])
                                 alignYEnd = np.interp(0, allTimesAlignEnd, sq['xorth'][1,:])
                                 axAllTraj.plot(alignXEnd, alignYEnd, '*', color='red', label = 'delay end alignment')

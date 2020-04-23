@@ -34,7 +34,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
         
        
         dataSt = dataStInit.filterTrials(delayTimeArr>lenSmallestTrl)
-        dataSt.computeCosTuningCurves()
+        # dataSt.computeCosTuningCurves()
         startDelay, endDelay = dataSt.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart)
         startDelayArr = np.asarray(startDelay)
         startDelaysList.append(startDelayArr)
@@ -52,7 +52,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
             endTimeArr = endDelayArr
         
         # add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
-        binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeDelay), endMs = list(endTimeArr+furthestTimeAfterDelay+binSizeMs/20), binSizeMs=binSizeMs, notChan=[31, 0])
+        binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeDelay), endMs = list(endTimeArr+furthestTimeAfterDelay+binSizeMs/20), binSizeMs=binSizeMs, notChan=[31, 0], alignmentPoints = list(zip(startTimeArr, endTimeArr)))
         
         try:
             binnedSpikesHere.labels['stimulusMainLabel'] = dataSt.markerTargAngles
@@ -64,13 +64,30 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
     
     return binnedSpikes
 
-def generateBinnedSpikeListsGroupedByLabel(binnedSpikesListToGroup, labelUse = 'stimulusMainLabel'):
+def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMainLabel'):
     
     groupedSpikesTrialAvg = []
     grpLabels = []
     for binnedSpikes in binnedSpikesListToGroup:
     
         # dataSt = data[dataInd]['dataset'].successfulTrials().trialsWithoutCatch()
+        if type(binnedSpikes) is list:
+            stBinsUn = np.unique([bnSp.alignmentBins[0] for bnSp in binnedSpikes])
+            if stBinsUn.size>1:
+                raise(Exception("Ruh roh dunno what we're doing here"))
+                pass
+            else:
+                minBins = np.min([bnSp.shape[1] for bnSp in binnedSpikes])
+                # note that all alignment bins are from the start, so if the 
+                # start doesn't change we don't need to change anything with them...
+                start,end,label,alignmentBins = zip(*[(bnSp.start, bnSp.end, bnSp.labels[labelUse],bnSp.alignmentBins) for bnSp in binnedSpikes])
+                binnedSpikes = BinnedSpikeSet(np.stack([bnSp[:, :minBins] for bnSp in binnedSpikes]),
+                                              start = list(start),
+                                              end = list(end),
+                                              binSize = binnedSpikes[0].binSize,
+                                              labels = {labelUse:np.stack(label)},
+                                              alignmentBins = list(alignmentBins))
+            
             
 
         uniqueTargAngle = np.unique(binnedSpikes.labels[labelUse], axis=0)
@@ -80,10 +97,10 @@ def generateBinnedSpikeListsGroupedByLabel(binnedSpikesListToGroup, labelUse = '
         
         # groupedSpikesEnd = dataSt.groupSpikes(trialsPresented, uniqueTargAngle, binnedSpikes = binnedSpikesHereEnd)
         # groupedSpikesShortStart = dataSt.groupSpikes(trialsPresented, uniqueTargAngle, binnedSpikes = binnedSpikesHereShortStart)
-        
+        alignmentBinsAll = binnedSpikes.alignmentBins[0]
         targAvgList, targStdList = zip(*[(groupedSpikes[targ].trialAverage(), groupedSpikes[targ].trialStd()) for targ in range(0, len(groupedSpikes))])
-        targTmTrcAvgArr = BinnedSpikeSet(np.stack(targAvgList), start=binnedSpikes.start, end = binnedSpikes.end, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel})
-        targTmTrcStdArr = BinnedSpikeSet(np.stack(targStdList), start=binnedSpikes.start, end = binnedSpikes.end, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel})
+        targTmTrcAvgArr = BinnedSpikeSet(np.stack(targAvgList), start=binnedSpikes.start, end = binnedSpikes.end, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel}, alignmentBins = alignmentBinsAll)
+        targTmTrcStdArr = BinnedSpikeSet(np.stack(targStdList), start=binnedSpikes.start, end = binnedSpikes.end, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel}, alignmentBins = alignmentBinsAll)
         # targAvgListEnd, targStdListEnd = zip(*[(groupedSpikesEnd[targ].trialAverage(), groupedSpikesEnd[targ].trialStd()) for targ in range(0, len(groupedSpikesEnd))])
         # targTmTrcAvgEndArr = np.stack(targAvgListEnd).view(BinnedSpikeSet)
         # targTmTrcStdEndArr = np.stack(targStdListEnd).view(BinnedSpikeSet)
@@ -265,12 +282,26 @@ def plotExampleChannelResponses(groupedSpikesTrialAvg, groupedSpikesTrialAvgForM
             subplotChooseDelayStart = subplotChoose[0]*2
             subplotChooseDelayEnd = subplotChoose[0]*2+1
             axes.append(plt.subplot(numRows, numCols*2, subplotChooseDelayStart+1))
+            
             tmValStart = np.arange(timeBeforeAndAfterStart[0]+binSizeMs/2, timeBeforeAndAfterStart[1]+binSizeMs/2, binSizeMs)
+            # Only plot what we have data for...
+            startZeroBin = chanRespMean.alignmentBins[0]
+            fstBin = 0
+            tmBeforeStartZero = (fstBin-startZeroBin)*chanRespMean.binSize
+            tmValStart = tmValStart[tmValStart>tmBeforeStartZero]
+            
             plt.plot(tmValStart, chanRespMean[idx, :])
             plt.fill_between(tmValStart, chanRespMean[idx, :]-chanRespStd[idx,:], chanRespMean[idx, :]+chanRespStd[idx,:], alpha=0.2)
             axVals = np.append(axVals, np.array(plt.axis())[None, :], axis=0)
             axes.append(plt.subplot(numRows, numCols*2, subplotChooseDelayEnd+1))
+            
             tmValEnd = np.arange(timeBeforeAndAfterEnd[0]+binSizeMs/2, timeBeforeAndAfterEnd[1]+binSizeMs/2, binSizeMs)
+            # Only plot what we have data for...
+            endZeroBin = chanRespEndMean.alignmentBins[1]
+            lastBin = chanRespEndMean.shape[1]
+            timeAfterEndZero = (lastBin-endZeroBin)*chanRespEndMean.binSize
+            tmValEnd = tmValEnd[tmValEnd<timeAfterEndZero]
+            
             plt.plot(tmValEnd, chanRespEndMean[idx, :])
             plt.fill_between(tmValEnd, chanRespEndMean[idx, :]-chanRespEndStd[idx,:], chanRespEndMean[idx, :]+chanRespEndStd[idx,:], alpha=0.2)
             axVals = np.append(axVals, np.array(plt.axis())[None, :], axis=0)
