@@ -353,9 +353,11 @@ def plotStimDistributionHistograms(listBSS, plotTitles, labelUse='stimulusMainLa
         plt.figure()
         plt.suptitle(plTtl)
     #    _, trialsPresented = np.unique(dtst.markerTargAngles, axis=0, return_inverse=True)
-        angsPres = bnSp.labels[labelUse]
-        angsPres[angsPres>np.pi] = np.pi - (angsPres[angsPres>np.pi] % (2*np.pi))
-        plt.hist(angsPres,bins = np.arange(-7*np.pi/8, 10*np.pi/8, np.pi/4))
+        angsPres = bnSp.labels[labelUse].copy()
+        # the bottom fits all the angles in the range -np.pi -> np.pi (angles remain
+        # unchanged if they were in that range to begin with)
+        angsPres = ((angsPres + np.pi) % (2*np.pi)) - np.pi
+        plt.hist(angsPres,bins = np.arange(-9*np.pi/8, 7*np.pi/8, np.pi/4))
         plt.title('distribution of directions')
         plt.xlabel('direction angle (rad)')
         plt.ylabel('count')
