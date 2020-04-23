@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from matplotlib import use as mtpltUse
 from matplotlib import get_backend as mtpltWhatBackend
 #mtpltUse('qt5agg') # nobody knows why, but this is necessary to not plot a million figures and *also* the combo tabs...
-mtpltUse('agg') # nobody knows why, but this is necessary to not plot a million figures and *also* the combo tabs...
+mtpltUse('qt5agg') # nobody knows why, but this is necessary to not plot a million figures and *also* the combo tabs...
 from matplotlib.backends.backend_pdf import PdfPages
 try:
     from IPython import get_ipython
@@ -56,12 +56,12 @@ data.append({'description': 'Wakko A2 2018-02-11\nPFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
-              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_PFC/'),
+data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
+              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
-              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_V4/'),
+data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
+              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
 
@@ -71,7 +71,7 @@ processedDataMat = 'processedData.mat'
 
 # dataset = [ [] for _ in range(len(data))]
 dataUseLogical = np.zeros(len(data), dtype='bool')
-dataIndsProcess = np.array([4])#np.array([1,4,7])
+dataIndsProcess = np.array([6])#np.array([4])#np.array([1,4,6])
 dataUseLogical[dataIndsProcess] = True
 
 for dataUse in data[dataUseLogical]:
@@ -88,7 +88,6 @@ for dataUse in data[dataUseLogical]:
 # return binned spikes
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsAroundDelay as genBSLAroundDelay
-from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsGroupedByLabel as genBSLLabGrp
 binnedSpikes = []
 binnedSpikesAll = []
 binnedSpikesOnlyDelay = []
@@ -178,6 +177,7 @@ binnedSpikesShortEnd = genBSLAroundDelay(data,
                                     furthestTimeAfterDelay=0,
                                     setStartToDelayEnd = True,
                                     setEndToDelayStart = False)
+
 
 offshift = 75 #ms
 binnedSpikesShortStartOffshift = genBSLAroundDelay(data, 
@@ -335,10 +335,13 @@ for idxSpks, bnSp in enumerate(binnedSpikesShortStart):
     
     
 #%% some descriptive data plots
+from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as genBSLLabGrp
 from methods.BinnedSpikeSetListMethods import plotExampleChannelResponses
 from methods.BinnedSpikeSetListMethods import plotStimDistributionHistograms
 
 descriptions = [data[idx]['description'] for idx in dataIndsProcess]
+chansAll = np.array([23,-1,-1,-1,23,-1,20,-1], dtype='int16')
+chansForPlots = chansAll[dataIndsProcess]
 
 timeBeforeAndAfterStart = (-furthestBack, furthestForward)
 timeBeforeAndAfterEnd = (-furthestBack, furthestForward)
@@ -350,17 +353,24 @@ listConcatBSS = [np.concatenate(bnSp, axis=1).view(BinnedSpikeSet)[None,:,:] for
 listBSSFull = binnedSpikes
 listBSSEnd = binnedSpikeEnd
 listBSSShortStart = binnedSpikesShortStart
-listBSSFull = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSSFull, listConcatBSS)]
-listBSSEnd = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSSEnd, listConcatBSS)]
-listBSSShortStart = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSSShortStart, listConcatBSS)]
-# listBSS = [bnSp[:,chK,:] for bnSp, chK in zip(listBSS, chansGoodBSS)]
-
-groupedSpikesTrialAvg, grpLabels = genBSLLabGrp([bnSp.baselineSubtract(labels=bnSp.labels['stimulusMainLabel']) for bnSp in listBSSFull], labelUse='stimulusMainLabel')
-groupedSpikesEndTrialAvg, grpLabels = genBSLLabGrp([bnSp.baselineSubtract(labels=bnSp.labels['stimulusMainLabel']) for bnSp in listBSSEnd], labelUse='stimulusMainLabel')
-groupedSpikesTrialShortStartAvg, grpLabels = genBSLLabGrp([bnSp.baselineSubtract(labels=bnSp.labels['stimulusMainLabel']) for bnSp in listBSSShortStart], labelUse='stimulusMainLabel')
+groupedSpikesTrialAvg, grpLabels = genBSLLabGrp(listBSSFull, labelUse='stimulusMainLabel')
+groupedSpikesEndTrialAvg, grpLabels = genBSLLabGrp(listBSSEnd, labelUse='stimulusMainLabel')
+groupedSpikesTrialShortStartAvg, grpLabels = genBSLLabGrp(listBSSShortStart, labelUse='stimulusMainLabel')
 plotExampleChannelResponses(groupedSpikesTrialAvg, groupedSpikesTrialShortStartAvg, groupedSpikesEndTrialAvg, 
                                 timeBeforeAndAfterStart, timeBeforeAndAfterEnd,
-                                grpLabels, descriptions, ylabel = 'Z score', chansForPlots = [23,83, 20])
+                                grpLabels, descriptions, ylabel = 'Z score', chansForPlots = chansForPlots)
+
+# Z-scored and baseline subbed!
+# listBSSFull = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSSFull, listConcatBSS)]
+# listBSSEnd = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSSEnd, listConcatBSS)]
+# listBSSShortStart = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSSShortStart, listConcatBSS)]
+# listBSS = [bnSp[:,chK,:] for bnSp, chK in zip(listBSS, chansGoodBSS)]
+# groupedSpikesTrialAvg, grpLabels = genBSLLabGrp([bnSp.baselineSubtract(labels=bnSp.labels['stimulusMainLabel']) for bnSp in listBSSFull], labelUse='stimulusMainLabel')
+# groupedSpikesEndTrialAvg, grpLabels = genBSLLabGrp([bnSp.baselineSubtract(labels=bnSp.labels['stimulusMainLabel']) for bnSp in listBSSEnd], labelUse='stimulusMainLabel')
+# groupedSpikesTrialShortStartAvg, grpLabels = genBSLLabGrp([bnSp.baselineSubtract(labels=bnSp.labels['stimulusMainLabel']) for bnSp in listBSSShortStart], labelUse='stimulusMainLabel')
+# plotExampleChannelResponses(groupedSpikesTrialAvg, groupedSpikesTrialShortStartAvg, groupedSpikesEndTrialAvg, 
+#                                 timeBeforeAndAfterStart, timeBeforeAndAfterEnd,
+#                                 grpLabels, descriptions, ylabel = 'Z score', chansForPlots = [23,83, 20])
 
 
 

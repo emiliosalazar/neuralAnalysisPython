@@ -42,12 +42,12 @@ data.append({'description': 'Wakko A2 2018-02-11\nPFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
-              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_PFC/'),
+data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
+              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
-              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_V4/'),
+data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
+              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
 
@@ -57,7 +57,7 @@ processedDataMat = 'processedData.mat'
 
 # dataset = [ [] for _ in range(len(data))]
 dataUseLogical = np.zeros(len(data), dtype='bool')
-dataIndsProcess = np.array([1,4,7])
+dataIndsProcess = np.array([6])#np.array([1,4,6])
 dataUseLogical[dataIndsProcess] = True
 
 for dataUse in data[dataUseLogical]:
@@ -74,7 +74,6 @@ for dataUse in data[dataUseLogical]:
 #%% get desired time segment
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsAroundDelay as genBSLAroundDelay
-from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsGroupedByLabel as genBSLLabGrp
 binnedSpikes = []
 binnedSpikesAll = []
 binnedSpikesOnlyDelay = []
