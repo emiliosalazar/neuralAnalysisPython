@@ -135,9 +135,9 @@ class Dataset():
             self.spikeDatSort = np.ones(self.spikeDatTimestamps.shape[0:2])
             
             if 'cue' in annots['S']:
-                self.markerTargAngles = np.stack([cue[0] for cue in annots['S']['cue'][0]])/180*180 # /*180 is to convert to dtype=float64 for matching to others
+                self.markerTargAngles = np.stack([cue[0] for cue in annots['S']['cue'][0]])*np.pi # /*180 is to convert to dtype=float64 for matching to others
             elif 'angle' in annots['S']:
-                self.markerTargAngles = np.stack([cue[0] for cue in annots['S']['angle'][0]])/180*180 
+                self.markerTargAngles = np.stack([cue[0] for cue in annots['S']['angle'][0]])/180*np.pi 
             self.trialStatuses = np.stack([stat[0,0] for stat in annots['S']['status'][0]])
             
             spikeDatChannels = np.stack(range(0, self.spikeDatTimestamps.shape[1]))
