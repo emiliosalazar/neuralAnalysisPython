@@ -134,6 +134,8 @@ def LoadHdf5Mat(matfilePath):
                         if deref.attrs['MATLAB_class'] == b'char':
                             out = "".join([chr(ch) for ch in deref[()]])
                             return out
+                        elif deref.attrs['MATLAB_class'] == b'logical':
+                            pass # uint8, the default, is a fine type for logicals
                         else:
                             print(deref.attrs['MATLAB_class'])
                             print('int decode but class not char...')
@@ -167,7 +169,7 @@ def LoadHdf5Mat(matfilePath):
         
         return out
     
-    hdf5Matfile = h5py.File(matfilePath)
+    hdf5Matfile = h5py.File(matfilePath, 'r')
     
     out = {}
 
