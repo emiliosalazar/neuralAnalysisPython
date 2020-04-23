@@ -30,7 +30,7 @@ class BinnedSpikeSet(np.ndarray):
     
     # this has to do with how it's suggested that ndarray be subclassed...
     # https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
-    def __new__(cls, input_array, start=None, end=None, binSize=None, labels = {}):
+    def __new__(cls, input_array, start=None, end=None, binSize=None, labels = {}, alignmentBins = None):
         # Create the ndarray instance of our type, given the usual
         # ndarray input arguments.  This will call the standard
         # ndarray constructor, but return an object of our type.
@@ -45,6 +45,9 @@ class BinnedSpikeSet(np.ndarray):
         obj.end = end
         obj.labels = labels # this is meant to hold various types of labels, especially for trials
                 # and also to be expansible if new/overlapping labels present
+        obj.alignmentBins = alignmentBins # this is meant to tell us how this BinnedSpikeSet
+                # was aligned when it was generated (i.e. what points in time correspond to an important 
+                # stimulus-related change, say)
         obj._new_label_index = []
                 
         # Finally, we must return the newly created object:
@@ -80,12 +83,15 @@ class BinnedSpikeSet(np.ndarray):
         self.start = getattr(obj, 'start', None)
         self.end = getattr(obj, 'end', None)
         self.labels = copy(getattr(obj, 'labels', {})) # this is meant to hold various types of labels, especially for trials
+        self.alignmentBins = getattr(obj, 'alignmentBins', None)
         try:
             # print('size = ' + str(len(obj._new_label_index)))
             # print('first ' + str(obj._new_label_index))
             # print('last ' + str(obj._new_label_index) + '\n')
             for key, val in self.labels.items():
                 self.labels[key] = val[obj._new_label_index]
+            
+            self.alignmentBins = self.alignmentBins[obj._new_label_index]
                 
             self._new_label_index = getattr(obj, '_new_label_index', [])
             setattr(obj, '_new_label_index', [])

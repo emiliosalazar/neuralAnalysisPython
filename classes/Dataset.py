@@ -147,6 +147,13 @@ class Dataset():
             
             self.stateNames = annots['S']['stateNames'][0,0]
             self.kinematics = None
+            
+        allComboTimestamps = np.concatenate(self.spikeDatTimestamps.flatten(), axis=1)
+        if np.any(allComboTimestamps < 0):
+            print('things might break if there are negative timestamps right from the offset...')
+        
+        self.minTimestamp = np.min(allComboTimestamps)
+        self.maxTimestamp = np.stack([np.max(np.concatenate(spDT.flatten(), axis=1)) for spDT in self.spikeDatTimestamps])
         
         if notChan is not None:
             self.removeChannels(notChan)
@@ -188,13 +195,25 @@ class Dataset():
         datasetWithoutCatch = self.filterTrials(trialsWithoutCatchLog)
         return datasetWithoutCatch
     
-    def binSpikeData(self, startMs=0, endMs=3600, binSizeMs=50, notChan = None):
+    def binSpikeData(self, startMs=0, endMs=3600, binSizeMs=50, notChan = None, alignmentPoints=None):
         
         from classes.BinnedSpikeSet import BinnedSpikeSet
+        smallestSpiketime = 0 # this should always be the case...
         if type(endMs) is list:
-            spikeDatBinnedList = [[[[counts for counts in np.histogram(chanSpks, bins=np.arange(sMs, eMs, binSizeMs))][0] for chanSpks in trlChans][0] for trlChans in trl] for trl, sMs, eMs in zip(self.spikeDatTimestamps, startMs, endMs)]
+            # Adding binSizeMs to the end ensures that that last spike gets counted...
+            binsUse = [np.arange(sMs, eMs, binSizeMs)[np.logical_and(smallestSpiketime<=np.arange(sMs, eMs, binSizeMs), np.arange(sMs, eMs, binSizeMs)<=lrgSpTm+binSizeMs)] for sMs, eMs, lrgSpTm in zip(startMs, endMs, self.maxTimestamp)]
+            startMs = [bU[0] for bU in binsUse]
+            endMs = [bU[-1] for bU in binsUse]
+            alignmentBins = [tuple((aP-bnsUse[0])/binSizeMs for aP in alPo) for alPo, bnsUse in zip(alignmentPoints, binsUse)] if alignmentPoints is not None else None
+            spikeDatBinnedList = [[[[counts for counts in np.histogram(chanSpks, bins=bnUse)][0] for chanSpks in trlChans][0] for trlChans in trl] for trl, bnUse in zip(self.spikeDatTimestamps, binsUse)]
         else:
-            spikeDatBinnedList = [[[[counts for counts in np.histogram(chanSpks, bins=np.arange(startMs, endMs, binSizeMs))][0] for chanSpks in trlChans][0] for trlChans in trl] for trl in self.spikeDatTimestamps]
+            binsUse = np.arange(startMs, endMs, binSizeMs)[np.logical_and(smallestSpiketime<=np.arange(startMs, endMs, binSizeMs), np.arange(startMs, endMs, binSizeMs)<=np.max(self.maxTimestamp))]
+            startMs = binsUse[0]
+            endMs = binsUse[-1]
+            alignmentBins = tuple((alignmentPoints-binsUse[0])/binSizeMs for aP in alignmentPoints) if alignmentPoints is not None else None
+            spikeDatBinnedList = [[[[counts for counts in np.histogram(chanSpks, bins=binsUse)][0] for chanSpks in trlChans][0] for trlChans in trl] for trl in self.spikeDatTimestamps]
+            
+
         spikeDatBinnedArr = [np.stack(trl) for trl in spikeDatBinnedList]
         
         if notChan is not None:
@@ -212,6 +231,7 @@ class Dataset():
                 sp.binSize = binSizeMs
                 sp.start = startMs[idx]
                 sp.end = endMs[idx]
+                sp.alignmentBins = alignmentBins[idx] if alignmentBins is not None else None
                 spikeDatBinned[idx] = sp
         else:
             spikeDatBinned = spikeDatBinned/(binSizeMs/1000)
@@ -219,6 +239,7 @@ class Dataset():
             spikeDatBinned.binSize = binSizeMs
             spikeDatBinned.start = startMs
             spikeDatBinned.end = endMs
+            spikeDatBinned.alignmentBins = alignmentBins
             spikeDatBinned = spikeDatBinned[:, chansOfInt, :]
         
         
