@@ -119,8 +119,8 @@ class GPFA:
             seqTestStr = "subsref([seqTrain{:}], struct('type', '()', 'subs', {{[]}}))"
         else:
             # NOTE: INCOMPLETE!
-            # self.computeTestTrainIndRandom(numFolds = crossvalidateNum)
-            self.trainInds, self.testInds = self.computeTestTrainIndOrdered(numFolds = crossvalidateNum)
+            self.trainInds, self.testInds =  self.computeTestTrainIndRandom(numFolds = crossvalidateNum)
+            # self.trainInds, self.testInds = self.computeTestTrainIndOrdered(numFolds = crossvalidateNum)
             seqsTrain, seqsTest = self.trainAndTestSeq()
             seqTrainStr = "[seqTrain{:}]"
             seqTestStr = "[seqTest{:}]"
