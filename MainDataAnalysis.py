@@ -341,6 +341,7 @@ from methods.BinnedSpikeSetListMethods import plotStimDistributionHistograms
 
 descriptions = [data[idx]['description'] for idx in dataIndsProcess]
 chansAll = np.array([23,-1,-1,-1,23,-1,20,-1], dtype='int16')
+# chansAll = np.array([23,-1,-1,-1,70,-1,20,-1], dtype='int16')
 chansForPlots = chansAll[dataIndsProcess]
 
 timeBeforeAndAfterStart = (-furthestBack, furthestForward)
