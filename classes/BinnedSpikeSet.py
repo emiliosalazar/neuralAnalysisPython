@@ -205,13 +205,13 @@ class BinnedSpikeSet(np.ndarray):
         return trlTmStmp
         
     def balancedTrialInds(self, labels):
-        unq, unqCnts = np.unique(labels, return_counts=True)
+        unq, unqCnts = np.unique(labels, return_counts=True, axis=0)
         minCnt = min(unqCnts)
         idxUse = []
         
         for idx, cnt in enumerate(unqCnts):
             labHere = unq[idx]
-            inds, _ = np.nonzero(labels==labHere)
+            inds, = np.nonzero(np.all(labels==labHere, axis=labHere.ndim))
             if cnt>minCnt:
                 # grab a random subset of labelled data of the correct balanced size
                 idxUse.append(np.random.permutation(inds)[:minCnt])
@@ -239,11 +239,11 @@ class BinnedSpikeSet(np.ndarray):
 
     # group by all unique values in label and/or group by explicit values in labelExtract
     def groupByLabel(self, labels, labelExtract=None):
-        unq, unqCnts = np.unique(labels, return_counts=True)
+        unq, unqCnts = np.unique(labels, return_counts=True, axis=0)
         if labelExtract is None:
-            groupedSpikes = [self[labels.squeeze()==lbl] for lbl in unq]
+            groupedSpikes = [self[np.all(labels.squeeze()==lbl,axis=lbl.ndim)] for lbl in unq]
         else:
-            groupedSpikes = [self[labels.squeeze()==lbl] for lbl in labelExtract]
+            groupedSpikes = [self[np.all(labels.squeeze()==lbl,axis=lbl.ndim)] for lbl in labelExtract]
             unq = labelExtract
             
         
@@ -753,7 +753,7 @@ class BinnedSpikeSet(np.ndarray):
                 firingRateThresh = -1
         
         
-        uniqueTargAngle, trialsPresented = np.unique(newLabels, return_inverse=True)
+        uniqueTargAngle, trialsPresented = np.unique(newLabels, return_inverse=True, axis=0)
         
         if numConds is None:
             stimsUse = np.arange(uniqueTargAngle.shape[0])
@@ -775,7 +775,7 @@ class BinnedSpikeSet(np.ndarray):
         
         
         
-        grpSpksNpArr, _ = binnedSpikesUse.groupByLabel(newLabels, labelExtract=uniqueTargAngle[stimsUse,None]) # extract one label...
+        grpSpksNpArr, _ = binnedSpikesUse.groupByLabel(newLabels, labelExtract=uniqueTargAngle[stimsUse]) # extract one label...
         if combineConds and (numConds is None or numConds>1):
             groupedBalancedSpikes = [BinnedSpikeSet(np.concatenate(grpSpksNpArr, axis=0), binSize = grpSpksNpArr[0].binSize)] # grpSpksNpArr
             condDescriptors = ['s' + '-'.join(['%d' % stN for stN in stimsUse]) + 'Grpd']
