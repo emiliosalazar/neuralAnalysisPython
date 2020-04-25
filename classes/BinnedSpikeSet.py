@@ -17,6 +17,8 @@ from copy import copy
 
 import pdb
 
+HANDLED_FUNCTIONS = {}
+
 class BinnedSpikeSet(np.ndarray):
     dimDescription = {'rows':'trials',
                       'cols':'channel',
@@ -45,7 +47,11 @@ class BinnedSpikeSet(np.ndarray):
         obj.end = end
         obj.labels = labels # this is meant to hold various types of labels, especially for trials
                 # and also to be expansible if new/overlapping labels present
-        obj.alignmentBins = alignmentBins # this is meant to tell us how this BinnedSpikeSet
+        
+        if alignmentBins is list:
+            obj.alignmentBins = np.stack(alignmentBins)
+        else:
+            obj.alignmentBins = alignmentBins # this is meant to tell us how this BinnedSpikeSet
                 # was aligned when it was generated (i.e. what points in time correspond to an important 
                 # stimulus-related change, say)
         obj._new_label_index = []
@@ -83,7 +89,7 @@ class BinnedSpikeSet(np.ndarray):
         self.start = getattr(obj, 'start', None)
         self.end = getattr(obj, 'end', None)
         self.labels = copy(getattr(obj, 'labels', {})) # this is meant to hold various types of labels, especially for trials
-        self.alignmentBins = getattr(obj, 'alignmentBins', None)
+        self.alignmentBins = copy(getattr(obj, 'alignmentBins', None))
         try:
             # print('size = ' + str(len(obj._new_label_index)))
             # print('first ' + str(obj._new_label_index))
@@ -96,6 +102,14 @@ class BinnedSpikeSet(np.ndarray):
             self._new_label_index = getattr(obj, '_new_label_index', [])
             setattr(obj, '_new_label_index', [])
         except Exception as e:
+            # print(e)
+            if hasattr(obj, '_new_label_index'):
+                # print('tried')
+                # print(obj._new_label_index)
+                # print('failed')
+                pass
+            else:
+                pass;#print('no _new_label_index')
             pass
                 # and also to be expansible if new/overlapping labels present
         self._new_label_index = getattr(self, '_new_label_index', [])
@@ -107,19 +121,22 @@ class BinnedSpikeSet(np.ndarray):
     def __getitem__(self,item):
         try:
             # print(type(self))
-            if isinstance(item, (slice, int, np.ndarray)):
+            if isinstance(item, (list,slice, int, np.ndarray)) or np.issubdtype(type(item), np.integer):
                 # print('test')
                 self._new_label_index = item
                 #setattr(self,'_new_label_index', item)
-            elif isinstance(item[0], (slice, int, np.ndarray)):
+            elif isinstance(item[0], (list,slice, int, np.ndarray)) or np.issubdtype(type(item[0]), np.integer):
                 # print('test2')
                 # print(str(item))
+                # print(type(item))
                 # print(str(self.shape))
                 # print(str(self.labels))
                 self._new_label_index = item[0]
                 # setattr(self,'_new_label_index', item[0])
             # else:
                 # print('test3')
+                # print(type(item))
+                # print(item)
                 # print(str(self.shape))
                 # self._new_label_index = item[0]
                 # print('hello')
@@ -127,9 +144,18 @@ class BinnedSpikeSet(np.ndarray):
             pass
         # print("0")
         return super().__getitem__(item)
+    
+    def __array_function__(self, func, types, args, kwargs):
+        if func not in HANDLED_FUNCTIONS:
+            return BinnedSpikeSet(func(np.array(*args), **kwargs))
+        # Note: this allows subclasses that don't override
+        # __array_function__ to handle BinnedSpikeSet objects
+        if not all(issubclass(t, BinnedSpikeSet) for t in types):
+            return NotImplemented
+        return HANDLED_FUNCTIONS[func](*args, **kwargs)
         
     def copy(self):
-        out = BinnedSpikeSet(self.view(np.ndarray).copy(), start=self.start, end=self.end, binSize=self.binSize, labels=self.labels.copy())
+        out = BinnedSpikeSet(self.view(np.ndarray).copy(), start=self.start, end=self.end, binSize=self.binSize, labels=self.labels.copy(), alignmentBins=self.alignmentBins.copy())
         
         # # copy back the labels
         # for labelName, labels in self.labels.items():
@@ -1061,3 +1087,53 @@ class BinnedSpikeSet(np.ndarray):
                     plt.axvline(x=0, linestyle='--')
        
         return xDimBestAll, gpfaPrepAll
+
+#%% implementation of some np functions
+
+def implements(numpy_function):
+    """Register an __array_function__ implementation for MyArray objects."""
+    def decorator(func):
+        HANDLED_FUNCTIONS[numpy_function] = func
+        return func
+    return decorator
+
+# implementation of concatenate for BinnedSpikeSet objects
+@implements(np.concatenate)
+def concatenate(arrays, axis=0, out=None):
+    binSizes = np.stack([arr.binSize for arr in arrays])
+    if not np.all(binSizes == binSizes[0]):
+        raise(Exception("Can't (shouldn't?) concatenate BinnedSpikeSets with different bin sizes!"))
+    from itertools import chain
+    if type(arrays) is list:
+        arrayNd = [arr.view(np.ndarray) for arr in arrays]
+    elif  type(arrays) is BinnedSpikeSet and arrays.dtype=='object':
+        # we're converting from a BinnedSpikeSet trl x chan object whose elements
+        # are spike trains, into a # trials length list of single trials 1 x trl x chan
+        arrayNd = [np.stack(arr.tolist())[None,:,:] for arr in arrays]
+    elif type(arrays) is BinnedSpikeSet: # and it's not an object
+        arrayNd = arrays.view(np.ndarray)
+    else:
+        raise(Exception("Concatenating anything but lists of BinnedSpikeSet not implemented yet!"))
+        
+    concatTrad = np.concatenate(arrayNd, axis = axis)
+    if axis == 0:
+        concatStartInit = [arr.start for arr in arrays]
+        concatStart = list(chain(*concatStartInit))
+        concatEndInit = [arr.end for arr in arrays]
+        concatEnd = list(chain(*concatEndInit))
+        
+        unLabelKeys = np.unique([arr.labels.keys() for arr in arrays])
+        for key in unLabelKeys:
+            # might need to return to the below if keys start having to be lists...
+            keyVals = np.stack([arr.labels[key] for arr in arrays])
+            newLabels[key] = keyVals # list(chain(*keyVals))
+            
+        concatAlBinsInit = np.stack([arr.alignmentBins for arr in arrays])
+        concatAlBins = list(chain(*concatAlBinsInit))
+        return BinnedSpikeSet(concatTrad, start=concatStart, end=concatEnd, binSize=binSizes[0], labels=newLabels, alignmentBins=concatAlBins)
+    elif axis < 3:
+        return BinnedSpikeSet(concatTrad, start=None, end=None, binSize=binSizes[0], labels=None, alignmentBins=None)
+    else:
+        raise(Exception("Not really sure what concatenating in more than 3 dims means... let's talk later"))
+    
+   
