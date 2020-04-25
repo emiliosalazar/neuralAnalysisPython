@@ -202,15 +202,15 @@ class Dataset():
         if type(endMs) is list:
             # Adding binSizeMs to the end ensures that that last spike gets counted...
             binsUse = [np.arange(sMs, eMs, binSizeMs)[np.logical_and(smallestSpiketime<=np.arange(sMs, eMs, binSizeMs), np.arange(sMs, eMs, binSizeMs)<=lrgSpTm+binSizeMs)] for sMs, eMs, lrgSpTm in zip(startMs, endMs, self.maxTimestamp)]
-            startMs = [bU[0] for bU in binsUse]
-            endMs = [bU[-1] for bU in binsUse]
-            alignmentBins = [tuple((aP-bnsUse[0])/binSizeMs for aP in alPo) for alPo, bnsUse in zip(alignmentPoints, binsUse)] if alignmentPoints is not None else None
+            startMs = np.stack([bU[0] for bU in binsUse])
+            endMs = np.stack([bU[-1] for bU in binsUse])
+            alignmentBins = np.stack([tuple((aP-bnsUse[0])/binSizeMs for aP in alPo) for alPo, bnsUse in zip(alignmentPoints, binsUse)]) if alignmentPoints is not None else None
             spikeDatBinnedList = [[[[counts for counts in np.histogram(chanSpks, bins=bnUse)][0] for chanSpks in trlChans][0] for trlChans in trl] for trl, bnUse in zip(self.spikeDatTimestamps, binsUse)]
         else:
             binsUse = np.arange(startMs, endMs, binSizeMs)[np.logical_and(smallestSpiketime<=np.arange(startMs, endMs, binSizeMs), np.arange(startMs, endMs, binSizeMs)<=np.max(self.maxTimestamp))]
-            startMs = binsUse[0]
-            endMs = binsUse[-1]
-            alignmentBins = tuple((alignmentPoints-binsUse[0])/binSizeMs for aP in alignmentPoints) if alignmentPoints is not None else None
+            startMs = np.stack([binsUse[0]])
+            endMs = np.stack([binsUse[-1]])
+            alignmentBins = np.stack(tuple((alignmentPoints-binsUse[0])/binSizeMs for aP in alignmentPoints)) if alignmentPoints is not None else None
             spikeDatBinnedList = [[[[counts for counts in np.histogram(chanSpks, bins=binsUse)][0] for chanSpks in trlChans][0] for trlChans in trl] for trl in self.spikeDatTimestamps]
             
 
@@ -224,15 +224,28 @@ class Dataset():
         try:
             spikeDatBinned = np.stack(spikeDatBinnedArr)
         except ValueError:
-            spikeDatBinned = [sp.view(BinnedSpikeSet) for sp in spikeDatBinnedArr]
-            spikeDatBinned = [sp[chansOfInt, :] for sp in spikeDatBinned]
-            for idx, sp in enumerate(spikeDatBinned):
-                sp = sp/(binSizeMs/1000)
-                sp.binSize = binSizeMs
-                sp.start = startMs[idx]
-                sp.end = endMs[idx]
-                sp.alignmentBins = alignmentBins[idx] if alignmentBins is not None else None
-                spikeDatBinned[idx] = sp
+            # spikeDatBinnedByChans = np.empty(spikeDatBinnedArr[0].shape[0], dtype='object')
+            # spikeDatBinned = [sp.view(BinnedSpikeSet) for sp in spikeDatBinnedArr]
+            # the None here indicates that there is only one trial for each bin... ensures that the
+            # dimensions appropriately reflect what they should
+            # spikeDatBinned = [sp[None,chansOfInt, :] for sp in spikeDatBinned]
+            
+            
+            # for idx, sp in enumerate(spikeDatBinned):
+            #     sp = sp/(binSizeMs/1000)
+            #     sp.binSize = binSizeMs
+            #     sp.start = np.stack([startMs[idx]])
+            #     sp.end = np.stack([endMs[idx]])
+            #     sp.alignmentBins = np.stack([alignmentBins[idx]]) if alignmentBins is not None else None
+            #     spikeDatBinned[idx] = sp
+            
+            spikeDatBinnedBreakout = [[sp for sp in spBArr] for spBArr in spikeDatBinnedArr]
+            spikeDatBinned = BinnedSpikeSet(np.asarray(spikeDatBinnedBreakout)/(binSizeMs/1000),
+                                            binSize = binSizeMs,
+                                            start = startMs,
+                                            end = endMs,
+                                            alignmentBins = alignmentBins)
+            spikeDatBinned = spikeDatBinned[:, chansOfInt]
         else:
             spikeDatBinned = spikeDatBinned/(binSizeMs/1000)
             spikeDatBinned = spikeDatBinned.view(BinnedSpikeSet)
