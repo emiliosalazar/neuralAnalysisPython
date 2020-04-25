@@ -804,6 +804,7 @@ class BinnedSpikeSet(np.ndarray):
                         
         for idx, gpfaPrep in enumerate(gpfaPrepAll):
             print("** Crossvalidating and plotting GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
+            grpSpks = groupedBalancedSpikes[idx]
             cvApproach = "logLikelihood"
             normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(eng=eng, approach = cvApproach)
             # best xDim is our lowest error from the normalGpfaScore... for now...
@@ -859,33 +860,46 @@ class BinnedSpikeSet(np.ndarray):
                 axesEnd = []
                 axVals = np.empty((0,4))
                 figSep = plt.figure()
-                figSep.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
+                figSep.suptitle(description + " cond " + str(uniqueTargAngleDeg[idx].tolist()) + "")
                 if xDimBest>2:
                     figTraj = plt.figure()
                     axStartTraj = plt.subplot(1,3,1,projection='3d')
                     axEndTraj = plt.subplot(1,3,2,projection='3d')
                     axAllTraj = plt.subplot(1,3,3,projection='3d')
-                    figTraj.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
+                    figTraj.suptitle(description + " cond " + str(uniqueTargAngleDeg[idx].tolist()) + "")
                 elif xDimBest>1:
                     figTraj = plt.figure()
                     axStartTraj = plt.subplot(1,3,1)
                     axEndTraj = plt.subplot(1,3,2)
                     axAllTraj = plt.subplot(1,3,3)
-                    figTraj.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
+                    figTraj.suptitle(description + " cond " + str(uniqueTargAngleDeg[idx].tolist()) + "")
                 
-                for sq, tstInd in zip(seqTestUse,gpfaPrep.testInds[0]):
+                for k, (sq2, tstInd) in enumerate(zip(seqTestUse,gpfaPrep.testInds[0])):
+                    # if k>5:
+                        # break
+                    gSp = grpSpks[tstInd]
+                    sq = {}
+                    sq['xorth'] = np.concatenate((sq2['xorth'][1:], sq2['xorth'][:1]), axis=0)
+                    # gSp = grpSpks[tstInd]
+                    # print(gSp.alignmentBins.shape)
                     if tmValsStartBest.size:
-                        startZeroBin = groupedBalancedSpikes[idx][tstInd].alignmentBins[0]
+                        startZeroBin = gSp.alignmentBins[0]
                         fstBin = 0
                         tmBeforeStartZero = (fstBin-startZeroBin)*binSize
                         tmValsStart = tmValsStartBest[tmValsStartBest>=tmBeforeStartZero]
+                    else:
+                        tmValsStart = np.ndarray((0,0))
                         
                     if tmValsEndBest.size:
                         # Only plot what we have data for...
-                        endZeroBin = groupedBalancedSpikes[idx][tstInd].alignmentBins[1]
-                        lastBin = groupedBalancedSpikes[idx][tstInd].shape[1] # note: same as sq['xorth'].shape[1]
+                        endZeroBin = gSp.alignmentBins[1]
+                        # going into gSp[0] because gSp might be dtype object instead of the float64,
+                        # so might have trials within the array, not accessible without
+                        lastBin = gSp[0].shape[0] # note: same as sq['xorth'].shape[1]
                         timeAfterEndZero = (lastBin-endZeroBin)*binSize
                         tmValsEnd = tmValsEndBest[tmValsEndBest<timeAfterEndZero]
+                    else:
+                        tmValsEnd = np.ndarray((0,0))
                         
                     if xDimBest>2:
                         plt.figure(figTraj.number)
@@ -1050,7 +1064,7 @@ class BinnedSpikeSet(np.ndarray):
                     if True:
                         pltNum = 1
                         plt.figure(figSep.number)
-                        plt.suptitle(description + " " + str(int(uniqueTargAngleDeg[idx])) + " deg")
+                        plt.suptitle(description + " cond " + str(uniqueTargAngleDeg[idx].tolist()) + "")
                         for dimNum, dim in enumerate(sq['xorth']):
                             dimNum = dimNum+1 # first is 1-dimensional, not zero-dimensinoal
                             #we'll only plot the xDimBest dims...
@@ -1062,7 +1076,7 @@ class BinnedSpikeSet(np.ndarray):
                                     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                                     axesStart.append(axesHere)
                                     if pltNum <= colsPlt:
-                                        axesHere.set_title("Start " + str(dimNum))
+                                        axesHere.set_title("dim " + str(dimNum) + " periStart")
                                 else:
                                     if tmValsEnd.size:
                                         axesHere = axesStart[int((pltNum-1)/2)]
@@ -1082,7 +1096,7 @@ class BinnedSpikeSet(np.ndarray):
                                     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                                     axesEnd.append(axesHere)
                                     if pltNum <= colsPlt:
-                                        axesHere.set_title("End " + str(dimNum))
+                                        axesHere.set_title("dim " + str(dimNum) + " periEnd")
                                 else:
                                     if tmValsStart.size:
                                         axesHere = axesEnd[int(pltNum/2-1)]
