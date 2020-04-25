@@ -12,12 +12,22 @@ from classes.BinnedSpikeSet import BinnedSpikeSet
 class GPFA:
     def __init__(self, binnedSpikes, firingRateThresh=5):
         from classes.BinnedSpikeSet import BinnedSpikeSet
-        allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None, :, :].view(BinnedSpikeSet)
-        allTrlTogether.binSize = binnedSpikes[0].binSize
+        if type(binnedSpikes) is list or binnedSpikes.dtype=='object':
+            allTrlTogether = np.concatenate(binnedSpikes, axis=2)
+        else:
+            allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None,:,:]
+        
         _, chansKeep = allTrlTogether.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
         # chansKeepCoinc = allTrlTogether.removeCoincidentSpikes()
         # chansKeep = np.logical_and(chansKeepThresh, chansKeepCoinc)
-        self.binnedSpikes = [bnSp[chansKeep, :] for bnSp in binnedSpikes]
+        if type(binnedSpikes) is list:
+            # the 0 index squeezes out that dimension--and it should be what happens,
+            # as in this structuring you should have only one trial in here...
+            self.binnedSpikes = [bnSp[0, chansKeep, :] for bnSp in binnedSpikes]
+        elif binnedSpikes.dtype=='object':
+            self.binnedSpikes = [np.stack(bnSp) for bnSp in binnedSpikes[:,chansKeep]]
+        else:
+            self.binnedSpikes = [bnSp[chansKeep, :] for bnSp in binnedSpikes]
         self.gpfaSeqDict = self.binSpikesToGpfaInputDict()
         self.trainInds = None
         self.testInds = None

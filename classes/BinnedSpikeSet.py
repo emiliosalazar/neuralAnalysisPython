@@ -165,7 +165,12 @@ class BinnedSpikeSet(np.ndarray):
 #%% general methods
         
     def timeAverage(self):
-        return np.average(self, axis=2)
+        if self.dtype == 'object':
+            out = self.copy()
+            out[:] = [np.average(np.stack(trl), axis=1) for trl in out]
+        else:
+            out = np.average(self, axis=2)
+        return out
     
     def timeStd(self):
         return np.std(self, axis=2, ddof=1) # ddof=1 makes this sample standard deviation #np.sqrt(self.timeAverage()) #
@@ -682,7 +687,16 @@ class BinnedSpikeSet(np.ndarray):
         # np.random.set_state(initRandSt)
         
         if type(self) is list:
-            bnSpksCheck = np.concatenate(self, axis=1)[None, :, :].view(BinnedSpikeSet)
+            bnSpksCheck = np.concatenate(self, axis=2).view(BinnedSpikeSet)
+            bnSpksCheck.labels = {}
+            bnSpksCheck.labels[labelUse] = np.stack([bnSp.labels[labelUse] for bnSp in self])
+            binSize = self[0].binSize
+            colorset = self[0].colorset
+        elif self.dtype == 'object':
+            bnSpksCheck = np.concatenate(self, axis=2).view(BinnedSpikeSet)
+            bnSpksCheck.labels = {}
+            # bastardization of how BinnedSpikeSet should be used, give that labels
+            # should refer to trials, and bnSpksCheck is flattened to one 'trial'
             bnSpksCheck.labels[labelUse] = np.stack([bnSp.labels[labelUse] for bnSp in self])
             binSize = self[0].binSize
             colorset = self[0].colorset
@@ -705,16 +719,16 @@ class BinnedSpikeSet(np.ndarray):
         # binnedSpikeHighFR = self[:,chIndsUseFR,:]
         
         if balanceDirs:
-            trlIndsUseLabel = bnSpksCheck.balancedTrialInds(labels=bnSpksCheck.labels[labelUse])
+            trlIndsUseLabel = self.balancedTrialInds(labels=self.labels[labelUse])
             # binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]#.view(np.ndarray)
         else:
-            trlIndsUseLabel = range(len(bnSpksCheck))
+            trlIndsUseLabel = range(len(self))
             # binnedSpikesUse = binnedSpikeHighFR
         # binnedSpikesBalanced = binnedSpikesBalanced.view(BinnedSpikeSet)
         # binnedSpikesBalanced = [self[trl] for trl in trlIndsUse] # FOR LATER
         
         if type(self) is list:
-            binnedSpikeHighFR = [bnSp[chIndsUseFR, :] for bnSp in self]
+            binnedSpikeHighFR = [bnSp[:,chIndsUseFR, :] for bnSp in self]
             binnedSpikesUse = np.empty(len(binnedSpikeHighFR), dtype='object')
             binnedSpikesUse[:] = binnedSpikeHighFR
             binnedSpikesUse = binnedSpikesUse[trlIndsUseLabel]
@@ -723,6 +737,13 @@ class BinnedSpikeSet(np.ndarray):
             binnedSpikesUse.labels[labelUse] = newLabels
             if baselineSubtract:
                 raise(Exception("Can't baseline subtract trials of unequal size!"))
+        elif self.dtype == 'object':
+            binnedSpikeHighFR = self[:,chIndsUseFR]
+            binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
+            newLabels = binnedSpikesUse.labels[labelUse]
+            if baselineSubtract:
+                binnedSpikesUse = binnedSpikesUse.baselineSubtract(labels = newLabels)
+                firingRateThresh = -1
         else:
             binnedSpikeHighFR = self[:,chIndsUseFR,:]
             binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
