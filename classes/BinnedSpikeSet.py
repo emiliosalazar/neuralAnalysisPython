@@ -812,7 +812,6 @@ class BinnedSpikeSet(np.ndarray):
                 xDimScoreBest = xDimTest[np.argmax(normalGpfaScore)]
             elif cvApproach is "squaredError":
                 xDimScoreBest = xDimTest[np.argmin(normalGpfaScore)]
-            seqTestUse = gpfaPrep.dimOutput[xDimScoreBest]['seqsTestNew'][0] # just use the first one...
             
             dimsAll = list(gpfaPrep.dimOutput.keys())
             Cparams = [prm['C'] for prm in gpfaPrep.dimOutput[xDimScoreBest]['allEstParams']]
@@ -874,7 +873,9 @@ class BinnedSpikeSet(np.ndarray):
                     axAllTraj = plt.subplot(1,3,3)
                     figTraj.suptitle(description + " cond " + str(uniqueTargAngleDeg[idx].tolist()) + "")
                 
-                for k, (sq, tstInd) in enumerate(zip(seqTestUse,gpfaPrep.testInds[0])):
+                cValUse = 0
+                seqTestUse = gpfaPrep.dimOutput[xDimScoreBest]['seqsTestNew'][cValUse] # just use the first one...
+                for k, (sq, tstInd) in enumerate(zip(seqTestUse,gpfaPrep.testInds[cValUse])):
                     # if k>5:
                         # break
                     gSp = grpSpks[tstInd]
