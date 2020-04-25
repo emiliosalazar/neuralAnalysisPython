@@ -43,6 +43,8 @@ class GPFA:
         
         gpfaSeqDict = []
         for trlNum, trl in enumerate(binnedSpikes):
+            if sqrtSpks:
+                trl = np.sqrt(trl)
             gpfaSeqDict.append({'trialId':trlNum,
                             'T': (trl.shape[1])*1.0,
                             'y': mc.convertNumpyArrayToMatlab(trl)})

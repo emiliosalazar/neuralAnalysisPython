@@ -819,7 +819,7 @@ class BinnedSpikeSet(np.ndarray):
             shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
             percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
             
-            shCovThresh = 0.9
+            shCovThresh = 0.95
             meanPercAcc = np.mean(percAcc, axis=0)
             stdPercAcc = np.std(percAcc, axis = 0)
             xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
@@ -874,12 +874,12 @@ class BinnedSpikeSet(np.ndarray):
                     axAllTraj = plt.subplot(1,3,3)
                     figTraj.suptitle(description + " cond " + str(uniqueTargAngleDeg[idx].tolist()) + "")
                 
-                for k, (sq2, tstInd) in enumerate(zip(seqTestUse,gpfaPrep.testInds[0])):
+                for k, (sq, tstInd) in enumerate(zip(seqTestUse,gpfaPrep.testInds[0])):
                     # if k>5:
                         # break
                     gSp = grpSpks[tstInd]
-                    sq = {}
-                    sq['xorth'] = np.concatenate((sq2['xorth'][1:], sq2['xorth'][:1]), axis=0)
+                    # sq = {}
+                    # sq['xorth'] = np.concatenate((sq2['xorth'][1:], sq2['xorth'][:1]), axis=0)
                     # gSp = grpSpks[tstInd]
                     # print(gSp.alignmentBins.shape)
                     if tmValsStartBest.size:
