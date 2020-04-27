@@ -92,9 +92,23 @@ function gpfaEngine(seqTrain, seqTest, fname, varargin)
     [blah, LLtest] = exactInferenceWithLL(seqTest, estParams);
   end
   
-  % =============
-  % Save results
-  % =============
-  vars  = who;
+  % =================================
+  % Remove unwanted fields  and Save results
+  % ================================
+  % Vsm and VsmGP take up most space. y is original data. So that can be removed as well
+  seqTrain = rmfield(seqTrain,'Vsm');
+  seqTrain = rmfield(seqTrain,'VsmGP');
+%   seqTrain = rmfield(seqTrain,'y');
+  vars = who;
   fprintf('Saving %s...\n', fname);
-  save(fname, vars{~ismember(vars, {'yAll', 'blah'})});
+  % Change version to save without errors
+  save(fname, vars{~ismember(vars, {'yAll', 'blah'})}, '-v7.3');
+  
+  % Below did not remove some space-hogging variables that weren't really
+  % used
+%   % =============
+%   % Save results
+%   % =============
+%   vars  = who;
+%   fprintf('Saving %s...\n', fname);
+%   save(fname, vars{~ismember(vars, {'yAll', 'blah'})});

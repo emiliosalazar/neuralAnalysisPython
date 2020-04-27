@@ -206,21 +206,26 @@ numStimulusConditions = None # because V4 has two...
 # baselineSubtract = True
 # signalDescriptor = "last%dMsDelayFRThresh%0.2f%sCondNum%d" % (furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "", numStimulusConditions)
 # # ** inputs for delay offshifted ** #
-# listBSS = binnedSpikesShortStartOffshift
-# # listConcatBSS = [np.concatenate(bnSp, axis=1).view(BinnedSpikeSet)[None,:,:] for bnSp in listBSS]
-# # chansGoodBSS = [bnSp.channelsAboveThresholdFiringRate(firingRateThresh)[1] for bnSp in listConcatBSS]
-# # listBSS = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSS, listConcatBSS)]
-# # listBSS = [bnSp[:,chK,:] for bnSp, chK in zip(listBSS, chansGoodBSS)]
-# timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
-# timeBeforeAndAfterEnd = None
-# baselineSubtract = True
-# signalDescriptor = "first%dMsDelayOffshift%dMsFRThresh%0.2f%s" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "")
+listBSS = binnedSpikesShortStartOffshift
+# listConcatBSS = [np.concatenate(bnSp, axis=1).view(BinnedSpikeSet)[None,:,:] for bnSp in listBSS]
+# chansGoodBSS = [bnSp.channelsAboveThresholdFiringRate(firingRateThresh)[1] for bnSp in listConcatBSS]
+# listBSS = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSS, listConcatBSS)]
+# listBSS = [bnSp[:,chK,:] for bnSp, chK in zip(listBSS, chansGoodBSS)]
+#timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
+#timeBeforeAndAfterEnd = None
+#baselineSubtract = True
+#signalDescriptor = "first%dMsDelayOffshift%dMsFRThresh%0.2f%s" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "")
 # ** inputs for beginning and end ** #
-listBSS = binnedSpikesAll
+#listBSS = binnedSpikesAll
+listBSS = binnedSpikesAll.copy()
+#allTrue = np.ones(listBSS[0].shape[1], dtype='bool')
+#allTrue[np.array([9,47,70,61,25,3])] = 0 # get rid of possibly bad channels?
+#listBSS[0] = listBSS[0][:,allTrue]
 timeBeforeAndAfterStart = (-furthestBack, furthestForward)
 timeBeforeAndAfterEnd = (-furthestBack, furthestForward)
 baselineSubtract = False
-signalDescriptor = "delayStart%d-%dMsdelayEnd%d-%dMsFRThresh%0.2f%s" % (furthestBack, furthestForward, furthestBack, furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "")
+crossvalidateNumFolds = 4
+signalDescriptor = "delayStart%d-%dMsdelayEnd%d-%dMsFR%0.2f%sSR" % (furthestBack, furthestForward, furthestBack, furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "")
 
 
 
@@ -230,9 +235,41 @@ dimsB, gpPrepB = gpfaComputation(
                 # [listBSS[-1]], [descriptions[-1]], [paths[-1]],
                           timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd = timeBeforeAndAfterEnd,
                           balanceDirs = True, numStimulusConditions = numStimulusConditions, combineConditions=combineConditions, baselineSubtract = baselineSubtract, 
-                          crossvalidateNumFolds = 4, xDimTest = xDimTest, firingRateThresh=firingRateThresh)
+                          crossvalidateNumFolds = crossvalidateNumFolds, xDimTest = xDimTest, firingRateThresh=firingRateThresh)
 
+# for the moment all we want to save is this...
 #%% now save all the figures
 from methods.GeneralMethods import saveFiguresToPdf
 
-saveFiguresToPdf(pdfname="gpfa")
+saveFiguresToPdf(pdfname="gpfaPFCAllCVWithCD12_M1")
+
+# now some more figures
+from matplotlib import pyplot as plt
+plt.close('all')
+if numStimulusConditions is None:
+    numConds = len(np.unique(listBSS[0].labels['stimulusMainLabel'], axis=0))
+else:
+    numConds = numStimulusConditions
+testingArea = 0
+for condUse in range(numConds):
+    for cValUse in range(crossvalidateNumFolds):
+        xDimBest = np.array(dimsB[testingArea][condUse])
+        xDimsTest = np.array(list(gpPrepB[testingArea][condUse].dimOutput.keys()))
+        # do some loops to get the key for the best xdim (given that it'll be loewr than the returned xDimBest)
+        xDimScoreBestIndPos = np.argmin((xDimTest-xDimBest)[(xDimsTest - xDimBest) >= 0])
+        xDimScoreBest = xDimsTest[(xDimsTest-xDimBest)>=0][xDimScoreBestIndPos]
+
+        # sequences are not necessarily in time sorted order, so find correct sorting
+        timeSortInds = np.argsort(gpPrepB[testingArea][condUse].trainInds[cValUse])
+
+        seqTrainNewAll = np.asarray(gpPrepB[testingArea][condUse].dimOutput[xDimScoreBest]['seqsTrainNew'][cValUse])
+        seqTrainNewAllSort = seqTrainNewAll[timeSortInds]
+        seqTrainOrthAll = [sq['xorth'] for sq in seqTrainNewAllSort]
+        seqTrainConcat = np.concatenate(seqTrainOrthAll, axis = 1)
+        plt.figure()
+        plt.plot(seqTrainConcat.T, alpha=0.65)
+        plt.title("GPFA trajectories over all trials in cond %d, cval %d")
+        plt.xlabel("trial bins across all trials concatenated")
+        plt.ylabel("GPFA projection")
+
+saveFiguresToPdf(pdfname="gpfaOverAllTrials_M1")
