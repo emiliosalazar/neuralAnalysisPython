@@ -171,6 +171,8 @@ class Dataset():
         filteredTrials.stateNames = filteredTrials.stateNames
         filteredTrials.statesPresented = [filteredTrials.statesPresented[hr] for hr in range(0, len(filteredTrials.statesPresented)) if mask[hr]]
         filteredTrials.cosTuningCurveParams = {'thBestPerChan': np.empty(0), 'modPerChan': np.empty(0), 'bslnPerChan': np.empty(0), 'tuningCurves': np.empty(0)}
+        filteredTrials.minTimestamp = filteredTrials.minTimestamp
+        filteredTrials.maxTimestamp = filteredTrials.maxTimestamp[mask]
         if filteredTrials.kinematics is not None:
             filteredTrials.kinematics = filteredTrials.kinematics[mask]
         return filteredTrials
