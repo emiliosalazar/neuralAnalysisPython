@@ -7,10 +7,11 @@ Created on Tue Feb 11 15:26:50 2020
 """
 from classes.MatlabConversion import MatlabConversion as mc
 import numpy as np
+import scipy as sp
 from classes.BinnedSpikeSet import BinnedSpikeSet
 
 class GPFA:
-    def __init__(self, binnedSpikes, firingRateThresh=5):
+    def __init__(self, binnedSpikes, firingRateThresh=5, sqrtSpks = True):
         from classes.BinnedSpikeSet import BinnedSpikeSet
         if type(binnedSpikes) is list or binnedSpikes.dtype=='object':
             allTrlTogether = np.concatenate(binnedSpikes, axis=2)
@@ -28,7 +29,7 @@ class GPFA:
             self.binnedSpikes = [np.stack(bnSp) for bnSp in binnedSpikes[:,chansKeep]]
         else:
             self.binnedSpikes = [bnSp[chansKeep, :] for bnSp in binnedSpikes]
-        self.gpfaSeqDict = self.binSpikesToGpfaInputDict()
+        self.gpfaSeqDict = self.binSpikesToGpfaInputDict(sqrtSpks = sqrtSpks)
         self.trainInds = None
         self.testInds = None
         self.dimOutput = {}
@@ -38,8 +39,9 @@ class GPFA:
         else:
             self.binSize = binnedSpikes.binSize
     
-    def binSpikesToGpfaInputDict(self, sqrtSpks = True):
-        binnedSpikes = self.binnedSpikes
+    def binSpikesToGpfaInputDict(self, sqrtSpks = True, binnedSpikes = None):
+        if binnedSpikes is None:
+            binnedSpikes = self.binnedSpikes
         
         gpfaSeqDict = []
         for trlNum, trl in enumerate(binnedSpikes):

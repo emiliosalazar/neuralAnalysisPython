@@ -654,7 +654,7 @@ class BinnedSpikeSet(np.ndarray):
     # of (-250,0) tells us that the *last* bin is aligned at the alignment point
     # for the end (whatever that may be--say, the delay end), and should be plotted
     # starting -250 ms before
-    def gpfa(self, eng, description, outputPath, signalDescriptor = "", xDimTest = [2,5,8], 
+    def gpfa(self, eng, description, outputPath, signalDescriptor = "", xDimTest = [2,5,8], sqrtSpikes = True,
              labelUse = 'stimulusMainLabel', numConds=1, combineConds = False, firingRateThresh = 1, balanceDirs = True, baselineSubtract = True,
              crossvalidateNum = 4, timeBeforeAndAfterStart=(0,250), timeBeforeAndAfterEnd=(-250, 0), plotInfo=None):
         from matlab import engine
@@ -744,14 +744,28 @@ class BinnedSpikeSet(np.ndarray):
             binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
             newLabels = binnedSpikesUse.labels[labelUse]
             if baselineSubtract:
-                binnedSpikesUse = binnedSpikesUse.baselineSubtract(labels = newLabels)
+                if sqrtSpikes:
+                    # we want to square root before negative numbers appear because of baseline subtracting
+                    aB = binnedSpikesUse.alignmentBins
+                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
+                    sqrtSpikes = False
+                    binnedSpikesUse.labels[labelUse] = newLabels
+                    binnedSpikesUse.alignmentBins = aB
+                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
                 firingRateThresh = -1
         else:
             binnedSpikeHighFR = self[:,chIndsUseFR,:]
             binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
             newLabels = binnedSpikesUse.labels[labelUse]
             if baselineSubtract:
-                binnedSpikesUse = binnedSpikesUse.baselineSubtract(labels = newLabels)
+                if sqrtSpikes:
+                    # we want to square root before negative numbers appear because of baseline subtracting
+                    aB = binnedSpikesUse.alignmentBins
+                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
+                    sqrtSpikes = False
+                    binnedSpikesUse.labels[labelUse] = newLabels
+                    binnedSpikesUse.alignmentBins = aB
+                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
                 firingRateThresh = -1
         
         
@@ -790,7 +804,7 @@ class BinnedSpikeSet(np.ndarray):
         gpfaPrepAll = []
         for idx, (grpSpks, condDesc) in enumerate(zip(groupedBalancedSpikes,condDescriptors)):
             print("** Training GPFA for condition %d/%d **" % (idx+1, len(groupedBalancedSpikes)))
-            gpfaPrep = GPFA(grpSpks, firingRateThresh=firingRateThresh)
+            gpfaPrep = GPFA(grpSpks, firingRateThresh=firingRateThresh,sqrtSpks=sqrtSpikes)
             gpfaPrepAll.append(gpfaPrep)
             for idxXdim, xDim in enumerate(xDimTest):
                 print("Testing dimensionality %d. Left to test: " % xDim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
