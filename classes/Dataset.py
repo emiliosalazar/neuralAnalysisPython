@@ -266,16 +266,17 @@ class Dataset():
     # checkNumTrls is the percentage of trials to go through
     def removeCoincidentSpikes(self, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1):
         
-        spikeCountOverallPerChan = np.stack(np.stack([np.concatenate(trlSpks[:], axis=1).shape[1] for trlSpks in self.spikeDatTimestamps.T]))
         
         # spikeCountOverallPerChan = [len(trlStmps)]
         
-        coincCnt = np.zeros((spikeCountOverallPerChan.shape[0],  spikeCountOverallPerChan.shape[0]))
         
         numTrls = len(self.spikeDatTimestamps)
         trlIdxes = np.arange(0, numTrls)
         randIdxes = np.random.permutation(trlIdxes)
         idxesUse = randIdxes[:round(numTrls*checkNumTrls)]
+
+        spikeCountOverallPerChan = np.stack(np.stack([np.concatenate(trlSpks[:], axis=1).shape[1] for trlSpks in self.spikeDatTimestamps[idxesUse,:].T]))
+        coincCnt = np.zeros((spikeCountOverallPerChan.shape[0],  spikeCountOverallPerChan.shape[0]))
         
         for numRound, trlIdx in enumerate(idxesUse):
             if not numRound % 10 and numRound != len(idxesUse)-1:
@@ -294,7 +295,8 @@ class Dataset():
         coincProp = coincCnt/spikeCountOverallPerChan
         
         chansKeep = np.unique(np.where(coincProp<coincidenceThresh)[1]) # every column is the division with that channel's spike count
-        # badChans = np.unique(np.where(coincProp>=coincidentThresh)[1]) # every column is the division with channel's spike count
+        badChans = np.unique(np.where(coincProp>=coincidenceThresh)[1]) # every column is the division with channel's spike count
+        print("Removed channels " + str(badChans))
         
         self.keepChannels(chansKeep)
         
