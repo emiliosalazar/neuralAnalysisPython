@@ -18,35 +18,35 @@ defaultParams = loadDefaultParams(defParamBase = ".")
 dataPath = defaultParams['dataPath']
 
 data = []
-data.append({'description': 'Earl 2019-03-18\nM1 - MGR',
+data.append({'description': 'Earl 2019-03-18 M1 - MGR',
               'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/18/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Erinn'});
-data.append({'description': 'Earl 2019-03-22\nM1 - MGR',
+data.append({'description': 'Earl 2019-03-22 M1 - MGR',
               'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/22/'),
               'delayStartStateName': 'Delay Period',
               'processor': 'Erinn'});
-data.append({'description': 'Pepe A1 2018-07-14\nPFC - MGS',
+data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'processor': 'Emilio'});
-data.append({'description': 'Pepe A2 2018-07-14\nPFC - MGS',
+data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'processor': 'Emilio'});
-data.append({'description': 'Wakko A1 2018-02-11\nPFC - MGS',
+data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'processor': 'Emilio'});
-data.append({'description': 'Wakko A2 2018-02-11\nPFC - MGS',
+data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02\nV4 - cuedAttn',
+data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
               'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02\nPFC - cuedAttn',
+data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
               'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
               'delayStartStateName': 'Blank Before',
               'processor': 'Emilio'});
@@ -241,9 +241,9 @@ dimsB, gpPrepB = gpfaComputation(
 #%% now save all the figures
 from methods.GeneralMethods import saveFiguresToPdf
 
-saveFiguresToPdf(pdfname="gpfaPFCAllCVWithCD12_M1")
+saveFiguresToPdf(pdfname=signalDescriptor + "M1")
 
-# now some more figures
+# now some more figures from matplotlib import pyplot as plt
 from matplotlib import pyplot as plt
 plt.close('all')
 if numStimulusConditions is None:
@@ -258,18 +258,18 @@ for condUse in range(numConds):
         # do some loops to get the key for the best xdim (given that it'll be loewr than the returned xDimBest)
         xDimScoreBestIndPos = np.argmin((xDimTest-xDimBest)[(xDimsTest - xDimBest) >= 0])
         xDimScoreBest = xDimsTest[(xDimsTest-xDimBest)>=0][xDimScoreBestIndPos]
-
+        
         # sequences are not necessarily in time sorted order, so find correct sorting
         timeSortInds = np.argsort(gpPrepB[testingArea][condUse].trainInds[cValUse])
-
+        
         seqTrainNewAll = np.asarray(gpPrepB[testingArea][condUse].dimOutput[xDimScoreBest]['seqsTrainNew'][cValUse])
         seqTrainNewAllSort = seqTrainNewAll[timeSortInds]
         seqTrainOrthAll = [sq['xorth'] for sq in seqTrainNewAllSort]
         seqTrainConcat = np.concatenate(seqTrainOrthAll, axis = 1)
         plt.figure()
         plt.plot(seqTrainConcat.T, alpha=0.65)
-        plt.title("GPFA trajectories over all trials in cond %d, cval %d")
+        plt.title("GPFA trajectories over all trials in cond %d, cval %d" % (condUse, cValUse))
         plt.xlabel("trial bins across all trials concatenated")
         plt.ylabel("GPFA projection")
 
-saveFiguresToPdf(pdfname="gpfaOverAllTrials_M1")
+saveFiguresToPdf(pdfname="gpfaAll" + signalDescriptor + "M1")
