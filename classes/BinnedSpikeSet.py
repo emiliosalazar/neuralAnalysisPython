@@ -230,12 +230,14 @@ class BinnedSpikeSet(np.ndarray):
             spikesUse = self.copy()
             spikesUse = spikesUse[:,:,:] - overallBaseline[:,:] # this indexing is important for the moment to keep the labels field correct...
         else:
-            unq, unqCnts = np.unique(labels, return_counts=True)
+            unq, unqCnts = np.unique(labels, return_counts=True, axis=0)
             spikesUse = self.copy()
+            overallBaseline = []
             for lbl in unq:
-                spikesUse[labels.squeeze()==lbl, :, :] = self[labels.squeeze()==lbl, :, :] - self[labels.squeeze()==lbl, :, :].trialAverage()
+                overallBaseline.append(self[np.all(labels==lbl,axis=lbl.ndim), :, :].trialAverage())
+                spikesUse[np.all(labels==lbl,axis=lbl.ndim), :, :] = self[np.all(labels==lbl,axis=lbl.ndim), :, :] - self[np.all(labels==lbl,axis=lbl.ndim), :, :].trialAverage()
 
-        return spikesUse 
+        return spikesUse, overallBaseline
 
     # group by all unique values in label and/or group by explicit values in labelExtract
     def groupByLabel(self, labels, labelExtract=None):
@@ -243,7 +245,7 @@ class BinnedSpikeSet(np.ndarray):
         if labelExtract is None:
             groupedSpikes = [self[np.all(labels.squeeze()==lbl,axis=lbl.ndim)] for lbl in unq]
         else:
-            groupedSpikes = [self[np.all(labels.squeeze()==lbl,axis=lbl.ndim)] for lbl in labelExtract]
+            groupedSpikes = [self[np.all(labels==lbl,axis=lbl.ndim)] for lbl in labelExtract]
             unq = labelExtract
             
         
@@ -315,7 +317,7 @@ class BinnedSpikeSet(np.ndarray):
             n_components =  self.shape[1]
             
         if baselineSubtract and labels is not None:
-            chanSub = self.baselineSubtract(labels=labels)
+            chanSub, _ = self.baselineSubtract(labels=labels)
         else:
             chanSub = self
             
@@ -376,7 +378,7 @@ class BinnedSpikeSet(np.ndarray):
             n_components =  uniqueLabel.shape[0]-1
             
         if baselineSubtract and labels is not None:
-            chanSub = self.baselineSubtract(labels=labels)
+            chanSub, _ = self.baselineSubtract(labels=labels)
         else:
             chanSub = self
             
@@ -432,7 +434,7 @@ class BinnedSpikeSet(np.ndarray):
             idxUse = np.arange(self.shape[0])
             
         if baselineSubtract:
-            spikesUse = self.baselineSubtract(labels)
+            spikesUse, _ = self.baselineSubtract(labels)
         else:
             spikesUse = self
            
@@ -542,7 +544,7 @@ class BinnedSpikeSet(np.ndarray):
         return areaDim
     
     def residualCorrelations(self, labels, separateNoiseCorrForLabels=False, plot=False, figTitle = "", normalize=False):
-        residualSpikes = self.baselineSubtract(labels=labels)
+        residualSpikes, _ = self.baselineSubtract(labels=labels)
         
         
         chanFirst = residualSpikes.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
