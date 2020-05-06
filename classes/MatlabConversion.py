@@ -33,8 +33,19 @@ class MatlabConversion:
                 numpyDict[key] = MatlabConversion.convertMatlabArrayToNumpy(val)
             elif type(val) is dict:
                 numpyDict[key] = MatlabConversion.convertMatlabDictToNumpy(val)
-            elif type(val) is bool:
+            else:
                 numpyDict[key] = val
             
         return numpyDict
             
+    def convertNumpyDictToMatlab(numpyDict):
+        matlabDict = {}
+        for key, val in numpyDict.items():
+            if type(val) is np.ndarray:
+                matlabDict[key] = MatlabConversion.convertNumpyArrayToMatlab(val)
+            elif type(val) is dict:
+                matlabDict[key] = MatlabConversion.convertNumpyDictToMatlab(val)
+            else:
+                matlabDict[key] = val
+            
+        return matlabDict

@@ -865,8 +865,12 @@ class BinnedSpikeSet(np.ndarray):
                 
                 axScore.axvline(xDimBest, linestyle='--')
                 
-                
-                for cValUse in range(crossvalidateNum):
+
+                for cValUse in [0]:# range(crossvalidateNum):
+#                    meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], labelMeans[idx][None,:,:], sqrtSpks = sqrtSpikes)
+                    meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], np.stack(labelMeans), sqrtSpks = sqrtSpikes)
+                    shuffTraj = gpfaPrep.shuffleGpfaControl(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], cvalTest = cValUse, sqrtSpks = sqrtSpikes)
+
                     rowsPlt = 2
                     if tmValsStartBest.size and tmValsEndBest.size:
                         colsPlt = np.ceil(xDimBest/rowsPlt)*2 # align to start and to end...

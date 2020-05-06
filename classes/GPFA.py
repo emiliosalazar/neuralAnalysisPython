@@ -246,7 +246,39 @@ class GPFA:
             
         return normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore
     
-    
+    def shuffleGpfaControl(self, estParams, cvalTest=0, numShuffle = 500, sqrtSpks = True, eng=None): 
+
+                    
+
+
+        from multiprocessing import Pool
+        with Pool() as poolHere:
+            res = []
+            eng = None
+                
+            res.append(poolHere.apply_async(shuffParallel, (self.binnedSpikes, self.testInds, estParams, cvalTest, numShuffle, sqrtSpks, eng)))
+
+            resultsShuff = [rs.get() for rs in res]
+            # resultsByVar = list(zip(*resultsByDim))
+
+        return resultsShuff[0]
+
+    def projectTrajectory(self, estParams, trajectory, sqrtSpks):
+
+        seqTrajDict = GPFA.binSpikesToGpfaInputDict([], binnedSpikes = trajectory, sqrtSpks=sqrtSpks)
+        from multiprocessing import Pool
+        with Pool() as poolHere:
+            res = []
+            eng = None
+
+            res.append(poolHere.apply_async(projectTrajectory, (seqTrajDict,estParams)))
+
+            resultsTraj = [rs.get() for rs in res]
+
+        return resultsTraj[0]
+
+        
+
     
 # NOTE: these bits of code are grabbed from the Elephant team, which I hadn't
 # found originally when trying to see if GPFA had been implemented in Python yet >.>
@@ -360,6 +392,51 @@ def logdet(A):
     U = np.linalg.cholesky(A)
     return 2 * (np.log(np.diag(U))).sum()
     
+# note that this is code from the elephant program
+def orthogonalize(highDimSpikes, unorthCMat):
+    xDim = unorthCMat.shape[1]
+    if xDim == 1:
+        TT = np.sqrt(np.dot(unorthCMat.T, unorthCMat))
+        Lorth = rdiv(unorthCMat, TT)
+        Xorth = np.dot(TT, highDimSpikes)
+    else:
+        UU, DD, VV = sp.linalg.svd(unorthCMat, full_matrices=False)
+        # TT is transform matrix
+        TT = np.dot(np.diag(DD), VV)
+
+        Lorth = UU
+        Xorth = np.dot(TT, highDimSpikes)
+    return Xorth, Lorth, TT
+
+def makeKBig(params, T, covType = 'rbf', eng=None):
+    if eng is None:
+        from methods.GeneralMethods import prepareMatlab
+        eng = prepareMatlab()
+        
+    xDim = params['C'].shape[1]
+    
+    idx = np.arange(start=0, stop=xDim*T, step=xDim)
+    KAll = np.zeros((xDim*T, xDim*T))
+    KAllInv = np.zeros_like(KAll)
+    logdetKAll = 0
+    time = np.arange(T)[:,None]
+    timeDiff = time - time.T
+    
+    for dim in range(xDim):
+        if covType is 'rbf':
+            K = (1 - params['eps'][0,dim]) * np.exp(-params["gamma"][0,dim] / 2 * np.power(timeDiff, 2)) + params["eps"][0,dim] * np.eye(T);
+            
+        else:
+            raise Exception("GPFA:CovType", "unknown or unprogrammed covariance type")
+            
+        KAll[(idx+dim)[:,None], idx+dim] = K
+        eng.workspace['K'] = mc.convertNumpyArrayToMatlab(K)
+        eng.evalc("[K_big_inv, logdet_K] = invToeplitz(K);")
+        KAllInv[(idx+dim)[:,None], idx+dim] = mc.convertMatlabArrayToNumpy(eng.eval("K_big_inv"))
+        logdetKAll += mc.convertMatlabArrayToNumpy(eng.eval("logdet_K"))
+    
+    
+    return KAll, KAllInv, logdetKAll
     
 def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
     from methods.GeneralMethods import pMat, prepareMatlab
@@ -377,7 +454,7 @@ def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, se
         eng.workspace['binWidth'] = binWidth*1.0
         eng.workspace['xDim'] = xDim*1.0
         eng.workspace['fname'] = str(fnameOutput)
-        eng.workspace['segLength'] = segLength*1.0
+        eng.workspace['segLength'] = np.inf #segLength*1.0
         
         
         
@@ -476,33 +553,55 @@ def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yD
     ll = len(seqsUse) * val - np.sum(np.sum((Rinv @ dif) * dif)) + np.sum(np.sum((term1Mat.T @ invM) * term1Mat.T))
     return ll
 
-def makeKBig(params, T, covType = 'rbf', eng=None):
+def shuffParallel(binnedSpikes, testInds, estParams, cvalTest, numShuffle, sqrtSpks, eng):
+
+    unShuffTestInds = testInds[cvalTest]
+    shuffPerChan = []
+
+    # numberTrials
+    numTestTrials = unShuffTestInds.shape[0]
+    # number of channels
+    numChans = binnedSpikes[0].shape[0]
+
+    # new chan x shuffle matrix that tells us, for each channel, which trial to choose
+    # (it gives an integer index trial to use)
+    shuffTestInds = np.random.randint(low=0, high=numTestTrials, size=(numChans, numShuffle))
+
+    binnedSpikesOrig = np.asarray([[spCh for spCh in spTrl] for spTrl in binnedSpikes.copy()])
+    binnedSpikesTestOrig = binnedSpikesOrig[unShuffTestInds]
+
+    binnedSpikesChanFirst = binnedSpikesTestOrig.swapaxes(0, 1) # put channels first
+    
+
+    binnedSpikesShuff = np.stack([bnSpCh[shf] for bnSpCh, shf in zip(binnedSpikesChanFirst, shuffTestInds)])
+    binnedSpikesShuffByTrial = binnedSpikesShuff.swapaxes(0,1) # trials first again
+
+
+    seqShuffDict = GPFA.binSpikesToGpfaInputDict([], binnedSpikes = binnedSpikesShuffByTrial, sqrtSpks=sqrtSpks)
+
+    seqShuffNew = projectTrajectory(seqShuffDict, estParams, eng)
+    return seqShuffNew
+
+def projectTrajectory(seqDict, estParams, eng=None):
+    # eng is sometimes not input...
     if eng is None:
-        from methods.GeneralMethods import prepareMatlab
-        print('what2')
-        eng = prepareMatlab()
-        
-    xDim = params['C'].shape[1]
-    
-    idx = np.arange(start=0, stop=xDim*T, step=xDim)
-    KAll = np.zeros((xDim*T, xDim*T))
-    KAllInv = np.zeros_like(KAll)
-    logdetKAll = 0
-    time = np.arange(T)[:,None]
-    timeDiff = time - time.T
-    
-    for dim in range(xDim):
-        if covType is 'rbf':
-            K = (1 - params['eps'][0,dim]) * np.exp(-params["gamma"][0,dim] / 2 * np.power(timeDiff, 2)) + params["eps"][0,dim] * np.eye(T);
-            
-        else:
-            raise Exception("GPFA:CovType", "unknown or unprogrammed covariance type")
-            
-        KAll[(idx+dim)[:,None], idx+dim] = K
-        eng.workspace['K'] = mc.convertNumpyArrayToMatlab(K)
-        eng.evalc("[K_big_inv, logdet_K] = invToeplitz(K);")
-        KAllInv[(idx+dim)[:,None], idx+dim] = mc.convertMatlabArrayToNumpy(eng.eval("K_big_inv"))
-        logdetKAll += mc.convertMatlabArrayToNumpy(eng.eval("logdet_K"))
-    
-    
-    return KAll, KAllInv, logdetKAll
+        from methods.GeneralMethods import pMat, prepareMatlab
+        eng = prepareMatlab(None)
+
+    eng.workspace['seqProj'] = seqDict
+    eng.workspace['estParams'] = mc.convertNumpyDictToMatlab(estParams)
+    # because lists become cells, we must combine them again to structs
+    eng.evalc('seqProj = [seqProj{:}];')
+    eng.evalc("seqProj = exactInferenceWithLL(seqProj, estParams);")
+    eng.evalc("X = [seqProj.xsm];")
+    eng.evalc("C = estParams.C;")
+    eng.evalc("[Xorth, Corth] = orthogonalize(X, C);")
+    eng.evalc("seqProj = segmentByTrial(seqProj, Xorth, 'xorth');")
+
+    # matlab engine can only output one struct at a time
+    numProj = int(eng.eval("length(seqProj)"))
+    seqShuffNew = [mc.convertMatlabDictToNumpy(eng.eval('seqProj(%d)' % (seqNum+1))) for seqNum in range(numProj)]
+
+    return seqShuffNew
+
+
