@@ -268,7 +268,9 @@ class Dataset():
         
         
         # spikeCountOverallPerChan = [len(trlStmps)]
-        
+        # wanna keep random state the same every time...
+        initSt = np.random.get_state()
+        np.random.seed(seed=0)
         
         numTrls = len(self.spikeDatTimestamps)
         trlIdxes = np.arange(0, numTrls)
@@ -294,11 +296,14 @@ class Dataset():
                     
         coincProp = coincCnt/spikeCountOverallPerChan
         
-        chansKeep = np.unique(np.where(coincProp<coincidenceThresh)[1]) # every column is the division with that channel's spike count
-        badChans = np.unique(np.where(coincProp>=coincidenceThresh)[1]) # every column is the division with channel's spike count
+        chansKeep = np.unique(np.where((coincProp<coincidenceThresh) & (spikeCountOverallPerChan != 0))[1]) # every column is the division with that channel's spike count
+        badChans = np.unique(np.where((coincProp>=coincidenceThresh) & (spikeCountOverallPerChan != 0))[1]) # every column is the division with channel's spike count
         print("Removed channels " + str(badChans))
         
         self.keepChannels(chansKeep)
+        
+        # reset random state
+        np.random.set_state(initSt)
         
         # in place change, though returns channels with too much coincidence if desired...
         return chansKeep
