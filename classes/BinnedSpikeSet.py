@@ -262,7 +262,125 @@ class BinnedSpikeSet(np.ndarray):
         highFiringChannels = avgFiringChan>firingRateThresh
         
         return self[:,highFiringChannels,:], np.where(highFiringChannels)[0]
-    
+
+    def channelsNotRespondingSparsely(self, zeroRate=0): 
+        # note that 'sparsely' here has a very specific definition (of mine)
+        # related to the responses of the channel having to occur often enough
+        # to not exist only at >3 standard deviations from the mean
+        #
+        # the steps to get there are the following: first flatten the firing
+        # rate of all the channels, then find the standard deviation of said
+        # firing rate. Next, we mark the firing rates that are >3x the standard
+        # deviation (this could be considered time points that have 'outlier'
+        # firing rates. Then we check whether the only remaining unmarked
+        # locations had zero firing rate to begin with. The flag for 'zero
+        # rate' reflects that sometimes a trial-mean subtracted array will be
+        # input here, where 0 firing rate gets mean subtracted to some
+        # different baseline value
+
+        if zeroRate.ndim == 3:
+            # we're resizing zeroRate, which was given on a per-trial basis, to be the right size
+            zeroRateFlattened = zeroRate.swapaxes(0, 1).reshape((zeroRate.shape[1], -1))
+
+        
+        flattenedResp = np.array(self.swapaxes(0,1).reshape((self.shape[1],-1)))
+        stdFlat = np.std(flattenedResp, axis=1)
+
+        maskGT3Std = np.abs(flattenedResp) > 3*stdFlat[:,None]
+
+
+        # add the mean back in, effectively making no firing rate locations equal 0 again
+        flattenedShiftedResp = flattenedResp + zeroRateFlattened
+
+        zeroFiringRate = 0
+        numRespsNotZeroRate = [np.sum(flattenedShiftedResp[i][~maskGT3Std[i]]!=zeroFiringRate) for i in range(flattenedResp.shape[0])]
+        numRespsNotZeroRate = np.array(numRespsNotZeroRate)
+
+        chansResponding = numRespsNotZeroRate != 0
+        # this line only to remind myself of the double negative of 'not' and
+        # 'sparsely' meaning actually responding heh
+        chansNotRespondingSparsely = chansResponding 
+
+
+        
+        return self[:,chansNotRespondingSparsely,:], np.where(chansNotRespondingSparsely)[0]
+
+    def removeInconsistentChannelsOverTrials(self, zeroRate=0): 
+        # Alright instead of schmancy thigns I tried to do, all I'm going to do
+        # now is check which channels had any firing during >90% of trials,
+        # after removing firing rates that were >3*std of firing rates of that
+        # channel.
+
+        # remove firing rate bins where the neuron fired at >3*std for that
+        # neuron
+        flattenedResp = np.array(self.swapaxes(0,1).reshape((self.shape[1],-1)))
+        stdFlat = np.std(flattenedResp, axis=1)
+
+        selfShift = self+zeroRate
+        maskGT3Std = np.abs(self) > 3*stdFlat[None,:,None]
+
+        # count the time bins for which the neuron fired in each trial
+        numRespsPerTrlAndChan = [[np.sum(chn[~chMsk]) for chn,chMsk in zip(trls,trlMsk)] for trls,trlMsk in zip(selfShift, maskGT3Std)]
+        respSizePerTrlAndChan = np.stack(numRespsPerTrlAndChan)
+
+        # find the number of trials for which the neuron responded *at all*
+        numRespTrialsByChan = np.sum(respSizePerTrlAndChan!=0, axis=0)
+
+        # only select neurons that responded in more than 90% of trials
+        consistentChans = (numRespTrialsByChan/self.shape[0])>=0.9
+        breakpoint()
+
+        return self[:,consistentChans,:], np.where(consistentChans)[0]
+#        # alright, this function aims to remove channels which don't respond to
+#        # some large subset of trials. How is 'large subset' defined?
+#        # Wyyeeelll... by making some assumptions.
+#        # 
+#        # Note that in all these cases, we are first removing firing rates that
+#        # are >3*std of the normal firing rate.
+#        #
+#        # Now. First, I make the assumption that a channel responding to a
+#        # trial at all (once those 3x firing rates are removed) is a Bernoulli
+#        # distributed variable (with a 1 if there are any spikes and a 0 if
+#        # there are none). As a result, the sum of those successes is a
+#        # binomial distributed variable with the median probability, p, that a
+#        # trial from a channel fired during all the trials being its p. The
+#        # expectation of this sum is thus np
+#        #
+#        # Since this variable is (assumed to be) Binomial distributed, I can
+#        # now compute its variance by var = np*(1-p). With this variance, I can
+#        # find channels that responded less than p-6*sqrt(var) of the
+#        # time--effectively removing channels responding less than 3 standard
+#        # deviations from average. I generally don't mind high responding
+#        # channels, so I won't remove them... but I will also warn that they
+#        # could be removed.
+#        flattenedResp = np.array(self.swapaxes(0,1).reshape((self.shape[1],-1)))
+#        stdFlat = np.std(flattenedResp, axis=1)
+#
+#        selfShift = self+zeroRate
+#        maskGT3Std = np.abs(self) > 3*stdFlat[None,:,None]
+#        numRespsPerTrlAndChan = [[np.sum(chn[~chMsk]) for chn,chMsk in zip(trls,trlMsk)] for trls,trlMsk in zip(selfShift, maskGT3Std)]
+#        respSizePerTrlAndChan = np.stack(numRespsPerTrlAndChan)
+#
+#        # find the rate of response per channel
+#        numRespsByChan = np.sum(respSizePerTrlAndChan!=0, axis=0)
+#
+#        numTrials = self.shape[0]
+#        binomialProbabilityP = np.mean(numRespsByChan)/numTrials
+#        binomialExpectation = numTrials * binomialProbabilityP
+#        binomialVarRespProp = numTrials*binomialProbabilityP * (1-binomialProbabilityP)
+#        binomialStdRespProp = np.sqrt(binomialVarRespProp)
+#
+#        # note the multiplication by 6 here for 6*std
+#        # also note that 6 is a... not... to... specific number?
+#        consistentChans = (numRespsByChan - binomialExpectation) >= -6*binomialStdRespProp
+#
+#        if np.any((numRespsByChan - binomialExpectation) > 3*binomialStdRespProp):
+#            print("Seems like some high FR channels have too... much... inconsistency?")
+#
+#        breakpoint()
+#
+#        return self[:,consistentChans,:], np.where(consistentChans)[0]
+#
     # coincidenceTime is how close spikes need to be, in ms, to be considered coincicdent, 
     # coincidentThresh in percent/100 (i.e. 20% = 0.2)
     def removeCoincidentSpikes(self, coincidenceTime=1, coincidentThresh=0.2): 
@@ -544,26 +662,37 @@ class BinnedSpikeSet(np.ndarray):
         return areaDim
     
     def residualCorrelations(self, labels, separateNoiseCorrForLabels=False, plot=False, figTitle = "", normalize=False):
-        residualSpikes, _ = self.baselineSubtract(labels=labels)
+        residualSpikes, overallBaseline = self.baselineSubtract(labels=labels)
+        unq, unqInv = np.unique(labels, return_inverse=True, axis=0)
+        residualSpikesGoodChans, chansGood = residualSpikes.channelsNotRespondingSparsely(zeroRate = np.array(overallBaseline)[unqInv])
+        residualSpikesGoodChans, chansGood = residualSpikesGoodChans.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
         
         
-        chanFirst = residualSpikes.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
-        chanFlat = chanFirst.reshape((self.shape[1], -1)) # chan are now rows, time is cols
+        chanFirst = residualSpikesGoodChans.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
+        chanFlat = chanFirst.reshape((residualSpikesGoodChans.shape[1], -1)) # chan are now rows, time is cols
         
         # let's remove trials that are larger than 3*std
         stdChanResp = np.std(chanFlat, axis=1)
-        chanMask = np.abs(chanFlat) > (3*stdChanResp[:,None])
-        maskChanFlat = np.ma.array(chanFlat, mask = chanMask)
+        chanMask = np.abs(chanFlat) > (3*stdChanResp[:,None]) # < 0
+        maskChanFlat = np.ma.array(np.array(chanFlat), mask = np.array(chanMask))
         
         # do the same as above for the baseline subtracted values, without baseline
         # subtracting--now we can find the true geometric mean firing rate
-        flatCnt = self.swapaxes(0,1).reshape((self.shape[1],-1))
+        flatCnt = np.array(self[:,chansGood,:].swapaxes(0,1).reshape((chansGood.size,-1)))
         flatCntMn = flatCnt.mean(axis=1)
         flatCntMn = np.expand_dims(flatCntMn, axis=1) # need to add back a lost dimension
         geoMeanCnt = np.sqrt(flatCntMn @ flatCntMn.T)
         
         uniqueLabel, labelPresented = np.unique(labels, axis=0, return_inverse=True)
-        
+
+        kla = [np.sum(flatCnt[i][~chanMask[i]]) for i in range(flatCnt.shape[0])]
+        kla = np.array(kla)
+        maskChanSpksLeft = maskChanFlat[kla!=0]
+        maskChanNoSpksLeft = maskChanFlat[kla==0]
+
+#        _, t = self.channelsNotRespondingSparsely()
+        breakpoint()
+
         if plot:
             if separateNoiseCorrForLabels:
                 numRows = 2
@@ -581,7 +710,7 @@ class BinnedSpikeSet(np.ndarray):
         minCorr = 1
         maxCorr = -1
         
-        corrSpks = np.empty(geoMeanCnt.shape + (0,))
+        corrSpksPerCond = np.empty(geoMeanCnt.shape + (0,))
         
         if separateNoiseCorrForLabels:
             labelPresented = np.repeat(labelPresented, self.shape[2])
@@ -607,26 +736,28 @@ class BinnedSpikeSet(np.ndarray):
                     
                     axsHist.flat[lblNum].hist(corrLblSpks[upTriInd].flat)
                 
-                corrSpks = np.concatenate((corrSpks, corrLblSpks[:,:,None]), axis=2) 
+                corrSpksPerCond = np.concatenate((corrSpksPerCond, corrLblSpks[:,:,None]), axis=2) 
                     
-            corrSpks = corrSpks.mean(axis=2)
+            corrSpksCondMn = corrSpksPerCond.mean(axis=2)
         else:
             covSpks = np.ma.cov(maskChanFlat)
             stdSpks = np.ma.std(maskChanFlat, axis=1)
             stdMult = np.outer(stdSpks, stdSpks)
             
-            corrSpks = covSpks.data/stdMult
+            corrSpksPerCond = covSpks.data/stdMult
             if normalize:
-                corrSpks = corrSpks/geoMeanCnt
+                corrSpksPerCond = corrSpksPerCond/geoMeanCnt
                 
-            np.fill_diagonal(corrSpks, 0)
+            np.fill_diagonal(corrSpksPerCond, 0)
             
             if plot:
-                imgs.append(axsCorr.imshow(corrSpks))
-                minCorr = np.min(corrSpks.flat)
-                maxCorr = np.max(corrSpks.flat)
+                imgs.append(axsCorr.imshow(corrSpksPerCond))
+                minCorr = np.min(corrSpksPerCond.flat)
+                maxCorr = np.max(corrSpksPerCond.flat)
                 
-                axsHist.hist(corrSpks.flat)
+                axsHist.hist(corrSpksPerCond.flat)
+
+            corrSpksCondMn = corrSpksPerCond
                 
                 
         if plot:
@@ -644,7 +775,7 @@ class BinnedSpikeSet(np.ndarray):
                 
         # the returned value is identical to having done a baseline subtract
         # with labels, but this allows the nice call of .noiseCorrelations(labels=<labels>)
-        return residualSpikes, corrSpks, geoMeanCnt
+        return residualSpikesGoodChans, corrSpksCondMn, corrSpksPerCond, geoMeanCnt
     
     # note that timeBeforeAndAfterStart asks about what the first and last points of
     # the binned spikes represent as it relates to the first and last alignment point
@@ -752,6 +883,15 @@ class BinnedSpikeSet(np.ndarray):
                     binnedSpikesUse.labels[labelUse] = newLabels
                     binnedSpikesUse.alignmentBins = aB
                 binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
+
+                # ROMP this might break stuff because I haven't accounted for
+                # non equal trial sizes when aligning objects for
+                # non-sparse-responses
+                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
+                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
+                labelMeans = [lM[chansGood,:] for lM in labelMeans]
+                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
+                labelMeans = [lM[chansGood,:] for lM in labelMeans]
                 firingRateThresh = -1
         else:
             binnedSpikeHighFR = self[:,chIndsUseFR,:]
@@ -766,6 +906,12 @@ class BinnedSpikeSet(np.ndarray):
                     binnedSpikesUse.labels[labelUse] = newLabels
                     binnedSpikesUse.alignmentBins = aB
                 binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
+
+                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
+                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
+                labelMeans = [lM[chansGood,:] for lM in labelMeans]
+                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(labelMeans)[unqInv])
+                labelMeans = [lM[chansGood,:] for lM in labelMeans]
                 firingRateThresh = -1
         
         
