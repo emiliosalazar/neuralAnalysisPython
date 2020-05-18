@@ -154,8 +154,8 @@ class BinnedSpikeSet(np.ndarray):
             return NotImplemented
         return HANDLED_FUNCTIONS[func](*args, **kwargs)
         
-    def copy(self):
-        out = BinnedSpikeSet(self.view(np.ndarray).copy(), start=self.start, end=self.end, binSize=self.binSize, labels=self.labels.copy(), alignmentBins=self.alignmentBins.copy())
+    def copy(self, *args, **kwargs):
+        out = BinnedSpikeSet(self.view(np.ndarray).copy(*args, **kwargs), start=self.start, end=self.end, binSize=self.binSize, labels=self.labels.copy(), alignmentBins=self.alignmentBins.copy())
         
         # # copy back the labels
         # for labelName, labels in self.labels.items():
@@ -1520,4 +1520,15 @@ def concatenate(arrays, axis=0, out=None):
     else:
         raise(Exception("Not really sure what concatenating in more than 3 dims means... let's talk later"))
     
-   
+@implements(np.copyto)
+def copyto(arr, fill_val, **kwargs):
+    return np.copyto(np.array(arr), fill_val, **kwargs)
+
+@implements(np.where)
+def where(condition, x=None, y=None):
+    
+    if x is None and y is None:
+        return np.where(np.array(condition))
+    else:
+        return np.where(np.array(condition), np.array(x), np.array(y))
+
