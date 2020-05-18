@@ -156,8 +156,8 @@ def pcaComputation(listBSS, plot=True):
 def ldaComputation(listBSS, plot=True):
     pass
 
-def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,combineConditions = False,
-                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], firingRateThresh=0.5, signalDescriptor = ""):
+def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False,
+                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], firingRateThresh=0.5, signalDescriptor = "",plotOutput=True):
     
     # from classes.GPFA import GPFA
     from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
@@ -169,38 +169,48 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
     
    
         
-    plotInfo = {}
-    figErr = plt.figure()
-    figErr.suptitle('dimensionality vs. GPFA log likelihood')
-    axs = figErr.subplots(nrows=2, ncols=len(listBSS), squeeze=False)
+    if plotOutput:
+        plotInfo = {}
+        figErr = plt.figure()
+        figErr.suptitle('dimensionality vs. GPFA log likelihood')
+        axs = figErr.subplots(nrows=2, ncols=len(listBSS), squeeze=False)
         
     dimExp = []
-    gpfaPrepAll = []
+    dimMoreLL = []
+    gpfaOutDimAll = []
+    gpfaTestIndsOutAll = []
+    gpfaTrainIndsOutAll = []
     # with pool.Pool() as pool:
     #     results = []
-    for bnSp, description, outputPath, axScore, axDim in zip(listBSS, descriptions, outputPaths, axs[0, :].flat, axs[1,:].flat):
+    for idx, (bnSp, description, outputPath) in enumerate(zip(listBSS, descriptions, outputPaths)):
         
         print("*** Running GPFA for " + description.replace('\n', ' ') + " ***")
-        plotInfo['axScore'] = axScore
-        plotInfo['axDim'] = axDim
-         # results.append(pool.apply_async(bnSp.gpfa, (eng,description,outputPath), dict(signalDescriptor = signalDescriptor,
-         #          xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions,
-         #          timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)))
-        
+
+        if plotOutput:
+            axScore = axs[0, :].flat[idx]
+            axDim = axs[1,:].flat[idx]
+            plotInfo['axScore'] = axScore
+            plotInfo['axDim'] = axDim
+        else:
+            plotInfo = None # don't plot for now...
    
-        numDims, gpfaPrepAllExp = BinnedSpikeSet.gpfa(bnSp, eng,description,outputPath, signalDescriptor = signalDescriptor,
-                  xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions,
+        numDims, numDimsLL, gpfaOutDim, gpfaTestIndsOut, gpfaTrainIndsOut = BinnedSpikeSet.gpfa(bnSp, eng,description,outputPath, signalDescriptor = signalDescriptor,
+                  xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
                   timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
         dimExp.append(numDims)
-        gpfaPrepAll.append(gpfaPrepAllExp)
+        dimMoreLL.append(numDimsLL)
+        gpfaOutDimAll.append(gpfaOutDim)
+        gpfaTestIndsOutAll.append(gpfaTestIndsOut)
+        gpfaTrainIndsOutAll.append(gpfaTrainIndsOut)
         # 
         # resGrouped = list(zip(*results))
         # dimExp = list(resGrouped[0])
         # gpfaPrepAll = list(resGrouped[1])
         
-    axScore.legend()
+    if plotOutput:
+        axScore.legend()
     
-    return dimExp, gpfaPrepAll
+    return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
 
 #%% Plotting and descriptive
 
