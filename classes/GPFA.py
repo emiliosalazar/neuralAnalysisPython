@@ -58,7 +58,7 @@ class GPFA:
     # ones would overlap, however, it makes more sense to use the function that
     # generates them in order
     # NOTE should be updated to return numFolds sets of sequences!
-    def computeTestTrainIndRandom(self, numFolds = 4):
+    def computeTrainTestIndRandom(self, numFolds = 4):
         seqAll = self.gpfaSeqDict
         numTrls = len(seqAll)
         
@@ -79,7 +79,7 @@ class GPFA:
         
     # Sequential sets of test inds, non-overlapping between each fold, a-la original
     # Yu 2009 code
-    def computeTestTrainIndOrdered(self, numFolds=4):
+    def computeTrainTestIndOrdered(self, numFolds=4):
         seqAll = self.gpfaSeqDict
         numTrls = len(seqAll)
         
@@ -121,8 +121,8 @@ class GPFA:
             seqTestStr = "subsref([seqTrain{:}], struct('type', '()', 'subs', {{[]}}))"
         else:
             # NOTE: INCOMPLETE!
-            self.trainInds, self.testInds =  self.computeTestTrainIndRandom(numFolds = crossvalidateNum)
-            # self.trainInds, self.testInds = self.computeTestTrainIndOrdered(numFolds = crossvalidateNum)
+            self.trainInds, self.testInds =  self.computeTrainTestIndRandom(numFolds = crossvalidateNum)
+            # self.trainInds, self.testInds = self.computeTrainTestIndOrdered(numFolds = crossvalidateNum)
             seqsTrain, seqsTest = self.trainAndTestSeq()
             seqTrainStr = "[seqTrain{:}]"
             seqTestStr = "[seqTest{:}]"
