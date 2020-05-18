@@ -7,6 +7,7 @@ Created on Tue Apr 14 15:07:23 2020
 """
 
 from methods.GeneralMethods import loadDefaultParams
+from matplotlib import pyplot as plt
 
 from classes.Dataset import Dataset
 
@@ -258,38 +259,138 @@ for gpfaArea, dimsUse, dimsGpfaUse in zip(gpfaDimOut, dims, dimsLL):
     shLogDetGenCovPropPopByArea.append(np.array(shLogDetGenCovPropPop))
 
 # for the moment all we want to save is this...
-#%% now save all the figures
+# now save all the figures
+if plotOutput:
+    from methods.GeneralMethods import saveFiguresToPdf
+
+    saveFiguresToPdf(pdfname=signalDescriptor)
+    plt.close('all')
+
+#%% Residual correlations
+from scipy.stats import binned_statistic
+avgSpkCorrOverall = []
+residCorrPerCondAll = []
+geoMeanOverall = []
+plotResid = True
+for idxSpks, bnSp in enumerate(listBSS):
+    idx = dataIndsProcess[idxSpks]
+    if plotResid:
+        scatterFig = plt.figure()
+    separateNoiseCorrForLabels = True
+    normalize = True
+    residualSpikes, avgSpkCorrAll, residCorrPerCond, geoMeanCntAll = bnSp.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0].residualCorrelations(bnSp.labels['stimulusMainLabel'], plot=plotResid, separateNoiseCorrForLabels = separateNoiseCorrForLabels, figTitle = data[idx]['description'], normalize = normalize)
+    # residualSpikes.pca(labels = datasets[idx].markerTargAngles, plot = True)
+    # plt.suptitle(data[idx]['description'] + " residuals PCA")
+    # residualSpikes.lda(labels = datasets[idx].markerTargAngles, plot = True)
+    # plt.suptitle(data[idx]['description'] + " residuals LDA")
+    avgSpkCorrOverall.append(avgSpkCorrAll)
+    geoMeanOverall.append(geoMeanCntAll)
+    # Only care about single repeats of the non-self pairs...
+    upperTriInds = np.triu_indices(avgSpkCorrAll.shape[0], 1)
+    avgSpkCorr = avgSpkCorrAll[upperTriInds]
+    geoMeanCnt = geoMeanCntAll[upperTriInds]
+
+    residCorrPerCond = residCorrPerCond[upperTriInds]
+    residCorrPerCondAll.append(residCorrPerCond)
+    
+    if plotResid:
+        labels=bnSp.labels['stimulusMainLabel']#datasets[idxSpks].markerTargAngles
+        uniqueLabel, labelPresented = np.unique(labels, axis=0, return_inverse=True)
+        scatterFig.suptitle(data[idx]['description'] + " geo mean FR vs corr var")
+        axs = scatterFig.subplots(2,1)
+        axs[0].scatter(geoMeanCnt.flatten(), avgSpkCorr.flatten())
+        axs[0].set_ylabel("Correlated Variability")
+        
+        binAvg, binEdges, bN = binned_statistic(geoMeanCnt.flatten(), avgSpkCorr.flatten(), statistic='mean', bins = np.arange(np.max(geoMeanCnt), step=10))
+        binStd, _, _ = binned_statistic(geoMeanCnt.flatten(), avgSpkCorr.flatten(), statistic='std', bins = np.arange(np.max(geoMeanCnt), step=10))
+        binEdges = np.diff(binEdges)[0]/2+binEdges[:-1]
+        axs[1].plot(binEdges, binAvg)
+        axs[1].fill_between(binEdges, binAvg-binStd, binAvg+binStd, alpha=0.2)
+        axs[1].set_xlabel("Mean Firing Rate")
+        axs[1].set_ylabel("Correlated Variability")
+    # residualSpikes[labelPresented==0].numberOfDimensions(title=data[idx]['description'] + " residuals", maxDims = 30)
+
+breakpoint()
+
+    
+if plotResid:
+    from methods.GeneralMethods import saveFiguresToPdf
+
+    saveFiguresToPdf(pdfname="residualsZsc3RemFR2")
+    plt.close('all')
+
+mnCorrPerCond = [residCorr.mean(axis=0) for residCorr in residCorrPerCondAll]
+plt.figure()
+plt.title('r_{sc} vs sh pop cov')
+[plt.scatter(mnCC, shCPP, label=desc) for mnCC, shCPP, desc in zip(mnCorrPerCond, shCovPropPopByArea, descriptions)]
+plt.xlabel('mean r_{sc}')
+plt.ylabel('shared population covariance')
+plt.legend()
+
+plt.figure()
+plt.title('r_{sc} vs sh cov neur avg')
+[plt.scatter(mnCC, shCPN, label=desc) for mnCC, shCPN, desc in zip(mnCorrPerCond, shCovPropNeurAvgByArea, descriptions)]
+plt.xlabel('mean r_{sc}')
+plt.ylabel('shared covariance neuron average')
+plt.legend()
+
+plt.figure()
+plt.title('r_{sc} vs log det (gen cov) pop')
+[plt.scatter(mnCC, shGCP, label=desc) for mnCC, shGCP, desc in zip(mnCorrPerCond, shLogDetGenCovPropPopByArea, descriptions)]
+plt.xlabel('mean r_{sc}')
+plt.ylabel('general covariance (log det) population')
+plt.legend()
+
+plt.figure()
+plt.title('r_{sc} vs dimensionality')
+[plt.scatter(mnCC, nD, label=desc) for mnCC, nD, desc in zip(mnCorrPerCond, dims, descriptions)]
+plt.xlabel('mean r_{sc}')
+plt.ylabel('num dims')
+plt.legend()
+
+plt.figure()
+plt.title('shared pop covar vs dimensionality')
+[plt.scatter(shCPP, nD, label=desc) for shCPP, nD, desc in zip(shCovPropPopByArea, dims, descriptions)]
+plt.xlabel('shared population covariance')
+plt.ylabel('num dims')
+plt.legend()
+
+plt.figure()
+plt.title('shared pop covar vs shared covar neur avg')
+[plt.scatter(shCPP, shCPN, label=desc) for shCPP, shCPN, desc in zip(shCovPropPopByArea, shCovPropNeurAvgByArea, descriptions)]
+plt.xlabel('shared population covariance')
+plt.ylabel('shared covariance neuron average')
+plt.legend()
+
 from methods.GeneralMethods import saveFiguresToPdf
-
-saveFiguresToPdf(pdfname=signalDescriptor + "M1")
-
-# now some more figures from matplotlib import pyplot as plt
-from matplotlib import pyplot as plt
-plt.close('all')
-if numStimulusConditions is None:
-    numConds = len(np.unique(listBSS[0].labels['stimulusMainLabel'], axis=0))
-else:
-    numConds = numStimulusConditions
-testingArea = 0
-for condUse in range(numConds):
-    for cValUse in range(crossvalidateNumFolds):
-        xDimBest = np.array(dimsB[testingArea][condUse])
-        xDimsTest = np.array(list(gpPrepB[testingArea][condUse].dimOutput.keys()))
-        # do some loops to get the key for the best xdim (given that it'll be loewr than the returned xDimBest)
-        xDimScoreBestIndPos = np.argmin((xDimTest-xDimBest)[(xDimsTest - xDimBest) >= 0])
-        xDimScoreBest = xDimsTest[(xDimsTest-xDimBest)>=0][xDimScoreBestIndPos]
-        
-        # sequences are not necessarily in time sorted order, so find correct sorting
-        timeSortInds = np.argsort(gpPrepB[testingArea][condUse].trainInds[cValUse])
-        
-        seqTrainNewAll = np.asarray(gpPrepB[testingArea][condUse].dimOutput[xDimScoreBest]['seqsTrainNew'][cValUse])
-        seqTrainNewAllSort = seqTrainNewAll[timeSortInds]
-        seqTrainOrthAll = [sq['xorth'] for sq in seqTrainNewAllSort]
-        seqTrainConcat = np.concatenate(seqTrainOrthAll, axis = 1)
-        plt.figure()
-        plt.plot(seqTrainConcat.T, alpha=0.65)
-        plt.title("GPFA trajectories over all trials in cond %d, cval %d" % (condUse, cValUse))
-        plt.xlabel("trial bins across all trials concatenated")
-        plt.ylabel("GPFA projection")
-
-saveFiguresToPdf(pdfname="gpfaAll" + signalDescriptor + "M1")
+saveFiguresToPdf(pdfname='scatterMetricsZsc3RemFR2')
+## now some more figures
+#from matplotlib import pyplot as plt
+#plt.close('all')
+#if numStimulusConditions is None:
+#    numConds = len(np.unique(listBSS[0].labels['stimulusMainLabel'], axis=0))
+#else:
+#    numConds = numStimulusConditions
+#testingArea = 0
+#for condUse in range(numConds):
+#    for cValUse in range(crossvalidateNumFolds):
+#        xDimBest = np.array(dims[testingArea][condUse])
+#        xDimsTest = np.array(list(gpfaDimOut[testingArea][condUse].keys()))
+#        # do some loops to get the key for the best xdim (given that it'll be loewr than the returned xDimBest)
+#        xDimScoreBestIndPos = np.argmin((xDimTest-xDimBest)[(xDimsTest - xDimBest) >= 0])
+#        xDimScoreBest = xDimsTest[(xDimsTest-xDimBest)>=0][xDimScoreBestIndPos]
+#        
+#        # sequences are not necessarily in time sorted order, so find correct sorting
+#        timeSortInds = np.argsort(gpfaTrainInds[testingArea][condUse][cValUse])
+#        
+#        seqTrainNewAll = np.asarray(gpfaDimOut[testingArea][condUse][xDimScoreBest]['seqsTrainNew'][cValUse])
+#        seqTrainNewAllSort = seqTrainNewAll[timeSortInds]
+#        seqTrainOrthAll = [sq['xorth'] for sq in seqTrainNewAllSort]
+#        seqTrainConcat = np.concatenate(seqTrainOrthAll, axis = 1)
+#        plt.figure()
+#        plt.plot(seqTrainConcat.T, alpha=0.65)
+#        plt.title("GPFA trajectories over all trials in cond %d, cval %d" % (condUse, cValUse))
+#        plt.xlabel("trial bins across all trials concatenated")
+#        plt.ylabel("GPFA projection")
+#
+#saveFiguresToPdf(pdfname="gpfaAll" + signalDescriptor + "M1")
