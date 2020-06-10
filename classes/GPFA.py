@@ -18,6 +18,7 @@ class GPFA:
         else:
             allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None,:,:]
         
+        allTrlTogether.units = binnedSpikes.units
         _, chansKeep = allTrlTogether.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
         # chansKeepCoinc = allTrlTogether.removeCoincidentSpikes()
         # chansKeep = np.logical_and(chansKeepThresh, chansKeepCoinc)
@@ -29,6 +30,7 @@ class GPFA:
             self.binnedSpikes = [np.stack(bnSp) for bnSp in binnedSpikes[:,chansKeep]]
         else:
             self.binnedSpikes = [bnSp[chansKeep, :] for bnSp in binnedSpikes]
+#        breakpoint()
         self.gpfaSeqDict = self.binSpikesToGpfaInputDict(sqrtSpks = sqrtSpks)
         self.trainInds = None
         self.testInds = None
@@ -53,6 +55,9 @@ class GPFA:
         
         return gpfaSeqDict
     
+    # Lookie, past me thought this wouldn't be used much! Now it's the only
+    # thing being used >.> 
+    #
     # This probably won't be used much, but it's here for generating random 
     # crossvalidation train/test sequences. Since it's unclear whether sequential
     # ones would overlap, however, it makes more sense to use the function that
@@ -170,8 +175,8 @@ class GPFA:
         # self.crossvalidatedGpfaError(eng = eng)
         return allEstParams, seqsTrainNew, seqsTestNew
     
-    def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None):
-        from multiprocessing import Pool
+    def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None, dimsCrossvalidate = None):
+        from multiprocessing import Pool, TimeoutError
         
         # if eng is None:
         #     from methods.GeneralMethods import prepareMatlab
@@ -190,13 +195,40 @@ class GPFA:
             
             with Pool() as plWrap:
                 res = []
-                for dimMax, paramsGpfa in self.dimOutput.items():
-                    res.append(plWrap.apply_async(cvalSuperWrap, (paramsGpfa, allSeqsTest)))
+                dimUsed = []
+                if dimsCrossvalidate is None: # actually kinda the opposite... this means it's all..
+                    for dimMax, paramsGpfa in self.dimOutput.items():
+                        res.append(plWrap.apply_async(cvalSuperWrap, (paramsGpfa, allSeqsTest)))
+                        dimUsed.append(dimMax)
+                else:
+                    for dim in dimsCrossvalidate:
+                        paramsGpfa = self.dimOutput[dim]
+                        res.append(plWrap.apply_async(cvalSuperWrap, (paramsGpfa, allSeqsTest)))
+                        dimUsed.append(dim)
                     
-                resultsByDim = [rs.get() for rs in res]
-                # resultsByVar = list(zip(*resultsByDim))
+                resultsByDim = []
+                timeoutSecs = 10
+                for ind, rs in enumerate(res):
+                    try:
+                        thisResult = rs.get(timeout=timeoutSecs)
+                    except TimeoutError as e:
+                        dimRedo = dimUsed[ind]
+                        paramsGpfa = self.dimOutput[dimRedo]
+                        thisResult = cvalSuperWrap(paramsGpfa, allSeqsTest)
+                        # lower the timeout if it already failed once...
+                        timeoutSecs = 3
+
+                    resultsByDim.append(thisResult)
+
                         
-                ll = {dim : np.stack(llDim) for dim, llDim in zip(self.dimOutput.keys(), resultsByDim)}        
+
+#                resultsByDim = [rs.get() for rs in res]
+                # resultsByVar = list(zip(*resultsByDim))
+                
+                if dimsCrossvalidate is None:
+                    ll = {dim : np.stack(llDim) for dim, llDim in zip(self.dimOutput.keys(), resultsByDim)}        
+                else:
+                    ll = {dim : np.stack(llDim) for dim, llDim in zip(dimsCrossvalidate, resultsByDim)}        
                     # llTemp = np.stack(llTemp)
                     # llTemp = llTemp - np.min(llTemp)
                     # llTemp = llTemp/np.max(llTemp)
@@ -479,12 +511,13 @@ def cvalSuperWrap(paramsGpfa, allSeqsTest):
     eng = prepareMatlab()
                     
     for cvNum, (paramsEst, seqsTest) in enumerate(zip(paramsGpfa['allEstParams'], allSeqsTest)):
-        llTemp.append(cvalWrap(seqsTest, paramsEst, cvNum+1, eng))
+        print('Computing LL of crossvalidation #%d' % (cvNum + 1))
+        llTemp.append(cvalWrap(seqsTest, paramsEst, eng))
+        print('LL of crossvalidation #%d computed' % (cvNum+1))
         
     return llTemp
 
-def cvalWrap(seqsTest, paramsEst, cvNum, eng):
-    print('Computing LL of crossvalidation #%d' % cvNum)
+def cvalWrap(seqsTest, paramsEst, eng):
     
     
     unT, seqWithT = np.unique(np.array([seq['T'] for seq in seqsTest]), return_inverse=True)
@@ -506,7 +539,6 @@ def cvalWrap(seqsTest, paramsEst, cvNum, eng):
         llT.append(cvalRun(paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=eng))
        
     llT = np.sum(llT)/2 # following Matlab GPFA code, but unsure why there's a divide-by-2 here...
-    print('LL of crossvalidation #%d computed' % cvNum)
     
     return llT
 
@@ -524,6 +556,7 @@ def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yD
     
     listCRinvC = [CRinvC for numTms in range(uniqueT)]
     blockDiagCRinvC = block_diag(*listCRinvC)
+
     
     invM, logdetM = invPersymm(KAllInv + blockDiagCRinvC, xDim)
     
@@ -537,14 +570,6 @@ def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yD
     
     term1Mat = CRinv @ dif
     term1Mat = term1Mat.reshape((xDim*uniqueT, -1), order = 'F')
-    
-    # Thalf = np.ceil(uniqueT/2)
-    # idx = np.arange(start=0, stop=xDim*Thalf, step=xDim)
-    
-    # blkProd = np.vstack([CRinvC @ invM[idxH + np.arange(xDim), :] for idxH in idx])
-    # blkProd = KAll[:xDim*Thalf, :] @ self.fillPerSymm(np.eye(xDim*Thalf, xDim*T), xDim, T)
-    
-    # xsmMat  = self.fillPerSymm(blkProd, xDim, uniqueT) @ term1Mat
     
     # compute log likelihood
     val = -uniqueT * logdetR - logdetKAll - logdetM -yDim * uniqueT * np.log(2*np.pi) 
