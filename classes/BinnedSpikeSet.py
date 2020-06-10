@@ -545,7 +545,7 @@ class BinnedSpikeSet(np.ndarray):
     def removeCoincidentSpikes(self, coincidenceTime=1, coincidentThresh=0.2): 
         spikeCountOverallPerChan = self.timeSpikeCount().trialSpikeCount()
         
-        timestampSpikes = self.computeTimestamps()
+        timestampSpikes = self.computeTimestampFromFirstBin()
         
         coincCnt = np.zeros((spikeCountOverallPerChan.shape[0],  spikeCountOverallPerChan.shape[0]))
         
@@ -572,16 +572,37 @@ class BinnedSpikeSet(np.ndarray):
         if (newBinSize/self.binSize) % 1:
             raise Exception('BinnedSpikeSet:BadBinSize', 'New bin size must be whole multiple of previous bin size!')
             return None
+        if newBinSize/self.binSize > self.shape[2]:
+            raise Exception('BinnedSpikeSet:BadBinSize', 'New bin size larger than the length of each trials!')
+            return None
+        if (newBinSize/self.binSize) % self.shape[2]:
+            raise Exception('BinnedSpikeSet:BadBinSize', "New bin size doesn't evenly divide trajectory. Avoiding splitting to not have odd last bin.")
         
-        bins = np.arange(self.start, self.end, newBinSize)
-        spikeTimestamps = self.computeTimestamps()
+        binsPerTrial = [np.arange(st, en+newBinSize/20, newBinSize)-st for st, en in zip(self.start,self.end)]
+        spikeTimestamps = self.computeTimestampFromFirstBin()
         
-        spikeDatBinnedList = [[[counts for counts in np.histogram(spikeTimestamps[trlNum][chanNum], bins=bins, weights=chanSpks[np.where(chanSpks)][None,:])][0] for chanNum, chanSpks in enumerate(trl)] for trlNum,trl in enumerate(self)]
+        spikeDatBinnedList = []
+        alignmentBins = []
+        for trlNum, (trl, bins) in enumerate(zip(self, binsPerTrial)):
+            spkDatBinnedTrl = []
+            for chanNum, chanSpks in enumerate(trl):
+                if self.units == 'count':
+                    spkDatBinnedTrl.append(sp.stats.binned_statistic(spikeTimestamps[trlNum][chanNum].flatten(), chanSpks[np.where(chanSpks)], statistic='sum', bins=bins)[0] if spikeTimestamps[trlNum][chanNum].size else np.zeros_like(bins)[:-1])
+                elif self.units == 'Hz':
+                    spkDatBinnedTrl.append(sp.stats.binned_statistic(spikeTimestamps[trlNum][chanNum].flatten(), chanSpks[np.where(chanSpks)], statistic='mean', bins=bins)[0] if spikeTimestamps[trlNum][chanNum].size else np.zeros_like(bins)[:-1])
+                else:
+                    raise(Exception("Don't know how to rebin with units: %s!" % self.units))
+            spikeDatBinnedList.append(spkDatBinnedTrl)
+            alignmentBins.append(np.digitize(self.alignmentBins[trlNum], bins=bins) - 1)
+
         newBinnedSpikeSet = np.stack(spikeDatBinnedList).view(BinnedSpikeSet)
-        
+
         newBinnedSpikeSet.binSize = newBinSize
         newBinnedSpikeSet.start = self.start
         newBinnedSpikeSet.end = self.end
+        newBinnedSpikeSet.units = self.units
+        newBinnedSpikeSet.alignmentBins = np.stack(alignmentBins)
+        newBinnedSpikeSet.labels = self.labels
         
         return newBinnedSpikeSet
         
