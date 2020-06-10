@@ -1292,13 +1292,17 @@ class BinnedSpikeSet(np.ndarray):
             
         if plotInfo is not None:
             for idx, gpfaPrep in enumerate(gpfaPrepAll):
-                normalGpfaScore = normalGpfaScoreAndErrAll[idx][0]
-                normalGpfaScoreErr = normalGpfaScoreAndErrAll[idx][1]
+                print("** Plotting GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
+                normalGpfaScore = normalGpfaScoreAll[idx]
+                normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
+
+                normalGpfaScoreMn = normalizedGpfaScore.mean(axis=1)
+                normalGpfaScoreErr = normalizedGpfaScore.std(axis=1)
 
                 if cvApproach is "logLikelihood":
-                    xDimScoreBest = xDimTest[np.argmax(normalGpfaScore)]
+                    xDimScoreBest = xDimTest[np.argmax(normalGpfaScoreMn)]
                 elif cvApproach is "squaredError":
-                    xDimScoreBest = xDimTest[np.argmin(normalGpfaScore)]
+                    xDimScoreBest = xDimTest[np.argmin(normalGpfaScoreMn)]
                 
                 Cparams = [prm['C'] for prm in gpfaPrep.dimOutput[xDimScoreBest]['allEstParams']]
                 shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
@@ -1310,11 +1314,11 @@ class BinnedSpikeSet(np.ndarray):
                 axScore = plotInfo['axScore']
                 
                 if cvApproach is "logLikelihood":
-                    axScore.plot(xDimTest,normalGpfaScore, label = lblLL)
-                    axScore.fill_between(xDimTest, normalGpfaScore-normalGpfaScoreErr, normalGpfaScore+normalGpfaScoreErr, alpha=0.2, label =lblLLErr)
+                    axScore.plot(xDimTest,normalGpfaScoreMn, label = lblLL)
+                    axScore.fill_between(xDimTest, normalGpfaScoreMn-normalGpfaScoreErr, normalGpfaScoreMn+normalGpfaScoreErr, alpha=0.2, label =lblLLErr)
                     axScore.set_title(description)
                 elif cvApproach is "squaredError":
-                    axScore.plot(xDimTest,normalGpfaScore, label = 'Summed GPFA Error Over Folds')
+                    axScore.plot(xDimTest,normalGpfaScoreMn, label = 'Summed GPFA Error Over Folds')
                     axScore.plot(np.arange(len(reducedGpfaScore))+1, reducedGpfaScore, label='Summed Reduced GPFA Error Over Folds')
                     axScore.set_title(description)
                 # axScore.legend(loc='upper right')
@@ -1332,7 +1336,12 @@ class BinnedSpikeSet(np.ndarray):
 
                 xlD = axDim.get_xlim()
                 xlS = axScore.get_xlim()
+                axScore.set_xticks(xDimTest)
+                axScore.set_xticklabels(xDimTest)
                 axScore.set_xlim(xmin=np.min([xlD[0],xlS[0]]), xmax=np.max([xlD[1],xlS[1]]))
+
+                axDim.set_xticks(xDimTest)
+                axDim.set_xticklabels(xDimTest)
 
                 lblLL = None
                 lblLLErr = None
