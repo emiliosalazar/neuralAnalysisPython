@@ -236,7 +236,7 @@ def pcaComputation(listBSS, plot=True):
 def ldaComputation(listBSS, plot=True):
     pass
 
-def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False,
+def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
                     crossvalidateNumFolds = 4, xDimTest = [2,5,8], firingRateThresh=0.5, signalDescriptor = "",plotOutput=True):
     
     # from classes.GPFA import GPFA
@@ -274,9 +274,27 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
         else:
             plotInfo = None # don't plot for now...
    
-        numDims, numDimsLL, gpfaOutDim, gpfaTestIndsOut, gpfaTrainIndsOut = BinnedSpikeSet.gpfa(bnSp, eng,description,outputPath, signalDescriptor = signalDescriptor,
-                  xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
-                  timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
+        if type(bnSp) is list:
+            numDims = []
+            numDimsLL = []
+            gpfaOutDim = []
+            gpfaTestIndsOut = []
+            gpfaTrainIndsOut = []
+            for subsetNum, bS in enumerate(bnSp):
+                numDimsSubst, numDimsLLSubst, gpfaOutDimSubst, gpfaTestIndsOutSubst, gpfaTrainIndsOutSubst = BinnedSpikeSet.gpfa(bS, eng,description,outputPath, signalDescriptor = Path(signalDescriptor) / ("shuff_%d" % subsetNum) , forceNewGpfaRun = forceNewGpfaRun,
+                          xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
+                          timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
+
+                numDims.append(numDimsSubst)
+                numDimsLL.append(numDimsLLSubst)
+                gpfaOutDim.append(gpfaOutDimSubst)
+                gpfaTestIndsOut.append(gpfaTestIndsOutSubst)
+                gpfaTrainIndsOut.append(gpfaTrainIndsOutSubst)
+        else:
+            numDims, numDimsLL, gpfaOutDim, gpfaTestIndsOut, gpfaTrainIndsOut = BinnedSpikeSet.gpfa(bnSp, eng,description,outputPath, signalDescriptor = signalDescriptor, forceNewGpfaRun = forceNewGpfaRun,
+                      xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
+                      timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
+            
         dimExp.append(numDims)
         dimMoreLL.append(numDimsLL)
         gpfaOutDimAll.append(gpfaOutDim)

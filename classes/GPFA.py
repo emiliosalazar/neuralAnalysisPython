@@ -105,8 +105,7 @@ class GPFA:
         
         
     
-    def runGpfaInMatlab(self, fname="~/Documents/BatistaLabData/analysesOutput/gpfaTest", runDescriptor = "", condDescriptor = "", crossvalidateNum = 0, xDim = 8, eng=None, segLength = None):
-        forceNewGpfaRun = False # I'm gonna keep this flag in here for now... you shouldn't *want* to run another GPFA, right?
+    def runGpfaInMatlab(self, fname="~/Documents/BatistaLabData/analysesOutput/gpfaTest", runDescriptor = "", condDescriptor = "", crossvalidateNum = 0, xDim = 8, eng=None, segLength = None, forceNewGpfaRun = False):
         
         # if eng is None:
         #     from matlab import engine 

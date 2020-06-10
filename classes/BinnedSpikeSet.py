@@ -874,7 +874,6 @@ class BinnedSpikeSet(np.ndarray):
         maskChanNoSpksLeft = maskChanFlat[kla==0]
 
 #        _, t = self.channelsNotRespondingSparsely()
-        breakpoint()
 
         if plot:
             if separateNoiseCorrForLabels:
@@ -969,13 +968,15 @@ class BinnedSpikeSet(np.ndarray):
     # for the end (whatever that may be--say, the delay end), and should be plotted
     # starting -250 ms before
     def gpfa(self, eng, description, outputPath, signalDescriptor = "", xDimTest = [2,5,8], sqrtSpikes = False,
-             labelUse = 'stimulusMainLabel', numConds=1, combineConds = False, firingRateThresh = 1, balanceDirs = True, baselineSubtract = True,
+             labelUse = 'stimulusMainLabel', numConds=1, combineConds = False, firingRateThresh = 1, balanceDirs = True, baselineSubtract = True,forceNewGpfaRun = False,
              crossvalidateNum = 4, timeBeforeAndAfterStart=(0,250), timeBeforeAndAfterEnd=(-250, 0), plotInfo=None):
         from matlab import engine
         from classes.GPFA import GPFA
         from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
         from methods.GeneralMethods import prepareMatlab
                 
+        if signalDescriptor == "":
+            signalDescriptor = "run"
 
         # eng was input and should be on... but let's check
         # eng = prepareMatlab(eng)
