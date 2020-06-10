@@ -210,7 +210,7 @@ class GPFAGenerator:
                  startT = 0, endT = 1000, binSize = 25,
                  # Do note that since these times are all in ms, the default 0.1 neuronMean is actually 0.1 sp/ms = 100sp/s!
                  # The neuronNoiseStdScale tells us what the max percent (from a uniform distribution), the neuron mean the noise will b
-                 numNeurons = 100, neuronMeansMax = 0.1, neuronNoiseStdScaleMax = 1):
+                 numNeurons = 100, neuronMeansFrMax = 0.1, neuronNoiseStdScaleMax = 1):
         
         self.time = np.arange(startT, endT, binSize) + binSize/2
         self.start = startT
@@ -222,9 +222,11 @@ class GPFAGenerator:
         self.gpMeans = gpMeans
         self.gpCovars = self.computeAllLowDimCovariances()
         
-        self.neuronMeans = np.random.uniform(high=neuronMeansMax, size=numNeurons)
+        neuronMeansCntMax = neuronMeansFrMax * binSize
+        self.neuronMeans = np.random.uniform(high=neuronMeansCntMax, size=numNeurons)
         self.neuronNoise = np.random.uniform(high=neuronNoiseStdScaleMax,size=numNeurons)*self.neuronMeans
         self.unorthoDirs = np.random.uniform(low=-1,high=1,size=(numNeurons, numGPs))
+#        self.unorthoDirs = np.random.multivariate_normal(np.zeros(numGPs),np.eye(numGPs), numGPs)
         
         
     def computeAllLowDimCovariances(self):
@@ -258,10 +260,12 @@ class GPFAGenerator:
             
         return gpTraj
     
-    def computeNeuralTraj(self, numNeurons = 100):
-        gpTraj = self.gpTraj[0]
+    def computeNeuralTraj(self, gpTraj):
         
-        highDimProjBase = self.unorthoDirs @ gpTraj
+        C = self.unorthoDirs # reflect naming of loading matrix in GPFA paper
+        numNeurons = C.shape[0]
+
+        highDimProjBase = C @ gpTraj
         
         neuralTrajMean = highDimProjBase+self.neuronMeans[:,None]
         neuralTrajNoise = np.diag(self.neuronNoise)
@@ -286,12 +290,14 @@ class GPFAGenerator:
             print("done with simulation " + str(simNum+1))
                 
             self.gpTraj[simNum, :, :] = self.computeGaussianProcess(numGPs = numGPs, means = self.gpMeans)
-            self.neuralTraj[simNum, :, :] = self.computeNeuralTraj(numNeurons=numNeurons)
+            self.neuralTraj[simNum, :, :] = self.computeNeuralTraj(self.gpTraj[simNum])
             
         outNeuralTraj = self.neuralTraj.view(BinnedSpikeSet)
         outNeuralTraj.binSize = self.binSize
         outNeuralTraj.start = self.start
         outNeuralTraj.end = self.end
+        outNeuralTraj.units = 'count'
         outNeuralTraj.labels['stimulusMainLabel'] = np.ones((outNeuralTraj.shape[0],1))
+        outNeuralTraj.alignmentBins = np.hstack([np.zeros((outNeuralTraj.shape[0],1)),outNeuralTraj.shape[2]*np.ones((outNeuralTraj.shape[0],1))])
             
         return outNeuralTraj
