@@ -1134,7 +1134,7 @@ class BinnedSpikeSet(np.ndarray):
         xDimBestAll = []
         xDimScoreBestAll = []
         gpfaPrepAll = []
-        normalGpfaScoreAndErrAll = []
+        normalGpfaScoreAll = []
         loadedSaved = []
         from time import time
         tSt = time()
@@ -1144,47 +1144,81 @@ class BinnedSpikeSet(np.ndarray):
             gpfaPrepAll.append(gpfaPrep)
 
             # we first want to check if the variables of interest have been presaved...
-            fullOutputPath = outputPath / "gpfa" / ("run" + str(signalDescriptor)) / ("cond" + str(condDesc))
+            fullOutputPath = outputPath / "gpfa" / (str(signalDescriptor)) / ("cond" + str(condDesc))
             fullOutputPath.mkdir(parents=True, exist_ok = True)
             preSavedDataPath = fullOutputPath / "procRes.npz"
-            if preSavedDataPath.exists():
-                try:
-                    gpfaSaved = np.load(preSavedDataPath, allow_pickle=True)
-                    xDimBestAll.append(gpfaSaved['xDimBest'])
-                    xDimScoreBestAll.append(gpfaSaved['xDimScoreBest'])
-                    normalGpfaScoreAndErrAll.append(gpfaSaved['normalGpfaScoreAndErr'])
-                    gpfaPrep.dimOutput = gpfaSaved['dimOutput'][()]
-                    gpfaPrep.testInds = gpfaSaved['testInds']
-                    gpfaPrep.trainInds = gpfaSaved['trainInds']
-                except KeyError as e:
-                    normalGpfaScoreAndErrAll.append([])
-                    xDimBestAll.append([])
-                    xDimScoreBestAll.append([])
-                    loadedSaved.append(False)
-                else:
-                    loadedSaved.append(True)
-            else:
-                normalGpfaScoreAndErrAll.append([])
-                xDimBestAll.append([])
-                xDimScoreBestAll.append([])
-                loadedSaved.append(False)
-
-            if not loadedSaved[-1]:
-
-                for idxXdim, xDim in enumerate(xDimTest):
-                    print("Testing dimensionality %d. Left to test: " % xDim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
-
-
+#            if False:#preSavedDataPath.exists():
+            # loading for each dimension and concatenating
+            normalGpfaScoreCond = np.empty((len(xDimTest),crossvalidateNum))
+            loadedDim = {}
+            for idxXdim, xDim in enumerate(xDimTest):
+                print("Testing/loading dimensionality %d. Left to test: " % xDim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
+                preSavedDataPath = fullOutputPath / ("procResDim%d.npz" % xDim)
+                if preSavedDataPath.exists() and not forceNewGpfaRun:
                     try:
-                        
+                        gpfaDimSaved = np.load(preSavedDataPath, allow_pickle=True)
 
-                        estParams, seqTrainNew, seqTestNew = gpfaPrep.runGpfaInMatlab(eng=eng, fname=fullOutputPath, runDescriptor = signalDescriptor, condDescriptor = condDesc, crossvalidateNum=crossvalidateNum, xDim=xDim)
+                        normalGpfaScoreCond[idxXdim,:] = gpfaDimSaved['normalGpfaScore']
+#                        normalGpfaScoreCond[idxXdim, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
+#                        normalGpfaScoreAndErrAll = [nGSE.append(savNGSE) for nGSE, savNGSE in zip(normalGpfaScoreAndErrAll, gpfaSaved['normalGpfaScoreAndErr'])]
+                        gpfaPrep.dimOutput[xDim] = gpfaDimSaved['dimOutput'][()]
+                        # make sure right number of channels are in here...
+                        if gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0] != grpSpks.shape[1]:
+                            raise(Exception("ChanSavedProcDiff"))
+                        # These are getting replaced every time. I think... that's... fine...
+                        gpfaPrep.testInds = gpfaDimSaved['testInds']
+                        gpfaPrep.trainInds = gpfaDimSaved['trainInds']
+
+                    except (KeyError, Exception) as e:
+                        loadedDim[xDim] = False
+                        if type(e) is Exception:
+                            if e.args[0] == "ChanSavedProcDiff":
+                                print("Diff chans expected vs saved: (dimTest, expChNum, savedChNum) - (%d, %d, %d)" % (xDim, self.shape[1], gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0]))
+                            else:
+                                raise(e)
+
+                        # take care to clear out any information that was added
+                        normalGpfaScoreCond[idxXdim, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
+                        gpfaPrep.dimOutput.pop(xDim, None);
+                        gpfaPrep.testInds = None
+                        gpfaPrep.trainInds = None
+
+                    else:
+                        loadedDim[xDim] = True
+                else:
+                    normalGpfaScoreCond[idxXdim, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
+                    loadedDim[xDim] = False
+
+                if not loadedDim[xDim] or forceNewGpfaRun:
+                    try:
+                        gpfaPrep.runGpfaInMatlab(eng=eng, fname=fullOutputPath, runDescriptor = signalDescriptor, condDescriptor = condDesc, crossvalidateNum=crossvalidateNum, xDim=xDim, forceNewGpfaRun = forceNewGpfaRun);
+                        if gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0] != grpSpks.shape[1]:
+                            print("Diff chans expected vs saved by MATLAB: (dimTest, expChNum, savedChNum) - (%d, %d, %d)" % (xDim, self.shape[1], gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0]))
+                            print("Trying to force rerun of GPFA in case inputs have changed")
+                            gpfaPrep.runGpfaInMatlab(eng=eng, fname=fullOutputPath, runDescriptor = signalDescriptor, condDescriptor = condDesc, crossvalidateNum=crossvalidateNum, xDim=xDim, forceNewGpfaRun = True);
+                            if gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0] != grpSpks.shape[1]:
+                                # MAKE SURE you're not asking GPFA to do any channel filtering
+                                breakpoint()
                     except Exception as e:
                         if type(e) is engine.MatlabExecutionError:
                             print(e)
+                            breakpoint()
                             continue
                         else:
                             raise(e)
+#                    gpfaSaved = np.load(preSavedDataPath, allow_pickle=True)
+#                    xDimBestAll.append(gpfaSaved['xDimBest'])
+#                    xDimScoreBestAll.append(gpfaSaved['xDimScoreBest'])
+            normalGpfaScoreAll.append(normalGpfaScoreCond)
+            loadedSaved.append(loadedDim)
+#                    gpfaPrep.dimOutput = gpfaSaved['dimOutput'][()]
+#                    gpfaPrep.testInds = gpfaSaved['testInds']
+#                    gpfaPrep.trainInds = gpfaSaved['trainInds']
+#            else:
+#                normalGpfaScoreAndErrAll.append([])
+#                xDimBestAll.append([])
+#                xDimScoreBestAll.append([])
+#                loadedSaved.append(False)
 
             print("GPFA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
         print("All GPFA training done in %d seconds" % (time()-tSt))
@@ -1192,19 +1226,34 @@ class BinnedSpikeSet(np.ndarray):
         lblLLErr = 'LL err over folds'
         lblLL= 'LL mean over folds'
         cvApproach = "logLikelihood"
+        # use Williamson 2016 method with svCovThresh (should be 0.95 or
+        # 95%...) threshold to find dimensionality
         shCovThresh = 0.95
         for idx, gpfaPrep in enumerate(gpfaPrepAll):
-            if loadedSaved[idx]:
-                continue # avoid wrapping everything in if statement...
-            print("** Crossvalidating and plotting GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
-            normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(eng=eng, approach = cvApproach)
-            normalGpfaScoreAndErr = [normalGpfaScore, normalGpfaScoreErr]
-            normalGpfaScoreAndErrAll[idx] = normalGpfaScoreAndErr
-            # best xDim is our lowest error from the normalGpfaScore... for now...
+            print("** Crossvalidating GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
+            # find any dimensions that still need crossvalidating
+            dimsCVal = []
+            indsCVal = []
+            for idxXdim, xDim in enumerate(xDimTest):
+                if not loadedSaved[idx][xDim]:
+                    dimsCVal.append(xDim)
+                    indsCVal.append(idxXdim)
+
+            # crossvalidate dimensions as needed
+            if len(dimsCVal) > 0:
+                normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(eng=eng, approach = cvApproach, dimsCrossvalidate = dimsCVal)
+                normalGpfaScoreCurr = normalGpfaScoreAll[idx]
+                normalGpfaScoreCurr[indsCVal, :] = normalGpfaScore
+                normalGpfaScoreAll[idx] = normalGpfaScoreCurr
+
+            # find the best xdim based on the crossvalidation approach
+            normalGpfaScore = normalGpfaScoreAll[idx]
+            normalGpfaScoreMn = normalGpfaScore.mean(axis=1)
             if cvApproach is "logLikelihood":
-                xDimScoreBest = xDimTest[np.argmax(normalGpfaScore)]
+                xDimScoreBest = xDimTest[np.argmax(normalGpfaScoreMn)]
             elif cvApproach is "squaredError":
-                xDimScoreBest = xDimTest[np.argmin(normalGpfaScore)]
+                xDimScoreBest = xDimTest[np.argmin(normalGpfaScoreMn)]
+
             
             Cparams = [prm['C'] for prm in gpfaPrep.dimOutput[xDimScoreBest]['allEstParams']]
             shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
@@ -1213,19 +1262,33 @@ class BinnedSpikeSet(np.ndarray):
             meanPercAcc = np.mean(percAcc, axis=0)
             stdPercAcc = np.std(percAcc, axis = 0)
             xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
-            xDimBestAll[idx] = xDimBest
-            xDimScoreBestAll[idx] = xDimScoreBest
+            xDimBestAll.append(xDimBest)
+            xDimScoreBestAll.append(xDimScoreBest)
 
             # save the computation!
-            fullOutputPath = outputPath / "gpfa" / ("run" + str(signalDescriptor)) / ("cond" + str(condDescriptors[idx]))
-            preSavedDataPath = fullOutputPath / "procRes.npz"
-            print("Saving output...")
-            t = time()
-            np.savez(preSavedDataPath, xDimScoreBest=xDimScoreBest, xDimBest = xDimBest, dimOutput=gpfaPrep.dimOutput,
-                testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, normalGpfaScoreAndErr=normalGpfaScoreAndErr)
+            # But save it per dimension! This allows later loading for specific
+            # dimension tests, and avoids rewriting previous loads of many
+            # dimensions
+            if not np.all([*loadedSaved[idx].values()]):
+                print("Saving output...")
+                t = time()
+                for idxXdim, xDim in enumerate(xDimTest):
+                    if not loadedSaved[idx][xDim]:
+                        fullOutputPath = outputPath / "gpfa" / (str(signalDescriptor)) / ("cond" + str(condDescriptors[idx]))
+                        preSavedDataPath = fullOutputPath / ("procResDim%d.npz" % xDim)
+                        np.savez(preSavedDataPath, dimOutput=gpfaPrep.dimOutput[xDim], testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, normalGpfaScore=normalGpfaScore[idxXdim,:])
 
-            tElapse = time()-t
-            print("Output saved in %d seconds" % tElapse)
+                tElapse = time()-t
+                print("Output saved in %d seconds" % tElapse)
+
+#            fullOutputPath = outputPath / "gpfa" / (str(signalDescriptor)) / ("cond" + str(condDescriptors[idx]))
+#            preSavedDataPath = fullOutputPath / "procRes.npz"
+#            print("Saving output...")
+#            t = time()
+#            np.savez(preSavedDataPath, xDimScoreBest=xDimScoreBest, xDimBest = xDimBest, dimOutput=gpfaPrep.dimOutput, testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, normalGpfaScoreAndErr=normalGpfaScoreAndErr)
+#
+#            tElapse = time()-t
+#            print("Output saved in %d seconds" % tElapse)
             
         if plotInfo is not None:
             for idx, gpfaPrep in enumerate(gpfaPrepAll):

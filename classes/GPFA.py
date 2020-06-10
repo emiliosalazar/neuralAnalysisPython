@@ -205,9 +205,10 @@ class GPFA:
                     
             reducedGpfaScore = np.stack([np.nan])
             normalGpfaScore = np.stack([llH for _, llH in ll.items()])
-            normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
-            normalGpfaScore = np.mean(normalizedGpfaScore, axis=1)
-            normalGpfaScoreErr = np.std(normalizedGpfaScore,axis=1)
+            normalGpfaScoreErr = np.stack([np.nan])
+#            normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
+#            normalGpfaScore = np.mean(normalizedGpfaScore, axis=1)
+#            normalGpfaScoreErr = np.std(normalizedGpfaScore,axis=1)
             
             
             
