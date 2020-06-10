@@ -157,7 +157,22 @@ class BinnedSpikeSet(np.ndarray):
     
     def __array_function__(self, func, types, args, kwargs):
         if func not in HANDLED_FUNCTIONS:
-            return BinnedSpikeSet(func(np.array(*args), **kwargs))
+            if type(args) == tuple:
+                newArgs = []
+                for ar in args:
+                    if type(ar) is BinnedSpikeSet:
+                        newArgs.append(np.array(ar))
+                    else:
+                        newArgs.append(ar)
+                newArgs = tuple(newArgs)
+            else:
+                newArgs = args
+
+            return BinnedSpikeSet(func(*newArgs, **kwargs))
+#                labels=self.labels.copy() if self.labels is not None else {},
+#                alignmentBins = self.alignmentBins.copy if self.alignmentBins is not None else None,
+#                units = self.units
+#            )
         # Note: this allows subclasses that don't override
         # __array_function__ to handle BinnedSpikeSet objects
         if not all(issubclass(t, BinnedSpikeSet) for t in types):
