@@ -63,6 +63,53 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
         binnedSpikes.append(binnedSpikesHere)
     
     return binnedSpikes
+# This function lets you match the number of neurons and trials for different
+# sets of data you're comparing, to be fairer in the comparison. Note that what
+# is referred to as 'neuron' in the method name could well be a thresholded
+# channel with multineuron activity... but this nomencalture reminds us what
+# the purpose is...
+def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(binnedSpikesList, numSubsamples = 1, labelName='stimulusMainLabel'):
+    minNumNeur = np.min([bnSp.shape[1] for bnSp in binnedSpikesList])
+    numTrls = [np.unique(bnSp.labels[labelName],axis=0,return_counts=True)[1] for bnSp in binnedSpikesList]
+    minNumTrlPerCond = np.min(np.hstack(numTrls))
+
+
+    initRandSt = np.random.get_state()
+    bnSpSubsamples = []
+    trlNeurSubsamples = []
+    for bnSpOrig in binnedSpikesList:
+        # reset the seed for every binned spike so we know that whenever a set
+        # of data comes through here it gets split up identically... well...
+        # assuming the same minima up there...
+        np.random.seed(0)
+        trlInds = range(bnSpOrig.shape[0])
+        neuronInds = range(bnSpOrig.shape[1])
+        bnSpHereSubsample = []
+        trlNeurHereSubsamples = []
+        for newSubset in range(numSubsamples):
+            # note that the trials are randomly chosen, but returned in sorted
+            # order (balancedTriaInds does this) from first to last... I think
+            # this'll make things easier to compare in downstream analyses that
+            # care about changes over time... neurons being sorted on the other
+            # hand... still for ease of comparison, maybe not for any specific
+            # analysis I can think of
+            trlsUse = bnSpOrig.balancedTrialInds(bnSpOrig.labels[labelName], minCnt = minNumTrlPerCond)
+            neuronsUse = np.sort(np.random.permutation(neuronInds)[:minNumNeur])
+            bnSpHereSubsample.append(bnSpOrig[trlsUse][:,neuronsUse])
+            trlNeurHereSubsamples.append((trlsUse, neuronsUse))
+
+        bnSpSubsamples.append(bnSpHereSubsample)
+        trlNeurSubsamples.append(trlNeurHereSubsamples)
+
+
+
+
+
+
+    np.random.set_state(initRandSt)
+
+    return bnSpSubsamples, trlNeurSubsamples, minNumTrlPerCond, minNumNeur
+    
 
 def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMainLabel'):
     

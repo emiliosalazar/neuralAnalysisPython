@@ -229,9 +229,10 @@ class BinnedSpikeSet(np.ndarray):
             
         return trlTmStmp
         
-    def balancedTrialInds(self, labels):
+    def balancedTrialInds(self, labels, minCnt = None):
         unq, unqCnts = np.unique(labels, return_counts=True, axis=0)
-        minCnt = min(unqCnts)
+        if minCnt is None:
+            minCnt = min(unqCnts)
         idxUse = []
         
         for idx, cnt in enumerate(unqCnts):
@@ -268,7 +269,7 @@ class BinnedSpikeSet(np.ndarray):
     def groupByLabel(self, labels, labelExtract=None):
         unq, unqCnts = np.unique(labels, return_counts=True, axis=0)
         if labelExtract is None:
-            groupedSpikes = [self[np.all(labels.squeeze()==lbl,axis=lbl.ndim)] for lbl in unq]
+            groupedSpikes = [self[np.all(labels==lbl,axis=lbl.ndim)] for lbl in unq]
         else:
             groupedSpikes = [self[np.all(labels==lbl,axis=lbl.ndim)] for lbl in labelExtract]
             unq = labelExtract
