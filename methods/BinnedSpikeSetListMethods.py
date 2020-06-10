@@ -306,7 +306,8 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
         # gpfaPrepAll = list(resGrouped[1])
         
     if plotOutput:
-        axScore.legend()
+        pass
+#        axScore.legend()
     
     return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
 
@@ -315,6 +316,7 @@ def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart 
 def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
     
     frFig = plt.figure()
+
     
     if cumulative:
         typeStr = " CDF"
@@ -328,29 +330,96 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
         
     ax = frFig.add_subplot(221)
     
-    for bnSp, desc in zip(listBSS, descriptions):
-        ax.hist(bnSp.avgFiringRateByChannel(), density=True, cumulative=cumulative, alpha = 0.8, label = desc)
+    for colInd, (bnSp, desc) in enumerate(zip(listBSS, descriptions)):
+        if type(bnSp) is list:
+            for bS in bnSp:
+                units = bS.units
+                if units == 'count':
+                    histDat = bS.sumTrialCountByChannel()
+                elif units == 'Hz':
+                    histDat = bS.avgFiringRateByChannel()
+                ax.hist(histDat.view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+                desc = None # only label first shuffle
+        else:
+            units = bnSp.units
+            if units == 'count':
+                histDat = bnSp.sumTrialCountByChannel()
+            elif units == 'Hz':
+                histDat = bnSp.avgFiringRateByChannel()
+            ax.hist(histDat.view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+            units = bnSp.units
+
+    if units == 'count':
+        title = 'trial counts'
+        xlabel = 'Spike Count'
+    elif units == 'Hz':
+        title = 'firing rate'
+        xlabel = 'Firing Rate (Hz)'
         
     ax.legend(loc="upper right")
-    ax.set_title("means")
-    ax.set_xlabel('Firing Rate (Hz)')
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('Probability')
     
     ax = frFig.add_subplot(223)
-    for bnSp, desc in zip(listBSS, descriptions):
-       ax.hist(bnSp.timeAverage().trialStd(), density=True, cumulative=cumulative, alpha = 0.8, label = desc)
+    for colInd, (bnSp, desc) in enumerate(zip(listBSS, descriptions)):
+        if type(bnSp) is list:
+            for bS in bnSp:
+                ax.hist(bS.timeAverage().trialStd().view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+                desc = None # only label the first shuffle
+            units = bS.units # replace every time, but should be the same for all...
+        else:
+            ax.hist(bnSp.timeAverage().trialStd().view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+            units = bnSp.units # replace every time, but should be the same for all...
+            
+    if units == 'count':
+        xlabel = 'Spike Count'
+    elif units == 'Hz':
+        xlabel = 'Firing Rate (Hz)'
        
     #ax.legend(loc="upper right")
     ax.set_title("by trial standard deviations")
-    ax.set_xlabel('Firing Rate STD (Hz)')
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('Probability')
     
     ax = frFig.add_subplot(122)
-    for bnSp, desc in zip(listBSS, descriptions):
-       ax.scatter(bnSp.avgFiringRateByChannel(), bnSp.timeAverage().trialStd())
+    for colInd, (bnSp, desc) in enumerate(zip(listBSS, descriptions)):
+        if type(bnSp) is list:
+            for bS in bnSp:
+                units = bS.units
+                if units == 'count':
+                    scMn = bS.sumTrialCountByChannel()
+                    scStd = bS.stdSumTrialCountByChannel()
+                elif units == 'Hz':
+                    scMn = bS.avgFiringRateByChannel()
+                    scStd = bS.stdFiringRateByChannel()
+                ax.scatter(scMn, scStd**2, color = 'C%d' % colInd)
+        else:
+            units = bnSp.units # replace every time, but should be the same for all...
+            if units == 'count':
+                scMn = bnSp.sumTrialCountByChannel()
+                scStd = bnSp.stdSumTrialCountByChannel()
+            elif units == 'Hz':
+                scMn = bnSp.avgFiringRateByChannel()
+                scStd = bnSp.stdFiringRateByChannel()
+            ax.scatter(scMn, scStd**2, color = 'C%d' % colInd)
        
-    ax.set_xlabel('Firing Rate (Hz)')
-    ax.set_ylabel('Firing Rate STD')
+    maxX = np.max(ax.get_xlim())
+    maxY = np.max(ax.get_ylim())
+    maxDiagLine = np.min([maxX, maxY])
+    ax.plot([0,maxDiagLine],[0,maxDiagLine], linestyle='--')
+
+    if units == 'count':
+        xlabel = 'Spike Count'
+        ylabel = 'Spike Count var'
+    elif units == 'Hz':
+        xlabel = 'Firing Rate (Hz)'
+        ylabel = 'Firing Rate var'
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    frFig.tight_layout()
     
 def plotExampleChannelResponses(groupedSpikesTrialAvg, groupedSpikesTrialAvgForMod, groupedSpikesEndTrialAvg, 
                                 timeBeforeAndAfterStart, timeBeforeAndAfterEnd,
@@ -458,14 +527,28 @@ def plotExampleChannelResponses(groupedSpikesTrialAvg, groupedSpikesTrialAvgForM
     
 def plotStimDistributionHistograms(listBSS, plotTitles, labelUse='stimulusMainLabel'):
     for bnSp, plTtl in zip(listBSS, plotTitles):
-        plt.figure()
-        plt.suptitle(plTtl)
-    #    _, trialsPresented = np.unique(dtst.markerTargAngles, axis=0, return_inverse=True)
-        angsPres = bnSp.labels[labelUse].copy()
-        # the bottom fits all the angles in the range -np.pi -> np.pi (angles remain
-        # unchanged if they were in that range to begin with)
-        angsPres = ((angsPres + np.pi) % (2*np.pi)) - np.pi
-        plt.hist(angsPres,bins = np.arange(-9*np.pi/8, 7*np.pi/8, np.pi/4))
-        plt.title('distribution of directions')
-        plt.xlabel('direction angle (rad)')
-        plt.ylabel('count')
+        if type(bnSp) is list:
+            plt.figure()
+            plt.suptitle(plTtl)
+            for bS in bnSp:
+            #    _, trialsPresented = np.unique(dtst.markerTargAngles, axis=0, return_inverse=True)
+                angsPres = bS.labels[labelUse].copy()
+                # the bottom fits all the angles in the range -np.pi -> np.pi (angles remain
+                # unchanged if they were in that range to begin with)
+                angsPres = ((angsPres + np.pi) % (2*np.pi)) - np.pi
+                plt.hist(angsPres,bins = np.arange(-9*np.pi/8, 7*np.pi/8, np.pi/4))
+                plt.title('distribution of directions')
+                plt.xlabel('direction angle (rad)')
+                plt.ylabel('count')
+        else:
+            plt.figure()
+            plt.suptitle(plTtl)
+        #    _, trialsPresented = np.unique(dtst.markerTargAngles, axis=0, return_inverse=True)
+            angsPres = bnSp.labels[labelUse].copy()
+            # the bottom fits all the angles in the range -np.pi -> np.pi (angles remain
+            # unchanged if they were in that range to begin with)
+            angsPres = ((angsPres + np.pi) % (2*np.pi)) - np.pi
+            plt.hist(angsPres,bins = np.arange(-9*np.pi/8, 7*np.pi/8, np.pi/4))
+            plt.title('distribution of directions')
+            plt.xlabel('direction angle (rad)')
+            plt.ylabel('count')
