@@ -7,6 +7,7 @@ Created on Tue Apr 14 15:07:23 2020
 """
 
 from methods.GeneralMethods import loadDefaultParams
+from methods.GeneralMethods import saveFiguresToPdf
 from matplotlib import pyplot as plt
 
 from classes.Dataset import Dataset
@@ -82,12 +83,6 @@ binnedSpikesEnd = []
 groupedSpikesTrialAvg = []
 groupedSpikesEndTrialAvg = []
 grpLabels = []
-
-endDelaysFromStartList = []
-startDelaysList = []
-binnedSpikesShortStart = []
-binnedSpikesShortEnd = []
-groupedSpikesTrialShortStartAvg = []
 
 # this'll bleed a little into the start of the new stimulus with the offset,
 # but before any neural response can happen
@@ -275,25 +270,16 @@ sqrtSpikes = False
 # timeBeforeAndAfterEnd = (-furthestForward, 0)
 # baselineSubtract = True
 # signalDescriptor = "last%dMsDelayFRThresh%0.2f%sCondNum%d" % (furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "", numStimulusConditions)
-# ** inputs for delay offshifted ** #
-#listBSS = binnedSpikesShortStartOffshift
-##listConcatBSS = [np.concatenate(bnSp, axis=1).view(BinnedSpikeSet)[None,:,:] for bnSp in listBSS]
-##chansGoodBSS = [bnSp.channelsAboveThresholdFiringRate(firingRateThresh)[1] for bnSp in listConcatBSS]
-##listBSS = [(bnSp[:,:,:]-conBS.mean(axis=2)[:,:,None])/conBS.std(axis=2)[:,:,None] for bnSp, conBS in zip(listBSS, listConcatBSS)]
-##listBSS = [bnSp[:,chK,:] for bnSp, chK in zip(listBSS, chansGoodBSS)]
-## -- for removing bad channels --
-listBSS = binnedSpikesShortStartOffshift.copy()
-#allTrue = np.ones(listBSS[0].shape[1], dtype='bool')
-## 70 for PFC
-#allTrue[np.array([13,18])] = 0 # get rid of possibly bad channel 72? 12, 10, 76? 38? 39? 45? 53? 81?
-#listBSS[0] = listBSS[0][:,allTrue]
-timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
-timeBeforeAndAfterEnd = None
-baselineSubtract = True
-signalDescriptor = "fst%dMsDelShft%dMsFR%0.2f%s%sRmSprsIncons" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "", "Sqrt" if sqrtSpikes else "")
+# ** inputs for delay offshifted residuals ** #
+#listBSS = binnedResidualsShortStartOffshift.copy()
+#firingRateThresh=-1
+#timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
+#timeBeforeAndAfterEnd = None
+#baselineSubtract = True
+#signalDescriptor = "fst%dMsDelShft%dMsFR%0.2f%s%sPreproc" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "", "Sqrt" if sqrtSpikes else "")
 # ** inputs for beginning and end ** #
 #listBSS = binnedSpikesAll
-listBSS = binnedSpikesAll.copy()
+#listBSS = binnedSpikesAll.copy()
 #allTrue = np.ones(listBSS[0].shape[1], dtype='bool')
 ##allTrue[np.array([70,72,12,10,76])] = 0 # get rid of possibly bad channels? 12, 10, 76? 38? 39? 45? 53? 81?
 ##listBSS[0] = listBSS[0][:,allTrue]
@@ -301,7 +287,20 @@ listBSS = binnedSpikesAll.copy()
 #timeBeforeAndAfterEnd = (-furthestBack, furthestForward)
 #baselineSubtract = False
 #signalDescriptor = "delayStart%d-%dMsdelayEnd%d-%dMsFR%0.2f%sSR" % (furthestBack, furthestForward, furthestBack, furthestForward,firingRateThresh, "Bsub" if baselineSubtract else "")
-
+# ** inputs for delay offshifted residuals matched for trials/channel-neurons ** #
+listBSS = binnedResidShStOffSubsamples
+baselineSubtract = True # this is how we get the residuals
+plotOutput = True # really, I don't want to plot all these figures...
+timeBeforeAndAfterStart = (0+offshift, furthestForward+offshift)
+timeBeforeAndAfterEnd = None
+signalDescriptor = "fst%dMsDelShft%dMsFR%0.2f%s%sTrlCnd%dNrn%dFnoThresh" % (furthestForward, offshift,firingRateThresh, "Bsub" if baselineSubtract else "", "Sqrt" if sqrtSpikes else "", minNumTrlPerCond, minNumNeur)
+# note that with the firingRateThresh, it needs to be -infinity to be lower
+# than any mean the new subset might have. Why? Because the average firing rate
+# for baseline subtracted channels is zero if *ALL* of them are averaged--since
+# we're taking just subsets, it's possible that they might be arbitrarily low.
+# Moreover, what does a firing rate of a baseline subtracted trace really mean?
+firingRateThresh=-np.inf # we've already thresholded (but change it after the name so that's reflected)
+baselineSubtract = False # we've already thresholded (but change it after the name so that's reflected)
 
 crossvalidateNumFolds = 4
 
@@ -313,124 +312,288 @@ dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds = gpfaComputation(
                           balanceDirs = True, numStimulusConditions = numStimulusConditions, combineConditions=combineConditions, baselineSubtract = baselineSubtract, sqrtSpikes = False,
                           crossvalidateNumFolds = crossvalidateNumFolds, xDimTest = xDimTest, firingRateThresh=firingRateThresh, plotOutput = plotOutput)
 
-shCovPropPopByArea = []
-shCovPropNeurAvgByArea = []
-shLogDetGenCovPropPopByArea = []
-for gpfaArea, dimsUse, dimsGpfaUse in zip(gpfaDimOut, dims, dimsLL):
-    CR = [(gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['C'][:,:numDimsUse],gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['R']) for gpfaCond, numDimsUse, gpfaDimParamsUse in zip(gpfaArea, dimsUse, dimsGpfaUse)]
-    shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
-    shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
-    shLogDetGenCovPropPop = [np.linalg.slogdet(C.T @ C)[1] / (np.linalg.slogdet(C.T @ C)[1] + np.linalg.slogdet(R)[1]) for C, R in CR]
-    shCovPropPopByArea.append(np.array(shCovPropPop))
-    shCovPropNeurAvgByArea.append(np.array(shCovPropNeurAvg))
-    shLogDetGenCovPropPopByArea.append(np.array(shLogDetGenCovPropPop))
-
 # for the moment all we want to save is this...
 # now save all the figures
 if plotOutput:
-    from methods.GeneralMethods import saveFiguresToPdf
 
     saveFiguresToPdf(pdfname=signalDescriptor)
     plt.close('all')
 
+#breakpoint()
+    
+shCovPropPopByArea = []
+shCovPropNeurAvgByArea = []
+shLogDetGenCovPropPopByArea = []
+for gpfaArea, dimsUse, dimsGpfaUse in zip(gpfaDimOut, dims, dimsLL):
+    if type(gpfaArea) is list:
+        shCovPropPopByAreaHere = []
+        shCovPropNeurAvgByAreaHere = []
+        shLogDetGenCovPropPopByAreaHere = []
+        for (gpA, dU, dGfU) in zip(gpfaArea, dimsUse, dimsGpfaUse):
+            CR = [(gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['C'][:,:numDimsUse],gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['R']) for gpfaCond, numDimsUse, gpfaDimParamsUse in zip(gpA, dU, dGfU)]
+            shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
+            shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
+            shLogDetGenCovPropPop = [np.linalg.slogdet(C.T @ C)[1] / (np.linalg.slogdet(C.T @ C)[1] + np.linalg.slogdet(R)[1]) for C, R in CR]
+            shCovPropPopByAreaHere.append(np.array(shCovPropPop))
+            shCovPropNeurAvgByAreaHere.append(np.array(shCovPropNeurAvg))
+            shLogDetGenCovPropPopByAreaHere.append(np.array(shLogDetGenCovPropPop))
+        
+        shCovPropPopByArea.append(shCovPropPopByAreaHere)
+        shCovPropNeurAvgByArea.append(shCovPropNeurAvgByAreaHere)
+        shLogDetGenCovPropPopByArea.append(shLogDetGenCovPropPopByAreaHere)
+    else:
+        CR = [(gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['C'][:,:numDimsUse],gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['R']) for gpfaCond, numDimsUse, gpfaDimParamsUse in zip(gpfaArea, dimsUse, dimsGpfaUse)]
+        shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
+        shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
+        shLogDetGenCovPropPop = [np.linalg.slogdet(C.T @ C)[1] / (np.linalg.slogdet(C.T @ C)[1] + np.linalg.slogdet(R)[1]) for C, R in CR]
+        
+        shCovPropPopByArea.append(np.array(shCovPropPop))
+        shCovPropNeurAvgByArea.append(np.array(shCovPropNeurAvg))
+        shLogDetGenCovPropPopByArea.append(np.array(shLogDetGenCovPropPop))
+
+
 #%% Residual correlations
 from scipy.stats import binned_statistic
-avgSpkCorrOverall = []
+residCorrMeanOverCondAll = []
 residCorrPerCondAll = []
 geoMeanOverall = []
+
+residCorrPerCondOBPTAll = []
+residCorrMeanOverCondOBPTAll = []
 plotResid = True
 for idxSpks, bnSp in enumerate(listBSS):
     idx = dataIndsProcess[idxSpks]
+    separateNoiseCorrForLabels = True
+    normalize = False #True
     if plotResid:
         scatterFig = plt.figure()
-    separateNoiseCorrForLabels = True
-    normalize = True
-    residualSpikes, avgSpkCorrAll, residCorrPerCond, geoMeanCntAll = bnSp.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0].residualCorrelations(bnSp.labels['stimulusMainLabel'], plot=plotResid, separateNoiseCorrForLabels = separateNoiseCorrForLabels, figTitle = data[idx]['description'], normalize = normalize)
-    # residualSpikes.pca(labels = datasets[idx].markerTargAngles, plot = True)
-    # plt.suptitle(data[idx]['description'] + " residuals PCA")
-    # residualSpikes.lda(labels = datasets[idx].markerTargAngles, plot = True)
-    # plt.suptitle(data[idx]['description'] + " residuals LDA")
-    avgSpkCorrOverall.append(avgSpkCorrAll)
-    geoMeanOverall.append(geoMeanCntAll)
-    # Only care about single repeats of the non-self pairs...
-    upperTriInds = np.triu_indices(avgSpkCorrAll.shape[0], 1)
-    avgSpkCorr = avgSpkCorrAll[upperTriInds]
-    geoMeanCnt = geoMeanCntAll[upperTriInds]
-
-    residCorrPerCond = residCorrPerCond[upperTriInds]
-    residCorrPerCondAll.append(residCorrPerCond)
-    
-    if plotResid:
-        labels=bnSp.labels['stimulusMainLabel']#datasets[idxSpks].markerTargAngles
-        uniqueLabel, labelPresented = np.unique(labels, axis=0, return_inverse=True)
-        scatterFig.suptitle(data[idx]['description'] + " geo mean FR vs corr var")
-        axs = scatterFig.subplots(2,1)
-        axs[0].scatter(geoMeanCnt.flatten(), avgSpkCorr.flatten())
-        axs[0].set_ylabel("Correlated Variability")
+        if type(bnSp) is list:
+            scatterFig.suptitle(data[idx]['description'] + " geo mean FR vs corr var multiple subsets")
+        else:
+            scatterFig.suptitle(data[idx]['description'] + " geo mean FR vs corr var")
+    if type(bnSp) is list:
+        residCorrMeanOverCondAllHere = []
+        residCorrPerCondAllHere = []
+        geoMeanOverallHere = []
         
-        binAvg, binEdges, bN = binned_statistic(geoMeanCnt.flatten(), avgSpkCorr.flatten(), statistic='mean', bins = np.arange(np.max(geoMeanCnt), step=10))
-        binStd, _, _ = binned_statistic(geoMeanCnt.flatten(), avgSpkCorr.flatten(), statistic='std', bins = np.arange(np.max(geoMeanCnt), step=10))
-        binEdges = np.diff(binEdges)[0]/2+binEdges[:-1]
-        axs[1].plot(binEdges, binAvg)
-        axs[1].fill_between(binEdges, binAvg-binStd, binAvg+binStd, alpha=0.2)
-        axs[1].set_xlabel("Mean Firing Rate")
-        axs[1].set_ylabel("Correlated Variability")
-    # residualSpikes[labelPresented==0].numberOfDimensions(title=data[idx]['description'] + " residuals", maxDims = 30)
+        residCorrPerCondOBPTAllHere = []
+        residCorrMeanOverCondOBPTAllHere = []
+        for idxSubset, bS in enumerate(bnSp):
+            trialLengthMs = furthestTimeBeforeDelay + furthestTimeAfterDelay - 1
+            bSOneBinPrTrl = bS.convertUnitsTo('count').increaseBinSize(trialLengthMs)
+            residualSpikes, residCorrMeanOverCond, residCorrPerCond, geoMeanCntAll = bS.convertUnitsTo('count').residualCorrelations(bS.labels['stimulusMainLabel'], plot=plotResid, separateNoiseCorrForLabels = separateNoiseCorrForLabels, figTitle = data[idx]['description'] + ("subset %d" % idxSubset), normalize = normalize)
+            residualSpikesOBPT, residCorrMeanOverCondOBPT, residCorrPerCondOBPT, geoMeanCntAllOBPT = bSOneBinPrTrl.residualCorrelations(bS.labels['stimulusMainLabel'], plot=plotResid, separateNoiseCorrForLabels = separateNoiseCorrForLabels, figTitle = data[idx]['description'] + ("1 bin/trl subset %d" % idxSubset), normalize = normalize)
+            
+            
+            residCorrMeanOverCondAllHere.append(residCorrMeanOverCond)
+            geoMeanOverallHere.append(geoMeanCntAll)
+            residCorrPerCondAllHere.append(residCorrPerCond)
+            
+            residCorrMeanOverCondOBPTAllHere.append(residCorrMeanOverCondOBPT)
+            residCorrPerCondOBPTAllHere.append(residCorrPerCondOBPT)
+            
+            
+            
+            # Only care about single repeats of the non-self pairs...
+            upperTriInds = np.triu_indices(residCorrMeanOverCond.shape[0], 1)
+            residCorrMeanOverCond = residCorrMeanOverCond[upperTriInds]
+            geoMeanCnt = geoMeanCntAll[upperTriInds]
+            residCorrPerCond = residCorrPerCond[upperTriInds]
+            
+            residCorrPerCondOBPT = residCorrPerCondOBPT[upperTriInds]
+            
+            
+            if False:#plotResid:
+                axs = scatterFig.subplots(2,1)
+                axs[0].scatter(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten())
+                axs[0].set_ylabel("Correlated Variability")
+                
+                binWidth = 5
+                binAvg, binEdges, bN = binned_statistic(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten(), statistic='mean', bins = np.arange(np.max(geoMeanCnt), step=binWidth))
+                binStd, _, _ = binned_statistic(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten(), statistic='std', bins = np.arange(np.max(geoMeanCnt), step=binWidth))
+                binEdges = np.diff(binEdges)[0]/2+binEdges[:-1]
+                axs[1].plot(binEdges, binAvg)
+                axs[1].fill_between(binEdges, binAvg-binStd, binAvg+binStd, alpha=0.2)
+                axs[1].set_xlabel("Geometric Mean Firing Rate")
+                axs[1].set_ylabel("Correlated Variability")
+                
+        residCorrMeanOverCondAll.append(residCorrMeanOverCondAllHere)
+        geoMeanOverall.append(geoMeanOverallHere)
+        residCorrPerCondAll.append(residCorrPerCondAllHere)
+        
+        residCorrPerCondOBPTAll.append(residCorrPerCondOBPTAllHere)
+        residCorrMeanOverCondOBPTAll.append(residCorrMeanOverCondOBPTAllHere)
+    else:
+        residualSpikes, residCorrMeanOverCond, residCorrPerCond, geoMeanCntAll = bS.residualCorrelations(bS.labels['stimulusMainLabel'], plot=plotResid, separateNoiseCorrForLabels = separateNoiseCorrForLabels, figTitle = data[idx]['description'], normalize = normalize)
+        
+        
+        residCorrMeanOverCondAll.append(residCorrMeanOverCond)
+        geoMeanOverall.append(geoMeanCntAll)
+        residCorrPerCondAll.append(residCorrPerCond)
+        
+        # Only care about single repeats of the non-self pairs...
+        upperTriInds = np.triu_indices(residCorrMeanOverCond.shape[0], 1)
+        residCorrMeanOverCond = residCorrMeanOverCond[upperTriInds]
+        geoMeanCnt = geoMeanCntAll[upperTriInds]
+        residCorrPerCond = residCorrPerCond[upperTriInds]
+        
+        
+        if plotResid:
+            axs = scatterFig.subplots(2,1)
+            axs[0].scatter(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten())
+            axs[0].set_ylabel("Correlated Variability")
+            
+            binWidth = 5
+            binAvg, binEdges, bN = binned_statistic(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten(), statistic='mean', bins = np.arange(np.max(geoMeanCnt), step=binWidth))
+            binStd, _, _ = binned_statistic(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten(), statistic='std', bins = np.arange(np.max(geoMeanCnt), step=binWidth))
+            binEdges = np.diff(binEdges)[0]/2+binEdges[:-1]
+            axs[1].plot(binEdges, binAvg)
+            axs[1].fill_between(binEdges, binAvg-binStd, binAvg+binStd, alpha=0.2)
+            axs[1].set_xlabel("Geometric Mean Firing Rate")
+            axs[1].set_ylabel("Correlated Variability")
 
-breakpoint()
 
     
 if plotResid:
     from methods.GeneralMethods import saveFiguresToPdf
-
-    saveFiguresToPdf(pdfname="residualsZsc3RemFR2")
+    
+    saveFiguresToPdf(pdfname="residualsOverSubsets")
     plt.close('all')
 
-mnCorrPerCond = [residCorr.mean(axis=0) for residCorr in residCorrPerCondAll]
-plt.figure()
-plt.title('r_{sc} vs sh pop cov')
-[plt.scatter(mnCC, shCPP, label=desc) for mnCC, shCPP, desc in zip(mnCorrPerCond, shCovPropPopByArea, descriptions)]
-plt.xlabel('mean r_{sc}')
-plt.ylabel('shared population covariance')
-plt.legend()
+breakpoint()
 
-plt.figure()
-plt.title('r_{sc} vs sh cov neur avg')
-[plt.scatter(mnCC, shCPN, label=desc) for mnCC, shCPN, desc in zip(mnCorrPerCond, shCovPropNeurAvgByArea, descriptions)]
-plt.xlabel('mean r_{sc}')
-plt.ylabel('shared covariance neuron average')
-plt.legend()
 
-plt.figure()
-plt.title('r_{sc} vs log det (gen cov) pop')
-[plt.scatter(mnCC, shGCP, label=desc) for mnCC, shGCP, desc in zip(mnCorrPerCond, shLogDetGenCovPropPopByArea, descriptions)]
-plt.xlabel('mean r_{sc}')
-plt.ylabel('general covariance (log det) population')
-plt.legend()
+if type(residCorrPerCondAll[0]) is list:
+    mnCorrPerCond = []
+    stdCorrPerCond = []
+    for rsCorr in residCorrPerCondAll:
+        mnCorrPerCond.append([residCorr.mean(axis=(0,1)) for residCorr in rsCorr])
+        stdCorrPerCond.append([residCorr.std(axis=(0,1)) for residCorr in rsCorr])
+    
+    mnCorrPerCondOBPT = []
+    stdCorrPerCondOBPT = []
+    for rsCorr in residCorrPerCondOBPTAll:
+        mnCorrPerCondOBPT.append([residCorr.mean(axis=(0,1)) for residCorr in rsCorr])
+        stdCorrPerCondOBPT.append([residCorr.std(axis=(0,1)) for residCorr in rsCorr])
+    
+    fRChMnByArea = []
+    fRChStdByArea = []
+    fanoFactorChMnByArea = []
+    fanoFactorChStdByArea = []
+    labelUse = 'stimulusMainLabel'
+    for bnSpCnt in binnedSpksShortStOffSubsamplesCnt:
+        fRChMnByAreaHere = []
+        fRChStdByAreaHere = []
+        fanoFactorChMnByAreaHere = []
+        fanoFactorChStdByAreaHere = []
+        for bSC in bnSpCnt:
+            grpSpkCnt, uniqueLabel = bSC.groupByLabel(bSC.labels[labelUse])
+            fRChMnByAreaHere.append([np.mean(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
+            fRChStdByAreaHere.append([np.std(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
+            fanoFactorChMnByAreaHere.append([np.mean(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
+            fanoFactorChStdByAreaHere.append([np.std(bSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
+        fRChMnByArea.append(np.stack(fRChMnByAreaHere))
+        fRChStdByArea.append(np.stack(fRChStdByAreaHere))
+        fanoFactorChMnByArea.append(np.stack(fanoFactorChMnByAreaHere))
+        fanoFactorChStdByArea.append(np.stack(fanoFactorChStdByAreaHere))
+    
+    mnCorrPerCond = [np.hstack(mn) for mn in mnCorrPerCond]
+    shCovPropPopByAreaAllSub = [np.hstack(shProp) for shProp in shCovPropPopByArea]
+    shCovPropNeurAvgByAreaAllSub = [np.hstack(shPropN) for shPropN in shCovPropNeurAvgByArea]
+    shLogDetGenCovPropPopByAreaAllSub = [np.hstack(shLD) for shLD in shLogDetGenCovPropPopByArea]
+    dimsByArea = [np.hstack(dm) for dm in dims]
+else:
+    # TODO fill this in with the rest of the values defined above...
+    mnCorrPerCond = [residCorr.mean(axis=0) for residCorr in residCorrPerCondAll]
+    stdCorrPerCond = [residCorr.std(axis=0) for residCorr in residCorrPerCondAll]
+    dimsByArea = dims
 
-plt.figure()
-plt.title('r_{sc} vs dimensionality')
-[plt.scatter(mnCC, nD, label=desc) for mnCC, nD, desc in zip(mnCorrPerCond, dims, descriptions)]
-plt.xlabel('mean r_{sc}')
-plt.ylabel('num dims')
-plt.legend()
+def pltAllVsAll(descriptions, metricDict):
+    for metricNum, (metricName, metricVal) in enumerate(metricDict.items()):
+        for metric2Num, (metric2Name, metric2Val) in enumerate(metricDict.items()):
+            if metric2Num > metricNum:
+                plt.figure()
+                plt.title('%s vs %s' % ( metricName, metric2Name ))
+                [plt.scatter(m1, m2, label=desc) for m1, m2, desc in zip(metricVal, metric2Val, descriptions)]
+                plt.xlabel(metricName)
+                plt.ylabel(metric2Name)
+                plt.legend()
 
-plt.figure()
-plt.title('shared pop covar vs dimensionality')
-[plt.scatter(shCPP, nD, label=desc) for shCPP, nD, desc in zip(shCovPropPopByArea, dims, descriptions)]
-plt.xlabel('shared population covariance')
-plt.ylabel('num dims')
-plt.legend()
+metricDict = { 
+    'mean channel firing rate (Hz)' : fRChMnByArea,
+    'std channel firing rate (Hz)' : fRChStdByArea,
+    'mean channel fano factor' : fanoFactorChMnByArea,
+    'std channel fano factor' : fanoFactorChStdByArea,
+    'mean(r_{sc})' : mnCorrPerCond,
+    'std(r_{sc})' : stdCorrPerCond,
+    'mean(r_{sc} 1 bn/tr)' : mnCorrPerCondOBPT,
+    'std(r_{sc} 1 bn/tr)' : stdCorrPerCondOBPT,
+    'sh pop cov' : shCovPropPopByAreaAllSub,
+    'sh cov neur avg' : shCovPropNeurAvgByAreaAllSub,
+    'dimensionality' : dimsByArea,
+    'gen cov (logdet) pop' : shLogDetGenCovPropPopByAreaAllSub,
+}
+pltAllVsAll(descriptions, metricDict)
+#
+#plt.figure()
+#plt.title('r_{sc} vs std(r_{sc})')
+#[plt.scatter(mnCC, stdCC, label=desc) for mnCC, stdCC, desc in zip(mnCorrPerCond, stdCorrPerCond, descriptions)]
+#plt.xlabel('mean r_{sc}')
+#plt.ylabel('std r_{sc}')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('r_{sc} vs sh pop cov')
+#[plt.scatter(mnCC, shCPP, label=desc) for mnCC, shCPP, desc in zip(mnCorrPerCond, shCovPropPopByAreaAllSub, descriptions)]
+#plt.xlabel('mean r_{sc}')
+#plt.ylabel('shared population covariance')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('r_{sc} vs sh cov neur avg')
+#[plt.scatter(mnCC, shCPN, label=desc) for mnCC, shCPN, desc in zip(mnCorrPerCond, shCovPropNeurAvgByAreaAllSub, descriptions)]
+#plt.xlabel('mean r_{sc}')
+#plt.ylabel('shared covariance neuron average')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('r_{sc} vs log det (gen cov) pop')
+#[plt.scatter(mnCC, shGCP, label=desc) for mnCC, shGCP, desc in zip(mnCorrPerCond, shLogDetGenCovPropPopByAreaAllSub, descriptions)]
+#plt.xlabel('mean r_{sc}')
+#plt.ylabel('general covariance (log det) population')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('r_{sc} vs dimensionality')
+#[plt.scatter(mnCC, nD, label=desc) for mnCC, nD, desc in zip(mnCorrPerCond, dimsByArea, descriptions)]
+#plt.xlabel('mean r_{sc}')
+#plt.ylabel('num dims')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('log det (gen cov) pop vs dimensionality')
+#[plt.scatter(shGCP, nD, label=desc) for shGCP, nD, desc in zip(shLogDetGenCovPropPopByAreaAllSub, dimsByArea, descriptions)]
+#plt.xlabel('mean r_{sc}')
+#plt.ylabel('general covariance (log det) population')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('shared pop covar vs dimensionality')
+#[plt.scatter(shCPP, nD, label=desc) for shCPP, nD, desc in zip(shCovPropPopByAreaAllSub, dimsByArea, descriptions)]
+#plt.xlabel('shared population covariance')
+#plt.ylabel('num dims')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('shared pop covar vs shared covar neur avg')
+#[plt.scatter(shCPP, shCPN, label=desc) for shCPP, shCPN, desc in zip(shCovPropPopByAreaAllSub, shCovPropNeurAvgByAreaAllSub, descriptions)]
+#plt.xlabel('shared population covariance')
+#plt.ylabel('shared covariance neuron average')
+#plt.legend()
 
-plt.figure()
-plt.title('shared pop covar vs shared covar neur avg')
-[plt.scatter(shCPP, shCPN, label=desc) for shCPP, shCPN, desc in zip(shCovPropPopByArea, shCovPropNeurAvgByArea, descriptions)]
-plt.xlabel('shared population covariance')
-plt.ylabel('shared covariance neuron average')
-plt.legend()
+saveFiguresToPdf(pdfname='scatterMetricsOverSubsets')
 
-from methods.GeneralMethods import saveFiguresToPdf
-saveFiguresToPdf(pdfname='scatterMetricsZsc3RemFR2')
+breakpoint()
 ## now some more figures
 #from matplotlib import pyplot as plt
 #plt.close('all')
