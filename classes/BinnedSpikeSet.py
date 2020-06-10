@@ -6,6 +6,7 @@ Created on Tue Jan 28 15:53:35 2020
 @author: emilio
 """
 import numpy as np
+import scipy as sp
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from classes.FactorAnalysis import FactorAnalysis
@@ -32,7 +33,7 @@ class BinnedSpikeSet(np.ndarray):
     
     # this has to do with how it's suggested that ndarray be subclassed...
     # https://docs.scipy.org/doc/numpy/user/basics.subclassing.html
-    def __new__(cls, input_array, start=None, end=None, binSize=None, labels = {}, alignmentBins = None):
+    def __new__(cls, input_array, start=None, end=None, binSize=None, labels = {}, alignmentBins = None, units = None):
         # Create the ndarray instance of our type, given the usual
         # ndarray input arguments.  This will call the standard
         # ndarray constructor, but return an object of our type.
@@ -47,14 +48,15 @@ class BinnedSpikeSet(np.ndarray):
         obj.end = end
         obj.labels = labels # this is meant to hold various types of labels, especially for trials
                 # and also to be expansible if new/overlapping labels present
-        
+        obj.units = units
+
         if alignmentBins is list:
             obj.alignmentBins = np.stack(alignmentBins)
         else:
             obj.alignmentBins = alignmentBins # this is meant to tell us how this BinnedSpikeSet
                 # was aligned when it was generated (i.e. what points in time correspond to an important 
                 # stimulus-related change, say)
-        obj._new_label_index = []
+        obj._new_label_index = None
                 
         # Finally, we must return the newly created object:
         return obj
@@ -89,20 +91,28 @@ class BinnedSpikeSet(np.ndarray):
         self.start = getattr(obj, 'start', None)
         self.end = getattr(obj, 'end', None)
         self.labels = copy(getattr(obj, 'labels', {})) # this is meant to hold various types of labels, especially for trials
+        self.units = getattr(obj, 'units', None)
         self.alignmentBins = copy(getattr(obj, 'alignmentBins', None))
+#        print(self.alignmentBins)
         try:
             # print('size = ' + str(len(obj._new_label_index)))
             # print('first ' + str(obj._new_label_index))
             # print('last ' + str(obj._new_label_index) + '\n')
-            for key, val in self.labels.items():
-                self.labels[key] = val[obj._new_label_index]
-            
-            self.alignmentBins = self.alignmentBins[obj._new_label_index]
+#            print('newlbind')
+#            print(obj._new_label_index)
+            if obj._new_label_index is not None: # we're gonna try and make None be the setting where no indexing has happened...
+                for key, val in self.labels.items():
+                    self.labels[key] = val[obj._new_label_index]
                 
-            self._new_label_index = getattr(obj, '_new_label_index', [])
-            setattr(obj, '_new_label_index', [])
+                self.alignmentBins = self.alignmentBins[obj._new_label_index]
+#                print('albin')
+#                print(self.alignmentBins)
+#                print(obj._new_label_index)
+                    
+                self._new_label_index = getattr(obj, '_new_label_index', None)
+                setattr(obj, '_new_label_index', None)
         except Exception as e:
-            # print(e)
+#            print(e)
             if hasattr(obj, '_new_label_index'):
                 # print('tried')
                 # print(obj._new_label_index)
@@ -112,7 +122,7 @@ class BinnedSpikeSet(np.ndarray):
                 pass;#print('no _new_label_index')
             pass
                 # and also to be expansible if new/overlapping labels present
-        self._new_label_index = getattr(self, '_new_label_index', [])
+        self._new_label_index = getattr(self, '_new_label_index', None)
         # We do not need to return anything
         
     # this little tidbit of info inspired by
@@ -155,7 +165,7 @@ class BinnedSpikeSet(np.ndarray):
         return HANDLED_FUNCTIONS[func](*args, **kwargs)
         
     def copy(self, *args, **kwargs):
-        out = BinnedSpikeSet(self.view(np.ndarray).copy(*args, **kwargs), start=self.start, end=self.end, binSize=self.binSize, labels=self.labels.copy(), alignmentBins=self.alignmentBins.copy())
+        out = BinnedSpikeSet(self.view(np.ndarray).copy(*args, **kwargs), start=self.start, end=self.end, binSize=self.binSize, labels=self.labels.copy() if self.labels is not None else {}, alignmentBins=self.alignmentBins.copy() if self.alignmentBins is not None else None, units=self.units)
         
         # # copy back the labels
         # for labelName, labels in self.labels.items():

@@ -199,7 +199,6 @@ class Dataset():
     
     def binSpikeData(self, startMs=0, endMs=3600, binSizeMs=50, notChan = None, alignmentPoints=None):
         
-        from classes.BinnedSpikeSet import BinnedSpikeSet
         smallestSpiketime = 0 # this should always be the case...
         if type(endMs) is list:
             # Adding binSizeMs to the end ensures that that last spike gets counted...
@@ -246,7 +245,8 @@ class Dataset():
                                             binSize = binSizeMs,
                                             start = startMs,
                                             end = endMs,
-                                            alignmentBins = alignmentBins)
+                                            alignmentBins = alignmentBins,
+                                            units = 'Hz')
             spikeDatBinned = spikeDatBinned[:, chansOfInt]
         else:
             spikeDatBinned = spikeDatBinned/(binSizeMs/1000)
@@ -255,6 +255,7 @@ class Dataset():
             spikeDatBinned.start = startMs
             spikeDatBinned.end = endMs
             spikeDatBinned.alignmentBins = alignmentBins
+            spikeDatBinned.units = 'Hz'
             spikeDatBinned = spikeDatBinned[:, chansOfInt, :]
         
         
