@@ -1349,9 +1349,11 @@ class BinnedSpikeSet(np.ndarray):
                 
 
                 for cValUse in [0]:# range(crossvalidateNum):
-#                    meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], labelMeans[idx][None,:,:], sqrtSpks = sqrtSpikes)
-                    meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], np.stack(labelMeans), sqrtSpks = sqrtSpikes)
-                    shuffTraj = gpfaPrep.shuffleGpfaControl(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], cvalTest = cValUse, sqrtSpks = sqrtSpikes)
+                    if baselineSubtract:
+                        # meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], labelMeans[idx][None,:,:], sqrtSpks = sqrtSpikes)
+                        meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], np.stack(labelMeans), sqrtSpks = sqrtSpikes)
+                        # this has nothing to do with baseline subtracting... I'm just being lazy
+                        shuffTraj = gpfaPrep.shuffleGpfaControl(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], cvalTest = cValUse, sqrtSpks = sqrtSpikes)
 
                     rowsPlt = 2
                     if tmValsStartBest.size and tmValsEndBest.size:
@@ -1679,166 +1681,167 @@ class BinnedSpikeSet(np.ndarray):
 
 
                     # wow is this ugly, but now I'm gonna plot the shuffles
-                    lblShuffle = 'shuffles'
-                    for sq in shuffTraj:
-                        pltNum = 1
-                        plt.figure(figSep.number)
-                        for dimNum, dim in enumerate(sq['xorth']):
-                            dimNum = dimNum+1 # first is 1-dimensional, not zero-dimensinoal
-                            #we'll only plot the xDimBest dims...
-                            if dimNum > xDimBest:
-                                break
-                            
-                            if tmValsStart.size:
-                                if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
-                                    axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
-                                    axesStart.append(axesHere)
-                                    if pltNum == 1:
-                                        axesHere.set_title("dim " + str(dimNum) + " periStart")
-                                    else:
-                                        axesHere.set_title("d"+str(dimNum)+"S")
-
-                                    if pltNum <= (xDimBest - colsPlt):
-                                        axesHere.set_xticklabels('')
-                                        axesHere.xaxis.set_visible(False)
-                                        axesHere.spines['bottom'].set_visible(False)
-                                    else:  
-                                        axesHere.set_xlabel('time (ms)')
-
-                                    if (pltNum % colsPlt) != 1:
-                                        axesHere.set_yticklabels('')
-                                        axesHere.yaxis.set_visible(False)
-                                        axesHere.spines['left'].set_visible(False)
-                                else:
-                                    if tmValsEnd.size:
-                                        axesHere = axesStart[int((pltNum-1)/2)]
-                                    else:
-                                        axesHere = axesStart[int(pltNum-1)]    
-                                    plt.axes(axesHere)
-                            
-                                plt.plot(tmValsStart, dim[:tmValsStart.shape[0]], color=[0.5,0.5,0.5], linewidth=0.2, alpha=0.5, label=lblShuffle)
-                            
-                            
-                            
-                                axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
-                                pltNum += 1
-                            
-                            if tmValsEnd.size:
-                                if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
-                                    axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
-                                    axesEnd.append(axesHere)
-                                    if pltNum == colsPlt:
-                                        axesHere.set_title("dim " + str(dimNum) + " periEnd")
-                                    else:
-                                        axesHere.set_title("d"+str(dimNum)+"E")
-
-                                    if pltNum <= (xDimBest - colsPlt):
-                                        axesHere.set_xticklabels('')
-                                        axesHere.xaxis.set_visible(False)
-                                        axesHere.spines['bottom'].set_visible(False)
-                                    else:  
-                                        axesHere.set_xlabel('time (ms)')
-
-                                    if (pltNum % colsPlt) != 1:
-                                        axesHere.set_yticklabels('')
-                                        axesHere.yaxis.set_visible(False)
-                                        axesHere.spines['left'].set_visible(False)
-                                else:
-                                    if tmValsStart.size:
-                                        axesHere = axesEnd[int(pltNum/2-1)]
-                                    else:
-                                        axesHere = axesEnd[int(pltNum-1)]
-                                    plt.axes(axesHere)
-                        
-                                plt.plot(tmValsEnd, dim[-tmValsEnd.shape[0]:], color=[0.5,0.5,0.5], linewidth=0.2, alpha=0.5, label=lblShuffle)                 
-                                axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
-                                pltNum += 1
-
-                        axesHere.legend()
-                        lblShuffle = None
+#                    lblShuffle = 'shuffles'
+#                    for sq in shuffTraj:
+#                        pltNum = 1
+#                        plt.figure(figSep.number)
+#                        for dimNum, dim in enumerate(sq['xorth']):
+#                            dimNum = dimNum+1 # first is 1-dimensional, not zero-dimensinoal
+#                            #we'll only plot the xDimBest dims...
+#                            if dimNum > xDimBest:
+#                                break
+#                            
+#                            if tmValsStart.size:
+#                                if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
+#                                    axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
+#                                    axesStart.append(axesHere)
+#                                    if pltNum == 1:
+#                                        axesHere.set_title("dim " + str(dimNum) + " periStart")
+#                                    else:
+#                                        axesHere.set_title("d"+str(dimNum)+"S")
+#
+#                                    if pltNum <= (xDimBest - colsPlt):
+#                                        axesHere.set_xticklabels('')
+#                                        axesHere.xaxis.set_visible(False)
+#                                        axesHere.spines['bottom'].set_visible(False)
+#                                    else:  
+#                                        axesHere.set_xlabel('time (ms)')
+#
+#                                    if (pltNum % colsPlt) != 1:
+#                                        axesHere.set_yticklabels('')
+#                                        axesHere.yaxis.set_visible(False)
+#                                        axesHere.spines['left'].set_visible(False)
+#                                else:
+#                                    if tmValsEnd.size:
+#                                        axesHere = axesStart[int((pltNum-1)/2)]
+#                                    else:
+#                                        axesHere = axesStart[int(pltNum-1)]    
+#                                    plt.axes(axesHere)
+#                            
+#                                plt.plot(tmValsStart, dim[:tmValsStart.shape[0]], color=[0.5,0.5,0.5], linewidth=0.2, alpha=0.5, label=lblShuffle)
+#                            
+#                            
+#                            
+#                                axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
+#                                pltNum += 1
+#                            
+#                            if tmValsEnd.size:
+#                                if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
+#                                    axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
+#                                    axesEnd.append(axesHere)
+#                                    if pltNum == colsPlt:
+#                                        axesHere.set_title("dim " + str(dimNum) + " periEnd")
+#                                    else:
+#                                        axesHere.set_title("d"+str(dimNum)+"E")
+#
+#                                    if pltNum <= (xDimBest - colsPlt):
+#                                        axesHere.set_xticklabels('')
+#                                        axesHere.xaxis.set_visible(False)
+#                                        axesHere.spines['bottom'].set_visible(False)
+#                                    else:  
+#                                        axesHere.set_xlabel('time (ms)')
+#
+#                                    if (pltNum % colsPlt) != 1:
+#                                        axesHere.set_yticklabels('')
+#                                        axesHere.yaxis.set_visible(False)
+#                                        axesHere.spines['left'].set_visible(False)
+#                                else:
+#                                    if tmValsStart.size:
+#                                        axesHere = axesEnd[int(pltNum/2-1)]
+#                                    else:
+#                                        axesHere = axesEnd[int(pltNum-1)]
+#                                    plt.axes(axesHere)
+#                        
+#                                plt.plot(tmValsEnd, dim[-tmValsEnd.shape[0]:], color=[0.5,0.5,0.5], linewidth=0.2, alpha=0.5, label=lblShuffle)                 
+#                                axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
+#                                pltNum += 1
+#
+#                        axesHere.legend()
+#                        lblShuffle = None
 
 
                     # just keeps getting uglier, but this is for the mean trajectory...
-                    lblMn = 'mean traj per cond'
-                    for condNum, mnTraj in enumerate(meanTraj):
-                        pltNum = 1
-                        plt.figure(figSep.number)
-                        for dimNum, dim in enumerate(mnTraj['xorth']):
-                            dimNum = dimNum+1 # first is 1-dimensional, not zero-dimensinoal
-                            #we'll only plot the xDimBest dims...
-                            if dimNum > xDimBest:
-                                break
+                    if baselineSubtract:
+                        lblMn = 'mean traj per cond'
+                        for condNum, mnTraj in enumerate(meanTraj):
+                            pltNum = 1
+                            plt.figure(figSep.number)
+                            for dimNum, dim in enumerate(mnTraj['xorth']):
+                                dimNum = dimNum+1 # first is 1-dimensional, not zero-dimensinoal
+                                #we'll only plot the xDimBest dims...
+                                if dimNum > xDimBest:
+                                    break
 
-                            
-                            if tmValsStart.size:
-                                if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
-                                    axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
-                                    axesStart.append(axesHere)
-                                    if pltNum == 1:
-                                        axesHere.set_title("dim " + str(dimNum) + " periStart")
+                                
+                                if tmValsStart.size:
+                                    if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
+                                        axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
+                                        axesStart.append(axesHere)
+                                        if pltNum == 1:
+                                            axesHere.set_title("dim " + str(dimNum) + " periStart")
+                                        else:
+                                            axesHere.set_title("d"+str(dimNum)+"S")
+
+                                        if pltNum <= (xDimBest - colsPlt):
+                                            axesHere.set_xticklabels('')
+                                            axesHere.xaxis.set_visible(False)
+                                            axesHere.spines['bottom'].set_visible(False)
+                                        else:  
+                                            axesHere.set_xlabel('time (ms)')
+
+                                        if (pltNum % colsPlt) != 1:
+                                            axesHere.set_yticklabels('')
+                                            axesHere.yaxis.set_visible(False)
+                                            axesHere.spines['left'].set_visible(False)
                                     else:
-                                        axesHere.set_title("d"+str(dimNum)+"S")
-
-                                    if pltNum <= (xDimBest - colsPlt):
-                                        axesHere.set_xticklabels('')
-                                        axesHere.xaxis.set_visible(False)
-                                        axesHere.spines['bottom'].set_visible(False)
-                                    else:  
-                                        axesHere.set_xlabel('time (ms)')
-
-                                    if (pltNum % colsPlt) != 1:
-                                        axesHere.set_yticklabels('')
-                                        axesHere.yaxis.set_visible(False)
-                                        axesHere.spines['left'].set_visible(False)
-                                else:
-                                    if tmValsEnd.size:
-                                        axesHere = axesStart[int((pltNum-1)/2)]
-                                    else:
-                                        axesHere = axesStart[int(pltNum-1)]    
-                                    plt.axes(axesHere)
-                            
+                                        if tmValsEnd.size:
+                                            axesHere = axesStart[int((pltNum-1)/2)]
+                                        else:
+                                            axesHere = axesStart[int(pltNum-1)]    
+                                        plt.axes(axesHere)
+                                
 #                                plt.plot(tmValsStart, dim[:tmValsStart.shape[0]], color=colorset[idx,:][0,0,0], linewidth=1,label=lblMn)
-                                plt.plot(tmValsStart, dim[:tmValsStart.shape[0]], color=colorset[condNum,:], linewidth=1,label=lblMn)
-                            
-                            
-                            
-                                axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
-                                pltNum += 1
-                            
-                            if tmValsEnd.size:
-                                if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
-                                    axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
-                                    axesEnd.append(axesHere)
-                                    if pltNum == colsPlt:
-                                        axesHere.set_title("dim " + str(dimNum) + " periEnd")
+                                    plt.plot(tmValsStart, dim[:tmValsStart.shape[0]], color=colorset[condNum,:], linewidth=1,label=lblMn)
+                                
+                                
+                                
+                                    axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
+                                    pltNum += 1
+                                
+                                if tmValsEnd.size:
+                                    if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
+                                        axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
+                                        axesEnd.append(axesHere)
+                                        if pltNum == colsPlt:
+                                            axesHere.set_title("dim " + str(dimNum) + " periEnd")
+                                        else:
+                                            axesHere.set_title("d"+str(dimNum)+"E")
+
+                                        if pltNum <= (xDimBest - colsPlt):
+                                            axesHere.set_xticklabels('')
+                                            axesHere.xaxis.set_visible(False)
+                                            axesHere.spines['bottom'].set_visible(False)
+                                        else:  
+                                            axesHere.set_xlabel('time (ms)')
+
+                                        if (pltNum % colsPlt) != 1:
+                                            axesHere.set_yticklabels('')
+                                            axesHere.yaxis.set_visible(False)
+                                            axesHere.spines['left'].set_visible(False)
+
                                     else:
-                                        axesHere.set_title("d"+str(dimNum)+"E")
+                                        if tmValsStart.size:
+                                            axesHere = axesEnd[int(pltNum/2-1)]
+                                        else:
+                                            axesHere = axesEnd[int(pltNum-1)]
+                                        plt.axes(axesHere)
+                            
+                                    plt.plot(tmValsEnd, dim[-tmValsEnd.shape[0]:], color=[0,0,0], linewidth=1, label=lblMn)                 
+                                    axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
+                                    pltNum += 1
 
-                                    if pltNum <= (xDimBest - colsPlt):
-                                        axesHere.set_xticklabels('')
-                                        axesHere.xaxis.set_visible(False)
-                                        axesHere.spines['bottom'].set_visible(False)
-                                    else:  
-                                        axesHere.set_xlabel('time (ms)')
-
-                                    if (pltNum % colsPlt) != 1:
-                                        axesHere.set_yticklabels('')
-                                        axesHere.yaxis.set_visible(False)
-                                        axesHere.spines['left'].set_visible(False)
-
-                                else:
-                                    if tmValsStart.size:
-                                        axesHere = axesEnd[int(pltNum/2-1)]
-                                    else:
-                                        axesHere = axesEnd[int(pltNum-1)]
-                                    plt.axes(axesHere)
-                        
-                                plt.plot(tmValsEnd, dim[-tmValsEnd.shape[0]:], color=[0,0,0], linewidth=1, label=lblMn)                 
-                                axVals = np.append(axVals, np.array(axesHere.axis())[None, :], axis=0)
-                                pltNum += 1
-
-                        axesHere.legend() #legend on the last plot...
-                        lblMn = None
+                            axesHere.legend() #legend on the last plot...
+                            lblMn = None
                     
                     ymin = np.min(np.append(0, np.min(axVals, axis=0)[2]))
                     ymax = np.max(axVals, axis=0)[3]
