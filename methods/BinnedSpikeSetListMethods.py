@@ -12,13 +12,15 @@ are better set out as a class that contains lists of these... but methinks not
 import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from matplotlib import pyplot as plt
+from pathlib import Path
 # from decorators.ParallelProcessingDecorators import parallelize
 
-def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelayStart, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeDelay=251, furthestTimeAfterDelay=251, setStartToDelayEnd = False, setEndToDelayStart = False):
+def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelayStart, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeDelay=251, furthestTimeAfterDelay=251, setStartToDelayEnd = False, setEndToDelayStart = False, returnResiduals = False, removeBadChannels = False, firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
     # return binned spikes
     startDelaysList = []
     endDelaysFromStartList = []
     binnedSpikes = []
+    chFanos = []
     for ind, stateNameDelayStart in zip(dataIndsProcess, stateNamesDelayStart):#dataset:#datasetSuccessNoCatch:
         
         if trialType is 'successful':
@@ -53,16 +55,46 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
         
         # add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
         binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeDelay), endMs = list(endTimeArr+furthestTimeAfterDelay+binSizeMs/20), binSizeMs=binSizeMs, notChan=[31, 0], alignmentPoints = list(zip(startTimeArr, endTimeArr)))
+        # first the firing rate thresh
+        binnedSpikesHere = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0]
+
+        # then we're doing fano factor, but for counts *over the trial*
+        trialLengthMs = furthestTimeBeforeDelay + furthestTimeAfterDelay - 1
+        binnedCountsPerTrial = binnedSpikesHere.convertUnitsTo('count').increaseBinSize(trialLengthMs)
+        _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh)
+        chFano = binnedCountsPerTrial[:,chansGood].fanoFactorByChannel()
+        chFanos.append(chFano)
+        binnedSpikesHere = binnedSpikesHere[:,chansGood]
+
         
+
+        if unitsOut is not None:
+            binnedSpikesHere.convertUnitsTo(units=unitsOut)
+
         try:
             binnedSpikesHere.labels['stimulusMainLabel'] = dataSt.markerTargAngles
         except AttributeError:
             for bnSp, lab in zip(binnedSpikesHere, dataSt.markerTargAngles):
                 bnSp.labels['stimulusMainLabel'] = lab
             
+        if returnResiduals:
+            labels = binnedSpikesHere.labels['stimulusMainLabel']
+            binnedSpikesHere, labelBaseline = binnedSpikesHere.baselineSubtract(labels=labels)
+
+        # This should also work if you don't returnResiduals, but I haven't thought through if the filtering would work appropriately, so I'll let it error for now if removeBadChannels=True but returnResiduals is not
+#        if removeBadChannels:
+#            unq, unqInv = np.unique(labels, return_inverse=True, axis=0)
+#            binnedSpikesHere, goodChans = binnedSpikesHere.channelsNotRespondingSparsely(zeroRate = np.array(labelBaseline)[unqInv])
+#            labelBaseline = [lb[goodChans] for lb in labelBaseline]
+#            binnedSpikesHere, goodChans = binnedSpikesHere.removeInconsistentChannelsOverTrials(zeroRate = np.array(labelBaseline)[unqInv])
+#            labelBaseline = [lb[goodChans] for lb in labelBaseline]
+
+        
         binnedSpikes.append(binnedSpikesHere)
     
-    return binnedSpikes
+    return binnedSpikes, chFanos
+
+
 # This function lets you match the number of neurons and trials for different
 # sets of data you're comparing, to be fairer in the comparison. Note that what
 # is referred to as 'neuron' in the method name could well be a thresholded
@@ -111,6 +143,7 @@ def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(binnedSpikesList
     return bnSpSubsamples, trlNeurSubsamples, minNumTrlPerCond, minNumNeur
     
 
+#%% Analyses on binned spike sets
 def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMainLabel'):
     
     groupedSpikesTrialAvg = []

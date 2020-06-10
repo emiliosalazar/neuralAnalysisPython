@@ -99,76 +99,80 @@ binSizeMs = 25 # good for PFC LDA #50 #
 trialType = 'successful'
 
 stateNamesDelayStart = [data[ind]['delayStartStateName'] for ind in dataIndsProcess]
+#
+#binnedSpikes = genBSLAroundDelay(data, 
+#                                    dataIndsProcess,
+#                                    stateNamesDelayStart,
+#                                    trialType = trialType,
+#                                    lenSmallestTrl=lenSmallestTrl, 
+#                                    binSizeMs = binSizeMs, 
+#                                    furthestTimeBeforeDelay=furthestBack, 
+#                                    furthestTimeAfterDelay=furthestForward,
+#                                    setStartToDelayEnd = False,
+#                                    setEndToDelayStart = True)
+#
+#
+#binnedSpikesAll = genBSLAroundDelay(data, 
+#                                    dataIndsProcess,
+#                                    stateNamesDelayStart,
+#                                    trialType = trialType,
+#                                    lenSmallestTrl=lenSmallestTrl, 
+#                                    binSizeMs = binSizeMs, 
+#                                    furthestTimeBeforeDelay=furthestBack, 
+#                                    furthestTimeAfterDelay=furthestForward,
+#                                    setStartToDelayEnd = False,
+#                                    setEndToDelayStart = False)
+#
+#binnedSpikesOnlyDelay = genBSLAroundDelay(data, 
+#                                    dataIndsProcess,
+#                                    stateNamesDelayStart,
+#                                    trialType = trialType,
+#                                    lenSmallestTrl=lenSmallestTrl, 
+#                                    binSizeMs = binSizeMs, 
+#                                    furthestTimeBeforeDelay=0, 
+#                                    furthestTimeAfterDelay=0,
+#                                    setStartToDelayEnd = False,
+#                                    setEndToDelayStart = False)
+#
+#binnedSpikeEnd = genBSLAroundDelay(data, 
+#                                    dataIndsProcess,
+#                                    stateNamesDelayStart,
+#                                    trialType = trialType,
+#                                    lenSmallestTrl=lenSmallestTrl, 
+#                                    binSizeMs = binSizeMs, 
+#                                    furthestTimeBeforeDelay=furthestBack, 
+#                                    furthestTimeAfterDelay=furthestForward,
+#                                    setStartToDelayEnd = True,
+#                                    setEndToDelayStart = False)
+#
+#binnedSpikesShortStart = genBSLAroundDelay(data, 
+#                                    dataIndsProcess,
+#                                    stateNamesDelayStart,
+#                                    trialType = trialType,
+#                                    lenSmallestTrl=lenSmallestTrl, 
+#                                    binSizeMs = binSizeMs, 
+#                                    furthestTimeBeforeDelay=0, 
+#                                    furthestTimeAfterDelay=lenSmallestTrl,
+#                                    setStartToDelayEnd = False,
+#                                    setEndToDelayStart = True)
+#
+#binnedSpikesShortEnd = genBSLAroundDelay(data, 
+#                                    dataIndsProcess,
+#                                    stateNamesDelayStart,
+#                                    trialType = trialType,
+#                                    lenSmallestTrl=lenSmallestTrl, 
+#                                    binSizeMs = binSizeMs, 
+#                                    furthestTimeBeforeDelay=lenSmallestTrl, 
+#                                    furthestTimeAfterDelay=0,
+#                                    setStartToDelayEnd = True,
+#                                    setEndToDelayStart = False)
 
-binnedSpikes = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
-                                    stateNamesDelayStart,
-                                    trialType = trialType,
-                                    lenSmallestTrl=lenSmallestTrl, 
-                                    binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=furthestBack, 
-                                    furthestTimeAfterDelay=furthestForward,
-                                    setStartToDelayEnd = False,
-                                    setEndToDelayStart = True)
-
-
-binnedSpikesAll = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
-                                    stateNamesDelayStart,
-                                    trialType = trialType,
-                                    lenSmallestTrl=lenSmallestTrl, 
-                                    binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=furthestBack, 
-                                    furthestTimeAfterDelay=furthestForward,
-                                    setStartToDelayEnd = False,
-                                    setEndToDelayStart = False)
-
-binnedSpikesOnlyDelay = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
-                                    stateNamesDelayStart,
-                                    trialType = trialType,
-                                    lenSmallestTrl=lenSmallestTrl, 
-                                    binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=0, 
-                                    furthestTimeAfterDelay=0,
-                                    setStartToDelayEnd = False,
-                                    setEndToDelayStart = False)
-
-binnedSpikeEnd = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
-                                    stateNamesDelayStart,
-                                    trialType = trialType,
-                                    lenSmallestTrl=lenSmallestTrl, 
-                                    binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=furthestBack, 
-                                    furthestTimeAfterDelay=furthestForward,
-                                    setStartToDelayEnd = True,
-                                    setEndToDelayStart = False)
-
-binnedSpikesShortStart = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
-                                    stateNamesDelayStart,
-                                    trialType = trialType,
-                                    lenSmallestTrl=lenSmallestTrl, 
-                                    binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=0, 
-                                    furthestTimeAfterDelay=lenSmallestTrl,
-                                    setStartToDelayEnd = False,
-                                    setEndToDelayStart = True)
-
-binnedSpikesShortEnd = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
-                                    stateNamesDelayStart,
-                                    trialType = trialType,
-                                    lenSmallestTrl=lenSmallestTrl, 
-                                    binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=lenSmallestTrl, 
-                                    furthestTimeAfterDelay=0,
-                                    setStartToDelayEnd = True,
-                                    setEndToDelayStart = False)
-
+# NOTE: this one is special because it returns *residuals*
 offshift = 75 #ms
-binnedSpikesShortStartOffshift = genBSLAroundDelay(data, 
+firingRateThresh = 1
+fanoFactorThresh = 4
+baselineSubtract = True
+binnedResidualsShortStartOffshift, chFanosResidualsShortStartOffshift = genBSLAroundDelay(data, 
                                     dataIndsProcess,
                                     stateNamesDelayStart,
                                     trialType = trialType,
@@ -177,8 +181,71 @@ binnedSpikesShortStartOffshift = genBSLAroundDelay(data,
                                     furthestTimeBeforeDelay=-offshift, # note that this starts it *forwards* from the delay
                                     furthestTimeAfterDelay=lenSmallestTrl+offshift,
                                     setStartToDelayEnd = False,
-                                    setEndToDelayStart = True)
+                                    setEndToDelayStart = True,
+                                    returnResiduals = baselineSubtract,
+                                    removeBadChannels = True,
+                                    unitsOut = 'count', # this shouldn't affect GPFA... but will affect fano factor cutoffs...
+                                    firingRateThresh = firingRateThresh,
+                                    fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
+                                    )
+baselineSubtract = False
+furthestTimeBeforeDelay=-offshift # note that this starts it *forwards* from the delay
+furthestTimeAfterDelay=lenSmallestTrl+offshift
+binnedSpikesShortStartOffshift, _ = genBSLAroundDelay(data, 
+                                    dataIndsProcess,
+                                    stateNamesDelayStart,
+                                    trialType = trialType,
+                                    lenSmallestTrl=lenSmallestTrl, 
+                                    binSizeMs = binSizeMs, 
+                                    furthestTimeBeforeDelay=-offshift, # note that this starts it *forwards* from the delay
+                                    furthestTimeAfterDelay=lenSmallestTrl+offshift,
+                                    setStartToDelayEnd = False,
+                                    setEndToDelayStart = True,
+                                    returnResiduals = baselineSubtract,
+                                    removeBadChannels = True,
+                                    unitsOut = 'count', # this shouldn't affect GPFA... but will affect fano factor cutoffs...
+                                    firingRateThresh = firingRateThresh,
+                                    fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
+                                    )
 
+from methods.BinnedSpikeSetListMethods import subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition as subsmpMatchCond
+numSubsamples = 1
+binnedResidShStOffSubsamples, trlNeurUseSubsamples, minNumTrlPerCond, minNumNeur = subsmpMatchCond(binnedResidualsShortStartOffshift, numSubsamples = numSubsamples)
+
+binnedSpksShortStOffSubsamplesFR = []
+binnedSpksShortStOffSubsamplesCnt = []
+for areaTrlNeurUse, spkCnts in zip(trlNeurUseSubsamples, binnedSpikesShortStartOffshift):
+    binnedSpksShortStOffSubsamplesHereFR = []
+    binnedSpksShortStOffSubsamplesHereCnt = []
+    for subsmpTrlNeurUse in areaTrlNeurUse:
+        valsUse = spkCnts[subsmpTrlNeurUse[0]][:, subsmpTrlNeurUse[1]]
+        binnedSpksShortStOffSubsamplesHereFR.append(valsUse.convertUnitsTo('Hz'))
+        binnedSpksShortStOffSubsamplesHereCnt.append(valsUse.convertUnitsTo('count'))
+
+    binnedSpksShortStOffSubsamplesFR.append(binnedSpksShortStOffSubsamplesHereFR)
+    binnedSpksShortStOffSubsamplesCnt.append(binnedSpksShortStOffSubsamplesHereCnt)
+
+#%% some descriptive data plots
+from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as genBSLLabGrp
+from methods.BinnedSpikeSetListMethods import plotExampleChannelResponses
+from methods.BinnedSpikeSetListMethods import plotStimDistributionHistograms
+from methods.BinnedSpikeSetListMethods import plotFiringRates
+
+descriptions = [data[idx]['description'] for idx in dataIndsProcess]
+
+listBSS = binnedSpksShortStOffSubsamplesFR
+plotStimDistributionHistograms(listBSS, descriptions)
+plotFiringRates(listBSS, descriptions, supTitle = 'Delay Start Offshift Firing Rates', cumulative = False)
+
+listBSS = binnedSpksShortStOffSubsamplesCnt
+plotStimDistributionHistograms(listBSS, descriptions)
+plotFiringRates(listBSS, descriptions, supTitle = 'Delay Start Offshift Spike Counts', cumulative = False)
+
+
+saveFiguresToPdf(pdfname="genericMetrics")
+plt.close('all')
+
+#breakpoint()
 #%% run GPFA
 from methods.BinnedSpikeSetListMethods import gpfaComputation
 
