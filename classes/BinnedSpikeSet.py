@@ -222,7 +222,7 @@ class BinnedSpikeSet(np.ndarray):
             return None
         
     # timestamps are computed by centering on bin
-    def computeTimestamps(self):
+    def computeTimestampFromFirstBin(self):
         trlTmStmp = []
         for trl in self:
             trlTmStmp.append([self.binSize*(np.where(trlChan)[0][None,:]+0.5) for trlChan in trl])
@@ -278,16 +278,149 @@ class BinnedSpikeSet(np.ndarray):
         return groupedSpikes, unq  
 
     def avgFiringRateByChannel(self):
-        avgFiringChan = self.timeAverage().trialAverage()
+        if self.units != 'Hz':
+            hzBinned = self.convertUnitsTo(units='Hz')
+        else:
+            hzBinned = self
+
+        if self.dtype == 'object':
+            chanFirst = hzBinned.swapaxes((0,1))
+            avgFiringChan = [np.mean(np.stack(chan), axis=1) for chan in chanFirst]
+            breakpoint() # because I'm not sure this is correct...
+        else:
+            avgFiringChan = hzBinned.timeAverage().trialAverage()
         
         return avgFiringChan
 
+    def stdFiringRateByChannel(self):
+        if self.units != 'Hz':
+            hzBinned = self.convertUnitsTo(units='Hz')
+        else:
+            hzBinned = self
+
+        if self.dtype == 'object':
+            chanFirst = hzBinned.swapaxes((0,1))
+            avgFiringStdChan = [np.std(np.stack(chan), axis=1) for chan in chanFirst]
+            breakpoint() # because I'm not sure this is correct... NOTE want mean before std?
+
+        else:
+            avgFiringStdChan = hzBinned.timeAverage().trialStd()
+        
+        return avgFiringStdChan
+
+    def sumTrialCountByChannel(self):
+        if self.units != 'count':
+            cntBinned = self.convertUnitsTo(units='count')
+        else:
+            cntBinned = self
+
+        if self.dtype == 'object':
+            chanFirst = cntBinned.swapaxes((0,1))
+            avgCountChan = np.stack([np.sum(np.stack(chan), axis=1) for chan in chanFirst])
+            breakpoint() # because I'm not sure this is correct...
+        else:
+            avgCountChan = cntBinned.sum(axis=2).trialAverage()
+        
+        return avgCountChan
+
+    def stdSumTrialCountByChannel(self):
+        if self.units != 'count':
+            cntBinned = self.convertUnitsTo(units='count')
+        else:
+            cntBinned = self
+
+        if self.dtype == 'object':
+            chanFirst = cntBinned.swapaxes((0,1))
+            avgCountStdChan = np.stack([np.std(np.stack(chan), axis=1) for chan in chanFirst])
+            breakpoint() # because I'm not sure this is correct... NOTE want sum before std?
+        else:
+            # we're taking a sum over the bins before taking the standard
+            # deviation... so it's the standard devation of spike counts in a
+            # trial no matter what... but that's also how the functions named so hah!
+            avgCountStdChan = cntBinned.sum(axis=2).trialStd()
+        
+        return avgCountStdChan
+
+    # this is different from chaining timeAverage and trialAverage together
+    # when there are different numbers of bins in different trials
+    def avgValByChannel(self):
+        if self.dtype == 'object':
+            chanFirst = self.swapaxes(0,1)
+            avgValChan = np.stack([np.mean(np.stack(chan), axis=1) for chan in chanFirst])
+            breakpoint() # because I'm not sure this is correct...
+        else:
+            avgValChan = self.timeAverage().trialAverage()
+        
+        return avgValChan
+
+    def stdValByChannel(self):
+        if self.dtype == 'object':
+            chanFirst = self.swapaxes(0,1)
+            stdValChan = np.stack([np.std(np.stack(chan), axis=1) for chan in chanFirst])
+            breakpoint() # because I'm not sure this is correct...
+        else:
+            numChannels = self.shape[1]
+            stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1)
+        
+        return stdValChan
+
+    # note: while this function will only reflect fano factor of 1 for poisson
+    # distributed spike counts if self.units is counts, not Hz, the definition
+    # of fano factor is just var/mean, so... I'm not gonna do that check here;
+    # I expect other functions feeding into this one to check that the units
+    # make sense
+    def fanoFactorByChannel(self):
+        avgValChan = self.avgValByChannel()
+        stdValChan = self.stdValByChannel()
+
+        # fano factor is variance/mean
+        return stdValChan**2/avgValChan
+
+    def convertUnitsTo(self, units='Hz'):
+        if self.units is None:
+            raise(Exception("Don't know what the original units were!"))
+        elif self.units == units:
+            return self.copy() # return a copy here...
+        else:
+            if self.units == 'Hz':
+                if units == 'count':
+                    outNewUnits = self.copy()
+                    outNewUnits = outNewUnits*self.binSize/1000
+                    outNewUnits.units = units
+                else:
+                    raise(Exception("Don't know how to convert between %s and %s") % (self.units, units))
+            elif self.units == 'count':
+                if units == 'Hz':
+                    outNewUnits = self.copy()
+                    outNewUnits = outNewUnits*1000/self.binSize
+                    outNewUnits.units = units
+                else:
+                    raise(Exception("Don't know how to convert between %s and %s") % (self.units, units))
+            else:
+                raise(Exception("Don't know how to convert between %s and %s") % (self.units, units))
+
+            return outNewUnits
+
+#%% filtering mechanics
     def channelsAboveThresholdFiringRate(self, firingRateThresh=1): #low firing thresh in Hz
-        avgFiringChan = self.timeAverage().trialAverage() 
+        avgFiringChan = self.avgFiringRateByChannel()
         
         highFiringChannels = avgFiringChan>firingRateThresh
         
-        return self[:,highFiringChannels,:], np.where(highFiringChannels)[0]
+        return self[:,highFiringChannels], np.where(highFiringChannels)[0]
+
+    # note that this will always calculate the *spike count* fano factor
+    def channelsBelowThresholdFanoFactor(self, fanoFactorThresh = 4):
+        if self.units != 'count':
+            cntBinned = self.convertUnitsTo(units='count')
+        else:
+            cntBinned = self
+
+        fanoFactorChans = cntBinned.fanoFactorByChannel()
+
+        lowFanoFactorChans = fanoFactorChans < fanoFactorThresh
+
+        return self[:,lowFanoFactorChans], np.where(lowFanoFactorChans)[0]
 
     def channelsNotRespondingSparsely(self, zeroRate=0): 
         # note that 'sparsely' here has a very specific definition (of mine)
