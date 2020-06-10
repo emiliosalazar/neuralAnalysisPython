@@ -466,9 +466,9 @@ class BinnedSpikeSet(np.ndarray):
 
     def removeInconsistentChannelsOverTrials(self, zeroRate=0): 
         # Alright instead of schmancy thigns I tried to do, all I'm going to do
-        # now is check which channels had any firing during >90% of trials,
-        # after removing firing rates that were >3*std of firing rates of that
-        # channel.
+        # now is check which channels had any firing during >meanPerc-3*stdPerc
+        # of trials, after removing firing rates that were >3*std of firing
+        # rates of that channel.
 
         # remove firing rate bins where the neuron fired at >3*std for that
         # neuron
@@ -485,9 +485,11 @@ class BinnedSpikeSet(np.ndarray):
         # find the number of trials for which the neuron responded *at all*
         numRespTrialsByChan = np.sum(respSizePerTrlAndChan!=0, axis=0)
 
-        # only select neurons that responded in more than 90% of trials
-        consistentChans = (numRespTrialsByChan/self.shape[0])>=0.9
-        breakpoint()
+        # only select neurons that responded in more than meanPerc-stdPerc of trials
+        respPerc = numRespTrialsByChan/self.shape[0]
+        respPercMean = respPerc.mean(axis=0)
+        respPercStd = respPerc.std(axis=0)
+        consistentChans = respPerc>=(respPercMean-3*respPercStd) # must be closer than three std
 
         return self[:,consistentChans,:], np.where(consistentChans)[0]
 #        # alright, this function aims to remove channels which don't respond to
@@ -853,7 +855,8 @@ class BinnedSpikeSet(np.ndarray):
         
         # let's remove trials that are larger than 3*std
         stdChanResp = np.std(chanFlat, axis=1)
-        chanMask = np.abs(chanFlat) > (3*stdChanResp[:,None]) # < 0
+#        chanMask = np.abs(chanFlat) > (3*stdChanResp[:,None]) # < 0
+        chanMask = np.abs(chanFlat) < 0 # mask nothing... for now
         maskChanFlat = np.ma.array(np.array(chanFlat), mask = np.array(chanMask))
         
         # do the same as above for the baseline subtracted values, without baseline
