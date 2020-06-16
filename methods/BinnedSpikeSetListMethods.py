@@ -27,8 +27,10 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
             dataStInit = data[ind]['dataset'].successfulTrials().trialsWithoutCatch()
         else:
             dataStInit = data[ind]['dataset'].failTrials().trialsWithoutCatch()
+        
+        alignmentStates = data[ind]['alignmentStates']
             
-        startDelay, endDelay = dataStInit.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart)
+        startDelay, endDelay = dataStInit.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
         startDelayArr = np.asarray(startDelay)
         endTimeArr = np.asarray(endDelay)
         delayTimeArr = endTimeArr - startDelayArr
@@ -37,7 +39,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
        
         dataSt = dataStInit.filterTrials(delayTimeArr>lenSmallestTrl)
         # dataSt.computeCosTuningCurves()
-        startDelay, endDelay = dataSt.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart)
+        startDelay, endDelay = dataSt.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
         startDelayArr = np.asarray(startDelay)
         startDelaysList.append(startDelayArr)
         endDelayArr = np.asarray(endDelay)

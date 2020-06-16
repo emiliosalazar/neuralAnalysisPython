@@ -23,34 +23,42 @@ data = []
 data.append({'description': 'Earl 2019-03-18 M1 - MGR',
               'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/18/'),
               'delayStartStateName': 'Delay Period',
+              'alignmentStates': [],
               'processor': 'Erinn'});
 data.append({'description': 'Earl 2019-03-22 M1 - MGR',
               'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/22/'),
               'delayStartStateName': 'Delay Period',
+              'alignmentStates': [],
               'processor': 'Erinn'});
 data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
               'delayStartStateName': 'TARG_OFF',
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
               'delayStartStateName': 'TARG_OFF',
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
               'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
               'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
               'delayStartStateName': 'Blank Before',
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
               'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
               'delayStartStateName': 'Blank Before',
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 
 data = np.asarray(data) # to allow fancy indexing

@@ -408,7 +408,7 @@ class Dataset():
                 
         return stateTmPres
             
-    def computeDelayStartAndEnd(self, stateNameDelayStart = 'Delay Period'):
+    def computeDelayStartAndEnd(self, stateNameDelayStart = 'Delay Period', ignoreStates = []):
         indDelayPres = np.where(self.stateNames == stateNameDelayStart)[1][0] # this is a horizontal vector...
         startTmsPres = []
         endTmsPres = []
@@ -418,6 +418,13 @@ class Dataset():
                 locDelayStrtSt = np.where(locDelayLog)[0][0]
                 delayStartSt = locDelayStrtSt
                 locDelayEndSt = locDelayStrtSt + 1
+
+                stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
+                # go to next state until we find one not to ignore
+                while self.stateNames[0,stNumPres] in ignoreStates:
+                    locDelayEndSt = locDelayEndSt + 1 
+                    stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
+
                 startTmsPres.append(statesPres[1, delayStartSt])
                 endTmsPres.append(statesPres[1, locDelayEndSt])
             else:
