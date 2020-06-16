@@ -38,9 +38,9 @@ class Dataset():
             
             self.spikeDatSort = np.stack([trlDat['spikes'][0][0]['sort'][0] for trlDat in annots['Data']['TrialData'][0]])
             
-            markerTargWindows = np.stack([trlParam['MarkerTargets'][0][0]['window'][0] for trlParam in annots['Data']['Parameters'][0]])
+            markerTargWindows = [trlParam['MarkerTargets'][0][0]['window'][0] for trlParam in annots['Data']['Parameters'][0]]
             
-            markerTargWindowNames = np.stack([trlParam['MarkerTargets'][0][0]['targetName'][0] for trlParam in annots['Data']['Parameters'][0]])
+            markerTargWindowNames = [trlParam['MarkerTargets'][0][0]['targetName'][0] for trlParam in annots['Data']['Parameters'][0]]
             
             _, self.markerTargAngles = self.computeTargetCoordsAndAngle(markerTargWindows, markerTargWindowNames, 'ReachTargetAppear')
             
