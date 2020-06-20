@@ -11,52 +11,65 @@ from methods.GeneralMethods import saveFiguresToPdf
 from matplotlib import pyplot as plt
 
 from classes.Dataset import Dataset
+from setup.DataJointSetup import DatasetInfo, DatasetGeneralLoadParams
+import datajoint as dj
+
 
 from pathlib import Path
 
 import numpy as np
+import re
+import dill as pickle # because this is what people seem to do?
 
 defaultParams = loadDefaultParams(defParamBase = ".")
 dataPath = defaultParams['dataPath']
 
 data = []
 data.append({'description': 'Earl 2019-03-18 M1 - MGR',
-              'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/18/'),
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Earl/2019/03/18/'),
               'delayStartStateName': 'Delay Period',
               'alignmentStates': [],
               'processor': 'Erinn'});
 data.append({'description': 'Earl 2019-03-22 M1 - MGR',
-              'path': dataPath / Path('memoryGuidedReach/Earl/2019/03/22/'),
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Earl/2019/03/22/'),
               'delayStartStateName': 'Delay Period',
               'alignmentStates': [],
               'processor': 'Erinn'});
 data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
+              'area' : 'PFC',
+              'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
+              'area' : 'PFC',
+              'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
+              'area' : 'PFC',
+              'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
-              'path': dataPath / Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
+              'area' : 'PFC',
+              'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
               'delayStartStateName': 'TARG_OFF',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
-              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
               'delayStartStateName': 'Blank Before',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
 data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
-              'path': dataPath / Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
+              'area' : 'PFC',
+              'path': Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
               'delayStartStateName': 'Blank Before',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio'});
@@ -64,20 +77,88 @@ data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
 data = np.asarray(data) # to allow fancy indexing
 #%% process data
 processedDataMat = 'processedData.mat'
+datasetDill = 'dataset.dill'
 
 # dataset = [ [] for _ in range(len(data))]
 dataUseLogical = np.zeros(len(data), dtype='bool')
-dataIndsProcess = np.array([6])#np.array([1,4,6])
+dataIndsProcess = np.array([1,6])#np.array([1,4,6])
 dataUseLogical[dataIndsProcess] = True
+
+removeCoincidentSpikes = True
+coincidenceTime = 1 #ms
+coincidenceThresh = 0.2 # 20% of spikes
+checkNumTrls = 0.1 # use 10% of trials
+datasetGeneralLoadParams = {
+    'remove_coincident_spikes' : removeCoincidentSpikes,
+    'coincidence_time' : coincidenceTime, 
+    'coincidence_thresh' : coincidenceThresh, 
+    'coincidence_fraction_trial_test' : checkNumTrls
+}
+dsgl = DatasetGeneralLoadParams()
+if len(dsgl & datasetGeneralLoadParams)>1:
+    raise Exception('multiple copies of the same parameters have been saved... I thought I avoided that')
+elif len(dsgl & datasetGeneralLoadParams)>0:
+    genParamId = (dsgl & datasetGeneralLoadParams).fetch1('ds_gen_params_id')
+else:
+    # tacky, but it doesn't return the new id, syoo...
+    currIds = dsgl.fetch('ds_gen_params_id')
+    DatasetGeneralLoadParams().insert1(datasetGeneralLoadParams)
+    newIds = dsgl.fetch('ds_gen_params_id')
+    genParamId = list(set(newIds) - set(currIds))[0]
 
 for dataUse in data[dataUseLogical]:
 # for ind, dataUse in enumerate(data):
 #    dataUse = data[1]
     # dataUse = data[ind]
-    dataMatPath = dataUse['path'] / processedDataMat
+    dataMatPath = dataPath / dataUse['path'] / processedDataMat
+
+    dataDillPath = dataPath / dataUse['path'] / datasetDill
     
-    print('processing data set ' + dataUse['description'])
-    datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = [31,0])
+    if dataUse['processor'] == 'Erinn':
+        notChan = np.array([31, 0])
+    else:
+        notChan = np.array([])
+
+    if dataDillPath.exists():
+        print('loading dataset ' + dataUse['description'])
+        with dataDillPath.open(mode='rb') as datasetDillFh:
+            datasetHere = pickle.load(datasetDillFh)
+    else:
+        print('processing data set ' + dataUse['description'])
+        datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = notChan, removeCoincidentSpikes=removeCoincidentSpikes, coincidenceTime=coincidenceTime, coincidenceThresh=coincidenceThresh, checkNumTrls=checkNumTrls)
+        with dataDillPath.open(mode='wb') as datasetDillFh:
+            pickle.dump(datasetHere, datasetDillFh)
+
+    datasetHash = dj.hash.uuid_from_file(dataDillPath).hex
+    # do some database insertions here
+    datasetHereInfo = {
+        'dataset_relative_path' : str(dataUse['path'] / datasetDill),
+        'dataset_hash' : datasetHash,
+        'dataset_name' : dataUse['description'],
+        'ds_gen_params_id' : genParamId,
+        'processor_name' : dataUse['processor'],
+        'brain_area' : dataUse['area'],
+        'date_acquired' : re.search('.*?(\d+-\d+-\d+).*', dataUse['description']).group(1)
+    }
+
+    dsi = DatasetInfo()
+    breakpoint()
+    if len(dsi & datasetHereInfo) > 1:
+        raise Exception('multiple copies of same dataset in the table...')
+    elif len(dsi & datasetHereInfo) > 0:
+        dsId = (dsi & datasetHereInfo).fetch1('dataset_id')
+    else:
+        dsId = len(dsi) + 1
+        datasetHereInfo['dataset_id'] = dsId
+        dsi.insert1(datasetHereInfo)
+
+    datasetSpecificLoadParams = {
+        'dataset_relative_path' : str(dataUse['path'] / datasetDill),
+        'ds_gen_params_id' : genParamId,
+        'ignore_channels' : notChan
+    }
+    dsi.DatasetSpecificLoadParams.insert1(datasetSpecificLoadParams)
+    breakpoint()
     dataUse['dataset'] = datasetHere
     
     
