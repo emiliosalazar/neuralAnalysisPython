@@ -4,13 +4,13 @@ Joint so I can access my data! Woo!
 """
 
 import sys
-sys.path.append('/Users/emilio/Documents/PostdocCode/datajoint-python')
 import datajoint as dj
 from pathlib import Path
 
 from methods.GeneralMethods import loadDefaultParams
 
 defaultParams = loadDefaultParams(defParamBase = ".")
+sys.path.append(defaultParams['datajointLibraryPath')
 dbLocation = defaultParams['databaseHost']
 dbPort = defaultParams['databasePort']
 dataPath = defaultParams['dataPath']
