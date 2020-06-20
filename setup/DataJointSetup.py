@@ -132,24 +132,20 @@ class BinnedSpikeSetInfo(dj.Manual):
     # binned spike set
     -> DatasetInfo
     -> BinnedSpikeSetProcessParams
-    binned_spike_set_id: int # binned spike set id
-    ---
     bss_relative_path: varchar(500) # path to processed binned spike set
-    bss_hash : char(32) # mostly important because of the hash filepath can create to check data consistency
+    # these two below are pks because they tell us which chunk of time is being grabbed
+    # BUT they're not in the BinnedSpikeSetProcessParams table because each dataset might
+    # have a different name for these states though they represent the same thing (say, the
+    # delay start and end) (poo)
+    start_alignment_state : varchar(100) # name of alignment state from whose beginning start_time is offset
+    end_alignment_state : varchar(100) # name of alignment state from whose beginning end_time is offset
+    ---
+    bss_hash : char(32) # mostly important to check data consistency if we want...
+    start_time_alignment : blob # start time in ms of the alignment_state
+    start_time : blob # true start_time in ms of each trial -- start_time_alignment + start_offset
+    end_time_alignment : blob # end time in ms from where each bss trial end was offset
+    end_time : blob # true end_time in ms of each trisl -- end_time_alignment + end_offset
     """
-
-    class BinnedSpikeSetSpecificProcessParams(dj.Part):
-        definition = """
-        # dataset info extraction params
-        -> BinnedSpikeSetInfo
-        ds_spec_params : int auto_increment # params id
-        ---
-        alignment_state : varchar(100) # name of alignment state (note this might be offset from the start_time)
-        start_time_alignment : blob # start time in ms of the alignment_state
-        start_time : blob # true start_time in ms of each trial -- start_time_alignment + start_offset
-        end_time_alignment : blob # end time in ms from where each bss trial end was offset
-        end_time : blob # true end_time in ms of each trisl -- end_time_alignment + end_offset
-        """
 
 
 if __name__ == '__main__':
