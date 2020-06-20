@@ -15,7 +15,9 @@ from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
 from methods.plotUtils.GpfaPlotMethods import visualizeGpfaResults
 #from mayavi import mlab
 
+
 from copy import copy
+import itertools
 
 import pdb
 
@@ -571,16 +573,25 @@ class BinnedSpikeSet(np.ndarray):
         return chansKeep
                     
     def increaseBinSize(self, newBinSize):
-        if (newBinSize/self.binSize) % 1:
+        # this syntax is for when newBinSize is an array because each trial is changed to a different length
+        if np.any((newBinSize/self.binSize) % 1): 
             raise Exception('BinnedSpikeSet:BadBinSize', 'New bin size must be whole multiple of previous bin size!')
             return None
-        if newBinSize/self.binSize > self.shape[2]:
+
+        if len(self.shape) == 3:
+            trlLen = self.shape[2]
+        elif len(self.shape) == 2:
+            trlLen = [bnSpTrl[0].shape[0] for bnSpTrl in self] 
+
+        if np.any((newBinSize/self.binSize) > trlLen):
             raise Exception('BinnedSpikeSet:BadBinSize', 'New bin size larger than the length of each trials!')
             return None
-        if (newBinSize/self.binSize) % self.shape[2]:
+        if np.any((newBinSize/self.binSize) % trlLen):
             raise Exception('BinnedSpikeSet:BadBinSize', "New bin size doesn't evenly divide trajectory. Avoiding splitting to not have odd last bin.")
         
-        binsPerTrial = [np.arange(st, en+newBinSize/20, newBinSize)-st for st, en in zip(self.start,self.end)]
+        # allows for both one new bin size and multiple new bin sizes (one per trial, or this will fail earlier when doing the size checks)
+        binTrialIterator = zip(self.start, self.end, newBinSize)
+        binsPerTrial = [np.arange(st, en+nbs/20, nbs)-st for st, en, nbs in binTrialIterator]
         spikeTimestamps = self.computeTimestampFromFirstBin()
         
         spikeDatBinnedList = []
