@@ -13,9 +13,42 @@ import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from matplotlib import pyplot as plt
 from pathlib import Path
+from methods.GeneralMethods import loadDefaultParams
 # from decorators.ParallelProcessingDecorators import parallelize
+from setup.DataJointSetup import BinnedSpikeSetProcessParams, BinnedSpikeSetInfo, DatasetInfo
+import hashlib
+import json
+import dill as pickle
 
 def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelayStart, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeDelay=251, furthestTimeAfterDelay=251, setStartToDelayEnd = False, setEndToDelayStart = False, returnResiduals = False, removeBadChannels = False, firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
+
+    defaultParams = loadDefaultParams(defParamBase = ".")
+    dataPath = defaultParams['dataPath']
+
+
+    bSSProcParams = dict(
+        start_offset = -furthestTimeBeforeDelay,
+        end_offset = furthestTimeAfterDelay, # note I'm ignoring the + binSizeMs/20... hope I don't rue the day...
+        bin_size = binSizeMs,
+        firing_rate_thresh = firingRateThresh,
+        fano_factor_thresh = fanoFactorThresh,
+        trial_type = trialType,
+        len_smallest_trial = lenSmallestTrl,
+        residuals = returnResiduals
+    )
+    bsspp = BinnedSpikeSetProcessParams()
+
+    if len(bsspp & bSSProcParams)>1:
+        raise Exception('multiple copies of binned spike set process params in here hm...')
+    elif len(bsspp & bSSProcParams)>0:
+        procParamId = (bsspp & bSSProcParams).fetch1('bss_params_id')
+    else:
+        # tacky, but it doesn't return the new id, syoo...
+        currIds = bsspp.fetch('bss_params_id')
+        bsspp.insert1(bSSProcParams)
+        newIds = bsspp.fetch('bss_params_id')
+        procParamId = list(set(newIds) - set(currIds))[0]
+
     # return binned spikes
     startDelaysList = []
     endDelaysFromStartList = []
@@ -23,6 +56,8 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
     chFanos = []
     for ind, stateNameDelayStart in zip(dataIndsProcess, stateNamesDelayStart):#dataset:#datasetSuccessNoCatch:
         
+        dsId = data[ind]['dataset'].id
+
         if trialType is 'successful':
             dataStInit = data[ind]['dataset'].successfulTrials().trialsWithoutCatch()
         else:
@@ -30,7 +65,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
         
         alignmentStates = data[ind]['alignmentStates']
             
-        startDelay, endDelay = dataStInit.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
+        startDelay, endDelay, stateNameDelayEnd = dataStInit.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
         startDelayArr = np.asarray(startDelay)
         endTimeArr = np.asarray(endDelay)
         delayTimeArr = endTimeArr - startDelayArr
@@ -39,7 +74,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
        
         dataSt = dataStInit.filterTrials(delayTimeArr>lenSmallestTrl)
         # dataSt.computeCosTuningCurves()
-        startDelay, endDelay = dataSt.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
+        startDelay, endDelay, stateNameDelayEnd = dataSt.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
         startDelayArr = np.asarray(startDelay)
         startDelaysList.append(startDelayArr)
         endDelayArr = np.asarray(endDelay)
@@ -47,50 +82,110 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
         
         if setStartToDelayEnd:
             startTimeArr = endDelayArr
+            stateNameDelayStart = stateNameDelayEnd
         else:
             startTimeArr = startDelayArr
         
         if setEndToDelayStart:
             endTimeArr = startDelayArr
+            stateNameDelayEnd = stateNameDelayStart
         else:
             endTimeArr = endDelayArr
-        
-        # add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
-        binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeDelay), endMs = list(endTimeArr+furthestTimeAfterDelay+binSizeMs/20), binSizeMs=binSizeMs, notChan=[31, 0], alignmentPoints = list(zip(startTimeArr, endTimeArr)))
-        # first the firing rate thresh
-        binnedSpikesHere = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0]
 
-        # then we're doing fano factor, but for counts *over the trial*
-        trialLengthMs = furthestTimeBeforeDelay + furthestTimeAfterDelay - 1
-        binnedCountsPerTrial = binnedSpikesHere.convertUnitsTo('count').increaseBinSize(trialLengthMs)
-        _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh)
-        chFano = binnedCountsPerTrial[:,chansGood].fanoFactorByChannel()
-        chFanos.append(chFano)
-        binnedSpikesHere = binnedSpikesHere[:,chansGood]
 
-        
+        # here we want to check if we're going to load new data or if it already exists...
+        bssi = BinnedSpikeSetInfo()
+        dsi = DatasetInfo()
 
+        dsiPks = (dsi & ('dataset_id = %d' % dsId)).fetch('dataset_id', 'dataset_relative_path', 'ds_gen_params_id', as_dict=True)
+
+        if len(dsiPks) != 1:
+            raise Exception('There should be exactly one dataset record per binned spike set')
+        else:
+            dsiPks = dsiPks[0]
+        binnedSpikeSetDill = 'binnedSpikeSet.dill'
+        # a nice way to distinguish the path for each BSS based on extraction parameters...
+        bSSProcParamsJson = json.dumps(bSSProcParams, sort_keys=True) # needed for consistency as dicts aren't ordered
+        # encode('ascii') needed for json to be hashable...
+        bSSProcParamsHash = hashlib.md5(bSSProcParamsJson.encode('ascii')).hexdigest()
+        saveBSSRelativePath = Path(dsiPks['dataset_relative_path']).parent / ('binnedSpikeSet_%s' % bSSProcParamsHash[:5]) / binnedSpikeSetDill
+
+
+        saveBSSPath = dataPath / saveBSSRelativePath
+
+        if saveBSSPath.exists():
+            with saveBSSPath.open(mode='rb') as saveBSSFh:
+                binnedSpikesHere = pickle.load(saveBSSFh)
+        else:
+            # add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
+            binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeDelay), endMs = list(endTimeArr+furthestTimeAfterDelay+binSizeMs/20), binSizeMs=binSizeMs, alignmentPoints = list(zip(startTimeArr, endTimeArr)))
+            # first the firing rate thresh
+            binnedSpikesHere = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0]
+
+            # then we're doing fano factor, but for counts *over the trial*
+            if binnedSpikesHere.dtype == 'object':
+                trialLengthMs = binSizeMs*np.array([bnSpTrl[0].shape[0] for bnSpTrl in binnedSpikesHere])
+            else:
+                trialLengthMs = np.array([binnedSpikesHere.shape[2]*binSizeMs])
+            binnedCountsPerTrial = binnedSpikesHere.convertUnitsTo('count').increaseBinSize(trialLengthMs)
+
+            # NOTE: I believe this is okay because it's as if we were taking just a similarly sized window for each trial (under the assumption of uniform firing), but the std and mean is taken *afterwards*
+            if trialLengthMs.size > 1:
+                binnedCountsPerTrial = binnedCountsPerTrial * trialLengthMs/trialLengthMs.max()
+            _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh)
+            chFano = binnedCountsPerTrial[:,chansGood].fanoFactorByChannel()
+            chFanos.append(chFano)
+            binnedSpikesHere = binnedSpikesHere[:,chansGood]
+
+            
+
+
+            try:
+                binnedSpikesHere.labels['stimulusMainLabel'] = dataSt.markerTargAngles
+            except AttributeError:
+                for bnSp, lab in zip(binnedSpikesHere, dataSt.markerTargAngles):
+                    bnSp.labels['stimulusMainLabel'] = lab
+                
+            if returnResiduals:
+                labels = binnedSpikesHere.labels['stimulusMainLabel']
+                binnedSpikesHere, labelBaseline = binnedSpikesHere.baselineSubtract(labels=labels)
+
+            if not saveBSSPath.exists():
+                saveBSSPath.parent.mkdir(parents=True, exist_ok = True)
+                with saveBSSPath.open(mode='wb') as saveBSSFh:
+                    pickle.dump(binnedSpikesHere, saveBSSFh)
+            else:
+                raise Exception('Uh oh our BSS save paths are on a collision course!')
+            
+        binnedSpikeSetHereInfo = dict(
+            bss_params_id = procParamId,
+            bss_relative_path = str(saveBSSRelativePath),
+            start_alignment_state = stateNameDelayStart,
+            end_alignment_state = stateNameDelayEnd,
+        )
+
+        if len(bssi & binnedSpikeSetHereInfo) > 1:
+            raise Exception("we've saved this processing more than once...")
+        elif len(bssi & binnedSpikeSetHereInfo) == 0:
+            bssHash = hashlib.md5(str(binnedSpikesHere).encode('ascii')).hexdigest()
+
+
+            addlBssInfo = dict(
+                bss_hash = bssHash,
+                start_time_alignment = np.array(startTimeArr),
+                start_time = np.array(startTimeArr + furthestTimeBeforeDelay),
+                end_time_alignment = np.array(endTimeArr),
+                end_time = np.array(endTimeArr + furthestTimeAfterDelay)
+            )
+            binnedSpikeSetHereInfo.update(addlBssInfo)
+                
+            binnedSpikeSetHereInfo.update(dsiPks)
+
+
+            bssi.insert1(binnedSpikeSetHereInfo)
+            
         if unitsOut is not None:
             binnedSpikesHere.convertUnitsTo(units=unitsOut)
-
-        try:
-            binnedSpikesHere.labels['stimulusMainLabel'] = dataSt.markerTargAngles
-        except AttributeError:
-            for bnSp, lab in zip(binnedSpikesHere, dataSt.markerTargAngles):
-                bnSp.labels['stimulusMainLabel'] = lab
-            
-        if returnResiduals:
-            labels = binnedSpikesHere.labels['stimulusMainLabel']
-            binnedSpikesHere, labelBaseline = binnedSpikesHere.baselineSubtract(labels=labels)
-
-        # This should also work if you don't returnResiduals, but I haven't thought through if the filtering would work appropriately, so I'll let it error for now if removeBadChannels=True but returnResiduals is not
-#        if removeBadChannels:
-#            unq, unqInv = np.unique(labels, return_inverse=True, axis=0)
-#            binnedSpikesHere, goodChans = binnedSpikesHere.channelsNotRespondingSparsely(zeroRate = np.array(labelBaseline)[unqInv])
-#            labelBaseline = [lb[goodChans] for lb in labelBaseline]
-#            binnedSpikesHere, goodChans = binnedSpikesHere.removeInconsistentChannelsOverTrials(zeroRate = np.array(labelBaseline)[unqInv])
-#            labelBaseline = [lb[goodChans] for lb in labelBaseline]
-
         
         binnedSpikes.append(binnedSpikesHere)
     
