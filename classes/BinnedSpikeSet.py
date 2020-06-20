@@ -285,9 +285,8 @@ class BinnedSpikeSet(np.ndarray):
             hzBinned = self
 
         if self.dtype == 'object':
-            chanFirst = hzBinned.swapaxes((0,1))
-            avgFiringChan = [np.mean(np.stack(chan), axis=1) for chan in chanFirst]
-            breakpoint() # because I'm not sure this is correct...
+            chanFirst = hzBinned.swapaxes(0,1)
+            avgFiringChan = np.array([np.mean(np.hstack(chan), axis=0) for chan in chanFirst])
         else:
             avgFiringChan = hzBinned.timeAverage().trialAverage()
         
@@ -300,8 +299,8 @@ class BinnedSpikeSet(np.ndarray):
             hzBinned = self
 
         if self.dtype == 'object':
-            chanFirst = hzBinned.swapaxes((0,1))
-            avgFiringStdChan = [np.std(np.stack(chan), axis=1) for chan in chanFirst]
+            chanFirst = hzBinned.swapaxes(0,1)
+            avgFiringStdChan = [np.std(np.hstack(chan), axis=1) for chan in chanFirst]
             breakpoint() # because I'm not sure this is correct... NOTE want mean before std?
 
         else:
@@ -316,8 +315,8 @@ class BinnedSpikeSet(np.ndarray):
             cntBinned = self
 
         if self.dtype == 'object':
-            chanFirst = cntBinned.swapaxes((0,1))
-            avgCountChan = np.stack([np.sum(np.stack(chan), axis=1) for chan in chanFirst])
+            chanFirst = cntBinned.swapaxes(0,1)
+            avgCountChan = np.stack([np.sum(np.hstack(chan), axis=1) for chan in chanFirst])
             breakpoint() # because I'm not sure this is correct...
         else:
             avgCountChan = cntBinned.sum(axis=2).trialAverage()
@@ -331,8 +330,8 @@ class BinnedSpikeSet(np.ndarray):
             cntBinned = self
 
         if self.dtype == 'object':
-            chanFirst = cntBinned.swapaxes((0,1))
-            avgCountStdChan = np.stack([np.std(np.stack(chan), axis=1) for chan in chanFirst])
+            chanFirst = cntBinned.swapaxes(0,1)
+            avgCountStdChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
             breakpoint() # because I'm not sure this is correct... NOTE want sum before std?
         else:
             # we're taking a sum over the bins before taking the standard
@@ -347,7 +346,7 @@ class BinnedSpikeSet(np.ndarray):
     def avgValByChannel(self):
         if self.dtype == 'object':
             chanFirst = self.swapaxes(0,1)
-            avgValChan = np.stack([np.mean(np.stack(chan), axis=1) for chan in chanFirst])
+            avgValChan = np.stack([np.mean(np.hstack(chan), axis=1) for chan in chanFirst])
             breakpoint() # because I'm not sure this is correct...
         else:
             avgValChan = self.timeAverage().trialAverage()
@@ -357,7 +356,7 @@ class BinnedSpikeSet(np.ndarray):
     def stdValByChannel(self):
         if self.dtype == 'object':
             chanFirst = self.swapaxes(0,1)
-            stdValChan = np.stack([np.std(np.stack(chan), axis=1) for chan in chanFirst])
+            stdValChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
             breakpoint() # because I'm not sure this is correct...
         else:
             numChannels = self.shape[1]
