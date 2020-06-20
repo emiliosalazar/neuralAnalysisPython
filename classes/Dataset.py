@@ -199,7 +199,7 @@ class Dataset():
         datasetWithoutCatch = self.filterTrials(trialsWithoutCatchLog)
         return datasetWithoutCatch
     
-    def binSpikeData(self, startMs=0, endMs=3600, binSizeMs=50, notChan = None, alignmentPoints=None):
+    def binSpikeData(self, startMs=0, endMs=3600, binSizeMs=50, alignmentPoints=None):
         
         smallestSpiketime = 0 # this should always be the case...
         if type(endMs) is list:
@@ -219,10 +219,6 @@ class Dataset():
 
         spikeDatBinnedArr = [np.stack(trl) for trl in spikeDatBinnedList]
         
-        if notChan is not None:
-            chansOfInt = self.maskAgainstChannels(notChan)
-        else:
-            chansOfInt = np.ones(spikeDatBinnedArr[0].shape[0])
             
         try:
             spikeDatBinned = np.stack(spikeDatBinnedArr)
@@ -249,7 +245,6 @@ class Dataset():
                                             end = endMs,
                                             alignmentBins = alignmentBins,
                                             units = 'Hz')
-            spikeDatBinned = spikeDatBinned[:, chansOfInt]
         else:
             spikeDatBinned = spikeDatBinned/(binSizeMs/1000)
             spikeDatBinned = spikeDatBinned.view(BinnedSpikeSet)
@@ -258,7 +253,6 @@ class Dataset():
             spikeDatBinned.end = endMs
             spikeDatBinned.alignmentBins = alignmentBins
             spikeDatBinned.units = 'Hz'
-            spikeDatBinned = spikeDatBinned[:, chansOfInt, :]
         
         
             
@@ -356,7 +350,7 @@ class Dataset():
         uniqueTargAngle, trialsPresented = np.unique(self.markerTargAngles, axis=0, return_inverse=True)
         
         if spikeDatBinnedArr is None:
-            spikeDatBinnedArr = self.binSpikeData(notChan=notChan)
+            spikeDatBinnedArr = self.binSpikeData()
 
 #        spikeDatBinnedArrImpTmAvg = spikeDatBinnedArr.timeAverage()
 
@@ -390,7 +384,7 @@ class Dataset():
     # note that they get grouped in the order of the given labels
     def groupSpikes(self, groupAssignment, groupLabels, binnedSpikes = None, notChan = None):
         if binnedSpikes is None:
-            binnedSpikes = self.binSpikeData(notChan = notChan)
+            binnedSpikes = self.binSpikeData()
             
         groupedSpikes = [binnedSpikes[groupAssignment==i] for i in range(0, len(groupLabels))]
         
