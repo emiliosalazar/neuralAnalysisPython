@@ -422,7 +422,7 @@ class Dataset():
                     locDelayEndSt = locDelayEndSt + 1 
                     stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
 
-                stateNameDelayEnd = self.stateNames[0,stNumPres]
+                stateNameDelayEnd = self.stateNames[0,stNumPres][0] # result of how mats are loaded >.>
 
                 startTmsPres.append(statesPres[1, delayStartSt])
                 endTmsPres.append(statesPres[1, locDelayEndSt])
@@ -431,7 +431,7 @@ class Dataset():
                 endTmsPres.append(np.nan)
 #        startEndIndsPres = [ ]
         
-        return startTmsPres, endTmsPres #, stateNameDelayEnd -- maybe we'll want this someday...
+        return startTmsPres, endTmsPres, stateNameDelayEnd 
     
 #%% Plotting functions and such
     def plotTuningCurves(self, subpltRows = 5, subpltCols = 2):
