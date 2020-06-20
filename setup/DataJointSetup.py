@@ -114,18 +114,13 @@ class DatasetInfo(dj.Manual):
 class BinnedSpikeSetProcessParams(dj.Manual):
     definition = """
     # dataset info extraction params
-    bss_params : int auto_increment # params id
+    bss_params_id : int auto_increment # params id
     ---
-    alignment_state : varchar(100) # name of alignment state (note this might be offset from the start_time)
-    start_time_alignment : blob # start time in ms of the alignment_state
-    start_offset : int # offset in ms from start_time_alignment
-    start_time : blob # true start_time in ms of each trial -- start_time_alignment + start_offset
-    end_time_alignment : blob # end time in ms from where each bss trial end was offset
-    end_offset : int # offset in ms from end_time_alignment
-    end_time : blob # true end_time in ms of each trisl -- end_time_alignment + end_offset
+    start_offset : int # offset in ms (from start_time_alignment in the specific params)
+    end_offset : int # offset in ms (from end_time_alignment in the specific params)
     bin_size : int # bin size in ms
-    firing_rate_thresh : float # firing rate threshold per channel
-    fano_factor_thresh : float # fano factor threshold per channel
+    firing_rate_thresh : float # lowest firing rate threshold per channel
+    fano_factor_thresh : float # highest fano factor threshold per channel
     trial_type : enum('all', 'successful', 'failure') # type of trials analyzed
     len_smallest_trial : int # length of the shortest alignment_state for trials retained
     residuals : enum(0, 1) # whether this bss is residuals (PSTH subtracted) or not
@@ -139,10 +134,22 @@ class BinnedSpikeSetInfo(dj.Manual):
     -> BinnedSpikeSetProcessParams
     binned_spike_set_id: int # binned spike set id
     ---
-    bss_path: varchar(500) # path to processed binned spike set
+    bss_relative_path: varchar(500) # path to processed binned spike set
     bss_hash : char(32) # mostly important because of the hash filepath can create to check data consistency
-    bss_params: varchar(4000) # parameters to get this spike set--they'll be JSONized and might take some space ?
     """
+
+    class BinnedSpikeSetSpecificProcessParams(dj.Part):
+        definition = """
+        # dataset info extraction params
+        -> BinnedSpikeSetInfo
+        ds_spec_params : int auto_increment # params id
+        ---
+        alignment_state : varchar(100) # name of alignment state (note this might be offset from the start_time)
+        start_time_alignment : blob # start time in ms of the alignment_state
+        start_time : blob # true start_time in ms of each trial -- start_time_alignment + start_offset
+        end_time_alignment : blob # end time in ms from where each bss trial end was offset
+        end_time : blob # true end_time in ms of each trisl -- end_time_alignment + end_offset
+        """
 
 
 if __name__ == '__main__':
