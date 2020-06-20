@@ -18,7 +18,7 @@ class Dataset():
                          [56,108,176],[240,2,127],[191,91,23],[102,102,102]])/255
     colorsetMayavi = [tuple(col) for col in colorset]
     
-    def __init__(self, dataMatPath, preprocessor, notChan=None, removeCoincidentChans = True):
+    def __init__(self, dataMatPath, preprocessor, notChan=None, removeCoincidentChans = True, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1):
         print("loading data")
         annots = LoadDataset(dataMatPath)
         print("data loaded")
@@ -158,7 +158,9 @@ class Dataset():
         if notChan is not None:
             self.removeChannels(notChan)
         if removeCoincidentChans:
-            self.removeCoincidentSpikes()
+            self.removeCoincidentSpikes(coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1)
+
+        self.id = None
             
     def filterTrials(self, mask):
         filteredTrials = copy(self)
@@ -412,6 +414,7 @@ class Dataset():
         indDelayPres = np.where(self.stateNames == stateNameDelayStart)[1][0] # this is a horizontal vector...
         startTmsPres = []
         endTmsPres = []
+        stateNameDelayEnd = ""
         for statesPres in self.statesPresented:
             locDelayLog = statesPres[0,:]==(indDelayPres+1) # remember Matlab is 1-indexed
             if np.any(locDelayLog):
@@ -425,6 +428,8 @@ class Dataset():
                     locDelayEndSt = locDelayEndSt + 1 
                     stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
 
+                stateNameDelayEnd = self.stateNames[0,stNumPres]
+
                 startTmsPres.append(statesPres[1, delayStartSt])
                 endTmsPres.append(statesPres[1, locDelayEndSt])
             else:
@@ -432,7 +437,7 @@ class Dataset():
                 endTmsPres.append(np.nan)
 #        startEndIndsPres = [ ]
         
-        return startTmsPres, endTmsPres
+        return startTmsPres, endTmsPres #, stateNameDelayEnd -- maybe we'll want this someday...
     
 #%% Plotting functions and such
     def plotTuningCurves(self, subpltRows = 5, subpltCols = 2):
