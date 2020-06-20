@@ -4,13 +4,14 @@ Joint so I can access my data! Woo!
 """
 
 import sys
-import datajoint as dj
 from pathlib import Path
 
 from methods.GeneralMethods import loadDefaultParams
 
 defaultParams = loadDefaultParams(defParamBase = ".")
-sys.path.append(defaultParams['datajointLibraryPath')
+sys.path.append(defaultParams['datajointLibraryPath'])
+import datajoint as dj
+
 dbLocation = defaultParams['databaseHost']
 dbPort = defaultParams['databasePort']
 dataPath = defaultParams['dataPath']
@@ -76,7 +77,7 @@ class DatasetInfo(dj.Manual):
         definition = """
         # dataset info extraction params
         -> DatasetInfo
-        ds_spec_params : int auto_increment # params id
+        ds_spec_params_id : int # params id
         ---
         ignore_channels : blob # channels removed during dataset extraction; stored as array
         """
