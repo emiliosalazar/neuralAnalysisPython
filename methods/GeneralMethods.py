@@ -1,9 +1,16 @@
 from pathlib import Path
 
-def loadDefaultParams(defParamName = "paramDefs.txt", defParamBase="."):
+def loadDefaultParams(defParamName = "paramDefs.txt", defParamBase=None):
     import json
 
-    defParamBasepath = Path(defParamBase).absolute()
+    if defParamBase is None:
+        # sadly enforces that this file must be one directory down from where
+        # the configs are... but I don't know that anything can be done about
+        # it
+        defParamBasepath = Path(__file__).parent.parent.absolute()
+    else:
+        defParamBasepath = Path(defParamBase).absolute()
+
     defParamFile = defParamBasepath / Path(defParamName)
 
     return json.load(defParamFile.open())
