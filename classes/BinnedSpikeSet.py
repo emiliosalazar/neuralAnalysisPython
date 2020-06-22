@@ -108,6 +108,8 @@ class BinnedSpikeSet(np.ndarray):
                     self.labels[key] = val[obj._new_label_index]
                 
                 self.alignmentBins = self.alignmentBins[obj._new_label_index]
+                self.start = self.start[obj._new_label_index]
+                self.end = self.end[obj._new_label_index]
 #                print('albin')
 #                print(self.alignmentBins)
 #                print(obj._new_label_index)
