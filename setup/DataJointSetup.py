@@ -11,6 +11,9 @@ from methods.GeneralMethods import loadDefaultParams
 defaultParams = loadDefaultParams(defParamBase = ".")
 sys.path.append(defaultParams['datajointLibraryPath'])
 import datajoint as dj
+import dill as pickle
+import hashlib
+import json
 
 dbLocation = defaultParams['databaseHost']
 dbPort = defaultParams['databasePort']
@@ -50,7 +53,7 @@ class DatasetGeneralLoadParams(dj.Manual):
     # dataset info extraction params
     ds_gen_params_id : int auto_increment # params id
     ---
-    remove_coincident_spikes : enum(0, 1) # flag on whether these were removed
+    remove_coincident_chans : enum(0, 1) # flag on whether these were removed
     coincidence_time : int # ms apart spikes need to be to be counted as coincident
     coincidence_thresh : float # fraction of spikes needing to be coincident to remove channel
     coincidence_fraction_trial_test : float # fraction of trials to check (0-1)
@@ -69,6 +72,7 @@ class DatasetInfo(dj.Manual):
     dataset_name : varchar(100) # name for dataset
     processor_name : varchar(100) # person responsible for preprocessing data
     brain_area : varchar(100) # brain area
+    task : varchar(100) # task the monkey was doing in this dataset
     date_acquired : date # date data was acquired
     """
 
@@ -89,24 +93,24 @@ class DatasetInfo(dj.Manual):
     # anyway, as I don't think it actually *loads* the data into memory. Though
     # even if it does, I don't think their serialization can handle the saving
     # of a class which is what Dataset (and BinnedSpikeSet below) are
-    def grabDatasets(self, expression = None):
-        import dill as pickle
+    def grabDatasets(self):
         defaultParams = loadDefaultParams()
         dataPath = Path(defaultParams['dataPath'])
 
         datasets = []
-        if expression is None:
-            dsExp = self
-        else:
-            dsExp = (self & expression)
+#        if expression is None:
+#            dsExp = self
+#        else:
+#            dsExp = (self & expression)
 
-        dsPaths, dsIds = dsExp.fetch('dataset_relative_path', 'dataset_id')
+        # give some ordering here
+        dsPaths, dsIds = self.fetch('dataset_relative_path', 'dataset_id', order_by='dataset_id')
         for path, dsId in zip(dsPaths, dsIds):
             fullPath = dataPath / path
             with fullPath.open(mode='rb') as datasetDillFh:
                 dataset = pickle.load(datasetDillFh)
                 dataset.id = dsId
-                datasets.append(pickle.load(datasetDillFh))
+                datasets.append(dataset)
 
         return datasets
 
