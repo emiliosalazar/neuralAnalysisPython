@@ -20,15 +20,27 @@ import hashlib
 import json
 import dill as pickle
 
-def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelayStart, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeDelay=251, furthestTimeAfterDelay=251, setStartToDelayEnd = False, setEndToDelayStart = False, returnResiduals = False, removeBadChannels = False, firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
+def generateBinnedSpikeListsAroundState(data, stateNamesStateStart, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToDelayEnd = False, setEndToDelayStart = False, returnResiduals = False, removeBadChannels = False, firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
 
     defaultParams = loadDefaultParams(defParamBase = ".")
     dataPath = defaultParams['dataPath']
 
 
+    if setStartToDelayEnd:
+        startOffsetLocation = 'stateEnd'
+    else:
+        startOffsetLocation = 'stateStart'
+    
+    if setEndToDelayStart:
+        endOffsetLocation = 'stateStart'
+    else:
+        endOffsetLocation = 'stateEnd'
+
     bSSProcParams = dict(
-        start_offset = -furthestTimeBeforeDelay,
-        end_offset = furthestTimeAfterDelay, # note I'm ignoring the + binSizeMs/20... hope I don't rue the day...
+        start_offset = -furthestTimeBeforeState,
+        start_offset_from_location = startOffsetLocation,
+        end_offset = furthestTimeAfterState, # note I'm ignoring the + binSizeMs/20... hope I don't rue the day...
+        end_offset_from_location = endOffsetLocation,
         bin_size = binSizeMs,
         firing_rate_thresh = firingRateThresh,
         fano_factor_thresh = fanoFactorThresh,
@@ -54,18 +66,22 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
     endDelaysFromStartList = []
     binnedSpikes = []
     chFanos = []
-    for ind, stateNameDelayStart in zip(dataIndsProcess, stateNamesDelayStart):#dataset:#datasetSuccessNoCatch:
+    for dt, stateNameStateStart in zip(data, stateNamesStateStart):#dataset:#datasetSuccessNoCatch:
+        try:
+            dt = dt['dataset']
+        except TypeError:
+            pass
         
-        dsId = data[ind]['dataset'].id
+        dsId = dt.id
 
         if trialType is 'successful':
-            dataStInit = data[ind]['dataset'].successfulTrials().trialsWithoutCatch()
+            dataStInit = dt.successfulTrials().filterOutCatch()
         else:
-            dataStInit = data[ind]['dataset'].failTrials().trialsWithoutCatch()
+            dataStInit = dt.failTrials().filterOutCatch()
         
-        alignmentStates = data[ind]['alignmentStates']
+        alignmentStates = dt.metastates
             
-        startDelay, endDelay, stateNameDelayEnd = dataStInit.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
+        startDelay, endDelay, stateNameAfter = dataStInit.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
         startDelayArr = np.asarray(startDelay)
         endTimeArr = np.asarray(endDelay)
         delayTimeArr = endTimeArr - startDelayArr
@@ -74,7 +90,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
        
         dataSt = dataStInit.filterTrials(delayTimeArr>lenSmallestTrl)
         # dataSt.computeCosTuningCurves()
-        startDelay, endDelay, stateNameDelayEnd = dataSt.computeDelayStartAndEnd(stateNameDelayStart = stateNameDelayStart, ignoreStates=alignmentStates)
+        startDelay, endDelay, stateNameAfter = dataSt.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
         startDelayArr = np.asarray(startDelay)
         startDelaysList.append(startDelayArr)
         endDelayArr = np.asarray(endDelay)
@@ -82,16 +98,13 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
         
         if setStartToDelayEnd:
             startTimeArr = endDelayArr
-            stateNameDelayStart = stateNameDelayEnd
         else:
             startTimeArr = startDelayArr
         
         if setEndToDelayStart:
             endTimeArr = startDelayArr
-            stateNameDelayEnd = stateNameDelayStart
         else:
             endTimeArr = endDelayArr
-
 
         # here we want to check if we're going to load new data or if it already exists...
         bssi = BinnedSpikeSetInfo()
@@ -118,7 +131,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
                 binnedSpikesHere = pickle.load(saveBSSFh)
         else:
             # add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
-            binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeDelay), endMs = list(endTimeArr+furthestTimeAfterDelay+binSizeMs/20), binSizeMs=binSizeMs, alignmentPoints = list(zip(startTimeArr, endTimeArr)))
+            binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeState), endMs = list(endTimeArr+furthestTimeAfterState+binSizeMs/20), binSizeMs=binSizeMs, alignmentPoints = list(zip(startTimeArr, endTimeArr)))
             # first the firing rate thresh
             binnedSpikesHere = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0]
 
@@ -131,7 +144,7 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
 
             # NOTE: I believe this is okay because it's as if we were taking just a similarly sized window for each trial (under the assumption of uniform firing), but the std and mean is taken *afterwards*
             if trialLengthMs.size > 1:
-                binnedCountsPerTrial = binnedCountsPerTrial * trialLengthMs/trialLengthMs.max()
+                binnedCountsPerTrial = binnedCountsPerTrial * trialLengthMs[:,None,None]/trialLengthMs.max()
             _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh)
             chFano = binnedCountsPerTrial[:,chansGood].fanoFactorByChannel()
             chFanos.append(chFano)
@@ -147,8 +160,12 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
                     bnSp.labels['stimulusMainLabel'] = lab
                 
             if returnResiduals:
+#                if binnedSpikesHere.dtype == 'object':
+#                    raise Exception("Residuals can only be computed if all trials are the same length!")
+#                else:
                 labels = binnedSpikesHere.labels['stimulusMainLabel']
                 binnedSpikesHere, labelBaseline = binnedSpikesHere.baselineSubtract(labels=labels)
+                
 
             if not saveBSSPath.exists():
                 saveBSSPath.parent.mkdir(parents=True, exist_ok = True)
@@ -160,8 +177,8 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
         binnedSpikeSetHereInfo = dict(
             bss_params_id = procParamId,
             bss_relative_path = str(saveBSSRelativePath),
-            start_alignment_state = stateNameDelayStart,
-            end_alignment_state = stateNameDelayEnd,
+            start_alignment_state = stateNameStateStart,
+            end_alignment_state = stateNameStateStart, # in this function it's always from the start, either the end or the beginning of the start, but from the start
         )
 
         if len(bssi & binnedSpikeSetHereInfo) > 1:
@@ -173,9 +190,9 @@ def generateBinnedSpikeListsAroundDelay(data, dataIndsProcess, stateNamesDelaySt
             addlBssInfo = dict(
                 bss_hash = bssHash,
                 start_time_alignment = np.array(startTimeArr),
-                start_time = np.array(startTimeArr + furthestTimeBeforeDelay),
+                start_time = np.array(startTimeArr + furthestTimeBeforeState),
                 end_time_alignment = np.array(endTimeArr),
-                end_time = np.array(endTimeArr + furthestTimeAfterDelay)
+                end_time = np.array(endTimeArr + furthestTimeAfterState)
             )
             binnedSpikeSetHereInfo.update(addlBssInfo)
                 
