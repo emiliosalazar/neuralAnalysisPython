@@ -195,12 +195,19 @@ class BinnedSpikeSet(np.ndarray):
 #%% general methods
         
     def timeAverage(self):
-        if self.dtype == 'object':
-            out = self.copy()
-            out[:] = [np.average(np.stack(trl), axis=1) for trl in out]
+        if self.size == 0:
+            # the average of nothing is nothing
+            if self.shape[2] == 0:
+                print('no timepoints, huh?')
+                return np.empty((self.shape[0], 0)).view(BinnedSpikeSet)
+            return np.empty(self.shape[:2]).view(BinnedSpikeSet)
         else:
-            out = np.average(self, axis=2)
-        return out
+            if self.dtype == 'object':
+                out = self.copy()
+                out[:] = [np.average(np.stack(trl), axis=1) for trl in out]
+            else:
+                out = np.average(self, axis=2)
+            return out
     
     def timeStd(self):
         return np.std(self, axis=2, ddof=1) # ddof=1 makes this sample standard deviation #np.sqrt(self.timeAverage()) #
@@ -210,9 +217,18 @@ class BinnedSpikeSet(np.ndarray):
     
     def trialAverage(self):
         if self.size > 0:
-            return np.average(self, axis=0)
+            if self.dtype == 'object':
+                if np.unique(self.alignmentBins, axis=0).shape[0] == 1:
+                    trlsAsObj = [np.stack(trl) for trl in self]
+                    mxLen = np.max([trl.shape[1] for trl in trlsAsObj])
+                    padSelf = np.stack([np.pad(trl, ((0,0),(0,mxLen-trl.shape[1])), constant_values=np.nan) for trl in trlsAsObj])
+                    return np.nanmean(padSelf,axis=0)
+                else:
+                    raise Exception('Can only trial average trials of different lengths if they are all aligned!')
+            else:
+                return np.average(self, axis=0)
         else:
-            return None
+            return np.empty_like(self.shape[1:]).view(BinnedSpikeSet)
         
     def trialStd(self):
         if self.size > 0:
@@ -358,7 +374,9 @@ class BinnedSpikeSet(np.ndarray):
         return avgValChan
 
     def stdValByChannel(self):
-        if self.dtype == 'object':
+        if self.size == 0:
+            stdValChan = np.empty(self.shape[1])
+        elif self.dtype == 'object':
             chanFirst = self.swapaxes(0,1)
             stdValChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
             breakpoint() # because I'm not sure this is correct...
