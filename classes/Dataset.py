@@ -431,34 +431,86 @@ class Dataset():
                 
         return stateTmPres
             
-    def computeDelayStartAndEnd(self, stateNameDelayStart = 'Delay Period', ignoreStates = []):
-        indDelayPres = np.where(self.stateNames == stateNameDelayStart)[1][0] # this is a horizontal vector...
+    def computeStateStartAndEnd(self, stateName = 'Entire trial', ignoreStates = []):
         startTmsPres = []
         endTmsPres = []
-        stateNameDelayEnd = ""
-        for statesPres in self.statesPresented:
-            locDelayLog = statesPres[0,:]==(indDelayPres+1) # remember Matlab is 1-indexed
-            if np.any(locDelayLog):
-                locDelayStrtSt = np.where(locDelayLog)[0][0]
-                delayStartSt = locDelayStrtSt
-                locDelayEndSt = locDelayStrtSt + 1
+        # the first two checks are to help out grabbing the start and end of
+        # the entire trial; the last check is to grab the entire trial directly
+        #
+        # note that the first two are not super useful unless we have some time
+        # chunk with unnamed neural data at the beginning, and we want to grab
+        # that. Keeping here for the moment...
+        stateNameStatesEnd = []
+        if stateName == 'Start of trial':
+            for statesPres in self.statesPresented:
+                startTmsPres.append(0)
+                endTmsPres.append(statesPres[1,0])
+                stateNamesStatesEnd.append(self.stateNames(int(self.statesPres[1,1]-1)))
+        elif stateName == 'End of trial':
+            for trl, statesPres in enumerate(self.statesPresented):
+                startTmsPres.append(statesPres[1,-1])
+                endTmsPres.append(self.maxTimestamp[trl])
+                stateNamesStatesEnd.append(self.stateNames('End of trial'))
+        elif stateName == 'Entire trial':
+            for trl, statePres in enumerate(self.statesPresented):
+                startTmsPres.append(0)
+                endTmsPres.append(self.maxTimestamp[trl]) # no true way to know how much longer it technically goes...
+                stateNamesStatesEnd.append(self.stateNames('End of trial'))
+        else:
+            indStatePres = np.where(self.stateNames == stateName)[1][0] # this is a horizontal vector...
+            for statesPres in self.statesPresented:
+                locStateLog = statesPres[0,:]==(indStatePres+1) # remember Matlab is 1-indexed
+                if np.any(locStateLog):
+                    locStateStrtSt = np.where(locStateLog)[0][0]
+                    delayStartSt = locStateStrtSt
+                    locStateEndSt = locStateStrtSt + 1
 
-                stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
-                # go to next state until we find one not to ignore
-                while self.stateNames[0,stNumPres] in ignoreStates:
-                    locDelayEndSt = locDelayEndSt + 1 
-                    stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
+                    stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
+                    # go to next state until we find one not to ignore
+                    while self.stateNames[0,stNumPres] in ignoreStates:
+                        locStateEndSt = locStateEndSt + 1 
+                        stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
 
-                stateNameDelayEnd = self.stateNames[0,stNumPres][0] # result of how mats are loaded >.>
+                    stateNameStatesEnd.append(self.stateNames[0,stNumPres][0]) # result of how mats are loaded >.>
 
-                startTmsPres.append(statesPres[1, delayStartSt])
-                endTmsPres.append(statesPres[1, locDelayEndSt])
-            else:
-                startTmsPres.append(np.nan)
-                endTmsPres.append(np.nan)
+                    startTmsPres.append(statesPres[1, delayStartSt])
+                    endTmsPres.append(statesPres[1, locStateEndSt])
+                else:
+                    startTmsPres.append(np.nan)
+                    endTmsPres.append(np.nan)
 #        startEndIndsPres = [ ]
         
-        return startTmsPres, endTmsPres, stateNameDelayEnd 
+        return startTmsPres, endTmsPres, stateNameStatesEnd 
+
+    def computeDelayStartAndEnd(self, stateNameDelayStart = 'Delay Period', ignoreStates = []):
+        startTmsPres, endTmsPres, stateNamesDelayEnd = self.computeStateStartAndEnd(stateName = stateNameDelayStart, ignoreStates = ignoreStates)
+#        indDelayPres = np.where(self.stateNames == stateNameDelayStart)[1][0] # this is a horizontal vector...
+#        startTmsPres = []
+#        endTmsPres = []
+#        stateNamesDelayEnd = []
+#        for statesPres in self.statesPresented:
+#            locDelayLog = statesPres[0,:]==(indDelayPres+1) # remember Matlab is 1-indexed
+#            if np.any(locDelayLog):
+#                locDelayStrtSt = np.where(locDelayLog)[0][0]
+#                delayStartSt = locDelayStrtSt
+#                locDelayEndSt = locDelayStrtSt + 1
+#
+#                stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
+#                # go to next state until we find one not to ignore
+#                while self.stateNames[0,stNumPres] in ignoreStates:
+#                    locDelayEndSt = locDelayEndSt + 1 
+#                    stNumPres = int(statesPres[0, locDelayEndSt] - 1) # go back to Python 0-indexing
+#
+#                stateNamesDelayEnd.append(self.stateNames[0,stNumPres][0]) # result of how mats are loaded >.>
+#
+#                startTmsPres.append(statesPres[1, delayStartSt])
+#                endTmsPres.append(statesPres[1, locDelayEndSt])
+#            else:
+#                startTmsPres.append(np.nan)
+#                endTmsPres.append(np.nan)
+#        startEndIndsPres = [ ]
+        
+        return startTmsPres, endTmsPres, stateNamesDelayEnd 
     
 #%% Plotting functions and such
     def plotTuningCurves(self, subpltRows = 5, subpltCols = 2):
