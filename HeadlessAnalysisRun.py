@@ -11,7 +11,7 @@ from methods.GeneralMethods import saveFiguresToPdf
 from matplotlib import pyplot as plt
 
 from classes.Dataset import Dataset
-from setup.DataJointSetup import DatasetInfo, DatasetGeneralLoadParams
+from setup.DataJointSetup import DatasetInfo, DatasetGeneralLoadParams, BinnedSpikeSetInfo, BinnedSpikeSetProcessParams
 import datajoint as dj
 
 
@@ -20,155 +20,31 @@ from pathlib import Path
 import numpy as np
 import re
 import dill as pickle # because this is what people seem to do?
+import hashlib
+import json
 
 defaultParams = loadDefaultParams(defParamBase = ".")
 dataPath = defaultParams['dataPath']
 
-data = []
-data.append({'description': 'Earl 2019-03-18 M1 - MGR',
-              'area' : 'M1',
-              'path': Path('memoryGuidedReach/Earl/2019/03/18/'),
-              'delayStartStateName': 'Delay Period',
-              'alignmentStates': [],
-              'processor': 'Erinn'});
-data.append({'description': 'Earl 2019-03-22 M1 - MGR',
-              'area' : 'M1',
-              'path': Path('memoryGuidedReach/Earl/2019/03/22/'),
-              'delayStartStateName': 'Delay Period',
-              'alignmentStates': [],
-              'processor': 'Erinn'});
-data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
-              'area' : 'PFC',
-              'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
-              'delayStartStateName': 'TARG_OFF',
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
-data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
-              'area' : 'PFC',
-              'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
-              'delayStartStateName': 'TARG_OFF',
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
-data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
-              'area' : 'PFC',
-              'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
-              'delayStartStateName': 'TARG_OFF',
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
-data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
-              'area' : 'PFC',
-              'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
-              'delayStartStateName': 'TARG_OFF',
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
-              'area' : 'V4',
-              'path': Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
-              'delayStartStateName': 'Blank Before',
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
-data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
-              'area' : 'PFC',
-              'path': Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
-              'delayStartStateName': 'Blank Before',
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
 
-data = np.asarray(data) # to allow fancy indexing
-#%% process data
-processedDataMat = 'processedData.mat'
-datasetDill = 'dataset.dill'
-
-# dataset = [ [] for _ in range(len(data))]
-dataUseLogical = np.zeros(len(data), dtype='bool')
-dataIndsProcess = np.array([1,6])#np.array([1,4,6])
-dataUseLogical[dataIndsProcess] = True
-
-removeCoincidentSpikes = True
+removeCoincidentChans = True
 coincidenceTime = 1 #ms
 coincidenceThresh = 0.2 # 20% of spikes
 checkNumTrls = 0.1 # use 10% of trials
 datasetGeneralLoadParams = {
-    'remove_coincident_spikes' : removeCoincidentSpikes,
+    'remove_coincident_chans' : removeCoincidentChans,
     'coincidence_time' : coincidenceTime, 
     'coincidence_thresh' : coincidenceThresh, 
     'coincidence_fraction_trial_test' : checkNumTrls
 }
 dsgl = DatasetGeneralLoadParams()
-if len(dsgl & datasetGeneralLoadParams)>1:
-    raise Exception('multiple copies of the same parameters have been saved... I thought I avoided that')
-elif len(dsgl & datasetGeneralLoadParams)>0:
-    genParamId = (dsgl & datasetGeneralLoadParams).fetch1('ds_gen_params_id')
-else:
-    # tacky, but it doesn't return the new id, syoo...
-    currIds = dsgl.fetch('ds_gen_params_id')
-    DatasetGeneralLoadParams().insert1(datasetGeneralLoadParams)
-    newIds = dsgl.fetch('ds_gen_params_id')
-    genParamId = list(set(newIds) - set(currIds))[0]
+dsi = DatasetInfo()
+bsi = BinnedSpikeSetInfo()
+bsp = BinnedSpikeSetProcessParams()
 
-for dataUse in data[dataUseLogical]:
-# for ind, dataUse in enumerate(data):
-#    dataUse = data[1]
-    # dataUse = data[ind]
-    dataMatPath = dataPath / dataUse['path'] / processedDataMat
-
-    dataDillPath = dataPath / dataUse['path'] / datasetDill
-    
-    if dataUse['processor'] == 'Erinn':
-        notChan = np.array([31, 0])
-    else:
-        notChan = np.array([])
-
-    if dataDillPath.exists():
-        print('loading dataset ' + dataUse['description'])
-        with dataDillPath.open(mode='rb') as datasetDillFh:
-            datasetHere = pickle.load(datasetDillFh)
-    else:
-        print('processing data set ' + dataUse['description'])
-        datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = notChan, removeCoincidentSpikes=removeCoincidentSpikes, coincidenceTime=coincidenceTime, coincidenceThresh=coincidenceThresh, checkNumTrls=checkNumTrls)
-        with dataDillPath.open(mode='wb') as datasetDillFh:
-            pickle.dump(datasetHere, datasetDillFh)
-
-    datasetHash = dj.hash.uuid_from_file(dataDillPath).hex
-    # do some database insertions here
-    datasetHereInfo = {
-        'dataset_relative_path' : str(dataUse['path'] / datasetDill),
-        'dataset_hash' : datasetHash,
-        'dataset_name' : dataUse['description'],
-        'ds_gen_params_id' : genParamId,
-        'processor_name' : dataUse['processor'],
-        'brain_area' : dataUse['area'],
-        'date_acquired' : re.search('.*?(\d+-\d+-\d+).*', dataUse['description']).group(1)
-    }
-
-    dsi = DatasetInfo()
-    if len(dsi & datasetHereInfo) > 1:
-        raise Exception('multiple copies of same dataset in the table...')
-    elif len(dsi & datasetHereInfo) > 0:
-        dsId = (dsi & datasetHereInfo).fetch1('dataset_id')
-    else:
-        dsId = len(dsi) + 1
-        datasetHereInfo['dataset_id'] = dsId
-        dsi.insert1(datasetHereInfo)
-
-
-        dsSpecId = len(dsi.DatasetSpecificLoadParams()) + 1
-        datasetSpecificLoadParams = {
-            'dataset_id' : dsId,
-            'ds_spec_params_id' :  dsSpecId,
-            'dataset_relative_path' : str(dataUse['path'] / datasetDill),
-            'ds_gen_params_id' : genParamId,
-            'ignore_channels' : notChan
-        }
-        dsi.DatasetSpecificLoadParams.insert1(datasetSpecificLoadParams)
-
-    datasetHere.id = dsId
-    dataUse['dataset'] = datasetHere
-    
-    
 #%% get desired time segment
 from classes.BinnedSpikeSet import BinnedSpikeSet
-from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsAroundDelay as genBSLAroundDelay
+from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsAroundState as genBSLAroundState
 binnedSpikes = []
 binnedSpikesAll = []
 binnedSpikesOnlyDelay = []
@@ -186,72 +62,68 @@ binSizeMs = 25 # good for PFC LDA #50 #
 
 trialType = 'successful'
 
-stateNamesDelayStart = [data[ind]['delayStartStateName'] for ind in dataIndsProcess]
+datasets = dsi.grabDatasets()
 
-binnedSpikes, _ = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+stateNamesDelayStart = [ds.keyStates['delay'] for ds in datasets]
+
+binnedSpikes, _ = genBSLAroundState(datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=furthestBack, 
-                                    furthestTimeAfterDelay=furthestForward,
+                                    furthestTimeBeforeState=furthestBack, 
+                                    furthestTimeAfterState=furthestForward,
                                     setStartToDelayEnd = False,
                                     setEndToDelayStart = True)
 
 
-binnedSpikesAll, _ = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+binnedSpikesAll, _ = genBSLAroundState(datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=furthestBack, 
-                                    furthestTimeAfterDelay=furthestForward,
+                                    furthestTimeBeforeState=furthestBack, 
+                                    furthestTimeAfterState=furthestForward,
                                     setStartToDelayEnd = False,
                                     setEndToDelayStart = False)
 
-binnedSpikesOnlyDelay, _ = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+binnedSpikesOnlyDelay, _ = genBSLAroundState(datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=0, 
-                                    furthestTimeAfterDelay=0,
+                                    furthestTimeBeforeState=0, 
+                                    furthestTimeAfterState=0,
                                     setStartToDelayEnd = False,
                                     setEndToDelayStart = False)
 
-binnedSpikeEnd, _ = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+binnedSpikeEnd, _ = genBSLAroundState(datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=furthestBack, 
-                                    furthestTimeAfterDelay=furthestForward,
+                                    furthestTimeBeforeState=furthestBack, 
+                                    furthestTimeAfterState=furthestForward,
                                     setStartToDelayEnd = True,
                                     setEndToDelayStart = False)
 
-binnedSpikesShortStart, _ = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+binnedSpikesShortStart, _ = genBSLAroundState(datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=0, 
-                                    furthestTimeAfterDelay=lenSmallestTrl,
+                                    furthestTimeBeforeState=0, 
+                                    furthestTimeAfterState=lenSmallestTrl,
                                     setStartToDelayEnd = False,
                                     setEndToDelayStart = True)
 
-binnedSpikesShortEnd, _ = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+binnedSpikesShortEnd, _ = genBSLAroundState(datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=lenSmallestTrl, 
-                                    furthestTimeAfterDelay=0,
+                                    furthestTimeBeforeState=lenSmallestTrl, 
+                                    furthestTimeAfterState=0,
                                     setStartToDelayEnd = True,
                                     setEndToDelayStart = False)
 
@@ -260,14 +132,14 @@ offshift = 75 #ms
 firingRateThresh = 1
 fanoFactorThresh = 4
 baselineSubtract = True
-binnedResidualsShortStartOffshift, chFanosResidualsShortStartOffshift = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+binnedResidualsShortStartOffshift, chFanosResidualsShortStartOffshift = genBSLAroundState(
+                                    datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=-offshift, # note that this starts it *forwards* from the delay
-                                    furthestTimeAfterDelay=lenSmallestTrl+offshift,
+                                    furthestTimeBeforeState=-offshift, # note that this starts it *forwards* from the delay
+                                    furthestTimeAfterState=lenSmallestTrl+offshift,
                                     setStartToDelayEnd = False,
                                     setEndToDelayStart = True,
                                     returnResiduals = baselineSubtract,
@@ -279,14 +151,13 @@ binnedResidualsShortStartOffshift, chFanosResidualsShortStartOffshift = genBSLAr
 baselineSubtract = False
 furthestTimeBeforeDelay=-offshift # note that this starts it *forwards* from the delay
 furthestTimeAfterDelay=lenSmallestTrl+offshift
-binnedSpikesShortStartOffshift, _ = genBSLAroundDelay(data, 
-                                    dataIndsProcess,
+binnedSpikesShortStartOffshift, _ = genBSLAroundState(datasets,
                                     stateNamesDelayStart,
                                     trialType = trialType,
                                     lenSmallestTrl=lenSmallestTrl, 
                                     binSizeMs = binSizeMs, 
-                                    furthestTimeBeforeDelay=-offshift, # note that this starts it *forwards* from the delay
-                                    furthestTimeAfterDelay=lenSmallestTrl+offshift,
+                                    furthestTimeBeforeState=-offshift, # note that this starts it *forwards* from the delay
+                                    furthestTimeAfterState=lenSmallestTrl+offshift,
                                     setStartToDelayEnd = False,
                                     setEndToDelayStart = True,
                                     returnResiduals = baselineSubtract,
@@ -295,6 +166,45 @@ binnedSpikesShortStartOffshift, _ = genBSLAroundDelay(data,
                                     firingRateThresh = firingRateThresh,
                                     fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
                                     )
+
+furthestTimeBeforeState=300 # note that this starts it *forwards* from the delay
+furthestTimeAfterState=300
+binSizeMs = 20
+dtExtract = dsi['brain_area="V4"'].grabDatasets()
+stateNamesTarget = [ds.keyStates['stimulus'] for ds in dtExtract]
+binnedSpikesAroundTarget, _ = genBSLAroundState(dtExtract,
+                                    stateNamesTarget,
+                                    trialType = trialType,
+                                    lenSmallestTrl=0, 
+                                    binSizeMs = binSizeMs, 
+                                    furthestTimeBeforeState=furthestTimeBeforeState, # note that this starts it *forwards* from the delay
+                                    furthestTimeAfterState=furthestTimeAfterState,
+                                    setStartToDelayEnd = False,
+                                    setEndToDelayStart = False,
+                                    returnResiduals = False,
+                                    removeBadChannels = True,
+                                    unitsOut = 'count', # this shouldn't affect GPFA... but will affect fano factor cutoffs...
+                                    firingRateThresh = firingRateThresh,
+                                    fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
+                                    )
+
+breakpoint()
+
+# we want trials without 'Success' state (they're a choice trial)
+# also trials that are in general > 1000ms, to make sure we have a full second
+trlLenLog = np.array([bnSp[0].shape[0] == 50 for bnSp in binnedSpikesAroundTarget[0]])
+noChStLog = ~dtExtract[0].successfulTrials().trialsWithState('Success')
+bsH = binnedSpikesAroundTarget[0][noChStLog]
+
+bsiFilt = bsi[dsi['brain_area="V4"']['start_alignment_state="Target"']]
+#bsToFilt = bsiFilt.grabBinnedSpikes()
+filteredBSS = []
+#for bsF, bsUse in zip(bsiFilt.fetch('KEY'), bsToFilt):
+for bsF in bsiFilt.fetch('KEY'):
+    dtUse = dsi[bsF]
+    noChoiceStLog = ~dtUse.grabDatasets()[0].successfulTrials().trialsWithState('Success')
+    bsFExp = bsi[bsF] # since this isn't actually an expression
+    filteredBSS.append(bsFExp.filterBSS("other", "remove choice trials", trialFilter = noChoiceStLog))
 
 breakpoint()
 
