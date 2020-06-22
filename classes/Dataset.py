@@ -19,7 +19,7 @@ class Dataset():
                          [56,108,176],[240,2,127],[191,91,23],[102,102,102]])/255
     colorsetMayavi = [tuple(col) for col in colorset]
     
-    def __init__(self, dataMatPath, preprocessor, notChan=None, removeCoincidentChans = True, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1):
+    def __init__(self, dataMatPath, preprocessor, notChan=None, removeCoincidentChans = True, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1, metastates = [], keyStates = []):
         print("loading data")
         annots = LoadDataset(dataMatPath)
         print("data loaded")
@@ -162,6 +162,9 @@ class Dataset():
             self.removeCoincidentSpikes(coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1)
 
         self.id = None
+        self.metastates = metastates # these are states that don't refer to what the monkey is seeing, but rather some state of the session itself (for alignment purposes, say)
+        self.keyStates = keyStates # I'm trying to allow some semblance of consistency for states o 'interest' among different stimuli -- i.e. 'delay period', 'stim period', etc.
+
     def hash(self):
         return hashlib.md5(str(self.spikeDatTimestamps).encode('ascii')) # this is both unique, fast, and good info
             
