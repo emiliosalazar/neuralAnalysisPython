@@ -9,6 +9,7 @@ from MatFileMethods import LoadDataset
 import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from copy import copy
+import hashlib
 from matplotlib import pyplot as plt
 #from mayavi import mlab
 
@@ -161,6 +162,8 @@ class Dataset():
             self.removeCoincidentSpikes(coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1)
 
         self.id = None
+    def hash(self):
+        return hashlib.md5(str(self.spikeDatTimestamps).encode('ascii')) # this is both unique, fast, and good info
             
     def filterTrials(self, mask):
         filteredTrials = copy(self)
@@ -186,18 +189,39 @@ class Dataset():
     def failTrials(self):
         failTrials = self.filterTrials(self.trialStatuses==0)
         return failTrials
+        
+    def filterOutState(self, stateName):
+        targetWithState = self.trialsWithState(stateName)
+        trialsWithoutStateLog = np.logical_not(targetWithState)
+        datasetWithoutState = self.filterTrials(trialsWithoutStateLog)
+        return datasetWithoutState
     
-    def trialsWithoutCatch(self):
+    def filterOutCatch(self):
+        return self.filterOutState('Catch')
+#        stNm = self.stateNames
+#        #stNm = stNm[None, :]
+#        stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
+#        stPres = self.statesPresented
+#        stPres = [stPr[0, stPr[0]!=-1] for stPr in stPres]
+#        stPresTrl = zip(stPres, stNm, range(0, len(self.statesPresented)))
+#        targetWithCatch = np.stack([np.any(np.core.defchararray.find(np.stack(stNm[np.int32(stPres-1)]),'Catch')!=-1) for stPres, stNm, trialNum in stPresTrl])
+#        trialsWithoutCatchLog = np.logical_not(targetWithCatch)
+#        datasetWithoutCatch = self.filterTrials(trialsWithoutCatchLog)
+#        return datasetWithoutCatch
+
+    def trialsWithState(self, stateName, asLogical=True):
         stNm = self.stateNames
         #stNm = stNm[None, :]
         stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
         stPres = self.statesPresented
         stPres = [stPr[0, stPr[0]!=-1] for stPr in stPres]
         stPresTrl = zip(stPres, stNm, range(0, len(self.statesPresented)))
-        targetWithCatch = np.stack([np.any(np.core.defchararray.find(np.stack(stNm[np.int32(stPres-1)]),'Catch')!=-1) for stPres, stNm, trialNum in stPresTrl])
-        trialsWithoutCatchLog = np.logical_not(targetWithCatch)
-        datasetWithoutCatch = self.filterTrials(trialsWithoutCatchLog)
-        return datasetWithoutCatch
+        trialsWithState = np.stack([np.any(np.core.defchararray.find(np.stack(stNm[np.int32(stPres-1)]),stateName)!=-1) for stPres, stNm, trialNum in stPresTrl])
+
+        if not asLogical:
+            trialsWithState = np.where(targetWithState)[0]
+        
+        return trialsWithState
     
     def binSpikeData(self, startMs=0, endMs=3600, binSizeMs=50, alignmentPoints=None):
         
