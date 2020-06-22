@@ -275,14 +275,36 @@ class BinnedSpikeSet(np.ndarray):
             print("baseline subtracting time trace with no groups")
             overallBaseline = self.trialAverage()
             spikesUse = self.copy()
-            spikesUse = spikesUse[:,:,:] - overallBaseline[:,:] # this indexing is important for the moment to keep the labels field correct...
+            if self.dtype == 'object':
+                # though the below check would've broken trialAverage() anyway
+                if np.unique(self.alignmentBins, axis=0).shape[0] == 1:
+                    for trl in spikesUse:
+                        for ch, bsCh in zip(trl, overallBaseline):
+                            ch[:] = ch[:] - bsCh[:ch.shape[0]]
+            else:
+                spikesUse = spikesUse[:,:] - overallBaseline[:,:] # this indexing is important for the moment to keep the labels field correct...
         else:
             unq, unqCnts = np.unique(labels, return_counts=True, axis=0)
             spikesUse = self.copy()
             overallBaseline = []
-            for lbl in unq:
-                overallBaseline.append(self[np.all(labels==lbl,axis=lbl.ndim), :, :].trialAverage())
-                spikesUse[np.all(labels==lbl,axis=lbl.ndim), :, :] = self[np.all(labels==lbl,axis=lbl.ndim), :, :] - self[np.all(labels==lbl,axis=lbl.ndim), :, :].trialAverage()
+            if self.dtype == 'object':
+                if np.unique(self.alignmentBins, axis=0).shape[0] == 1:
+                    for lbl in unq:
+                        lblTrls = np.all(labels==lbl,axis=lbl.ndim)
+                        lblBaseline = self[lblTrls].trialAverage()
+                        overallBaseline.append(lblBaseline)
+                        # can't quite get broadcasting to work here, but that's fine
+                        for trl in spikesUse[lblTrls]:
+                            for ch, bsCh in zip(trl, lblBaseline):
+                                ch[:] = ch[:] - bsCh[:ch.shape[0]]
+                else:
+                    raise Exception("Can only baseline subtract when trials have dissimilar lengths if they are identically aligned!")
+            else:
+                for lbl in unq:
+                    overallBaseline.append(self[np.all(labels==lbl,axis=lbl.ndim)].trialAverage())
+                    spikesUse[np.all(labels==lbl,axis=lbl.ndim), :] = self[np.all(labels==lbl,axis=lbl.ndim), :] - self[np.all(labels==lbl,axis=lbl.ndim), :].trialAverage()
+            # had this before and not sure if the extra : is necessary...
+#                spikesUse[np.all(labels==lbl,axis=lbl.ndim), :, :] = self[np.all(labels==lbl,axis=lbl.ndim), :, :] - self[np.all(labels==lbl,axis=lbl.ndim), :, :].trialAverage()
 
         return spikesUse, overallBaseline
 
