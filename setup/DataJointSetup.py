@@ -784,6 +784,46 @@ class BinnedSpikeSetInfo(dj.Manual):
             return binnedSpikeSets, dict(paths = relPaths, dataset_names=dsNames)
         return binnedSpikeSets
 
+    def rebinSpikes(self, newBinSizeMs):
+        dsi = DatasetInfo()
+        bsp = BinnedSpikeSetProcessParams()
+        ds = dsi[self].grabDatasets()[0]
+        bsParamsDsFilts = bsp[self]['dataset_trial_filters'][0]
+
+        # filter trials by special filters
+        bsPDsFiltsInd = bsParamsDsFilts.split(';')
+        for filtStr in bsPDsFiltsInd:
+            lambdaFilt = eval(filtStr)
+            ds = lambdaFilt(ds)
+
+        # filter trials by type
+        trialType = bsp[self]['trial_type'][0]
+        if trialType == 'successful':
+            ds = ds.successfulTrials()
+        elif trialType == 'failure':
+            ds = ds.failTrials()
+
+        # filter trials by length in state
+        # NOTE this is special to expecting trials to be around a state...
+        stateNameStateStart = self['start_alignment_state'][0]
+        alignmentStates = ds.metastates
+        startState, endState, stateNameAfter = ds.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
+        startStateArr = np.asarray(startState)
+        endStateArr = np.asarray(endState)
+        timeInStateArr = endStateArr - startStateArr
+
+        lenSmallestTrial = bsp[self].fetch('len_smallest_trial')
+        ds = ds.filterTrials(timeInStateArr>lenSmallestTrial)
+
+        bnSpTmBounds = self.fetch('start_time','end_time',as_dict=True)[0]
+        bnSpTmAlign = self.fetch('start_time_alignment', 'end_time_alignment')
+        alBins = list(zip(bnSpTmAlign[0][0], bnSpTmAlign[1][0]))
+
+        reBinnedSpikeSet = ds.binSpikeData(startMs = list(bnSpTmBounds['start_time']), endMs = list(bnSpTmBounds['end_time']+newBinSizeMs/20), binSizeMs=newBinSizeMs, alignmentPoints = alBins)
+        reBinnedSpikeSet.labels['stimulusMainLabel'] = ds.markerTargAngles
+
+        return reBinnedSpikeSet
+
 
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):
