@@ -618,6 +618,112 @@ class BinnedSpikeSetInfo(dj.Manual):
                 return bssFiltered, bssKey
             return bssFiltered
 
+    def computeRandomSubsets(self, filterDescription, numTrialsPerCond, numChannels, labelName, binnedSpikeSet = None, numSubsets = 1, returnInfo = False):
+        filterReason = 'randomSubset' # that's the purpose of this function...
+        if binnedSpikeSet is None:
+            # if you forgot to include the binnedSpikeSet...
+            #
+            # or you have voodoo magic knowing about number of
+            # trials/channels... possible? Might allow you to group things if I
+            # decide to allow this function to be called for groups of
+            # lists of binnedSpikeSets
+            if returnInfo:
+                bss, bssInfo = self.grabBinnedSpikes(returnInfo=returnInfo)
+            else:
+                bss = self.grabBinnedSpikes(returnInfo=returnInfo)
+        else:
+            bss = binnedSpikeSet
+
+        if len(self)>1:
+            raise Exception("computeRandomSubset should only be called on one binned spike set...")
+        elif len(self) == 0:
+            raise Exception("computeRandomSubset didn't find any binned spike sets")
+        else:
+
+            bssFilterParams = dict(
+                    filter_reason = filterReason,
+                    )
+
+            if numTrialsPerCond is not None:
+                useAllTrials = False
+                bssFilterParams['trial_num_per_cond_min'] = numTrialsPerCond
+            elif numTrialsPerCond == "all":
+                useAllTrials = True
+                _, condCounts = np.unique(bss.labels[labelName], return_counts=True, axis=0)
+                numTrialsPerCond = np.min(condCounts)
+                bssFilterParams['trial_num_per_cond_min'] = numTrialsPerCond
+
+            if numChannels is not None:
+                bssFilterParams['ch_num'] = numChannels
+            else:
+                numChannels = bss.shape[1]
+                bssFilterParams['ch_num'] = numChannels
+
+
+            fsp = FilterSpikeSetParams()
+            bsi = BinnedSpikeSetInfo()
+            existingSS = fsp[bssFilterParams][{'parent_bss_relative_path' : self.fetch1('bss_relative_path')}]
+#            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key}] 
+#            try: # this does double duty checking if self is a FilteredSpikeSet already or not
+#                fsi = self.FilteredSpikeSetInfo()
+#                existingSS = fsi[bssFilterParams][self] 
+#            except AttributeError:
+#                # this is a nonrestricted version...
+#                fsi = self.__class__()
+#                # Explanation: find FilteredSpikeSets with those params, and
+#                # then of those find the ones with the matching parent
+#                # BinnedSpikeSet
+#                existingSS = fsi[bssFilterParams][{'parent_fss_rel_path_from_parent' : self.fetch('fss_rel_path_from_parent')[0]}]
+
+
+            if list(existingSS['filter_description']).count(filterDescription) != len(existingSS['filter_description']):
+                # NOTE: maybe we can just filter on the filterDescription. I'm
+                # not sure that's what I want, though, so let's hold off for
+                # now...
+                raise Exception("Filter descriptions are different... come back and fix this so it doesn't break!")
+
+            trChFiltsPth = existingSS.fetch('trial_filter','ch_filter', 'bss_relative_path', order_by='fss_param_hash', as_dict=True)
+            # from a list of trial and a list of ch filters, tuples of (tr,ch) filters
+            trChFilts = trChFiltsPth[:2] # first two values
+            trlChanFilters = [(tr['trial_filter'], tr['ch_filter']) for tr in trChFiltsPth]
+            trlChanFilters = trlChanFilters[:numSubsets]
+            fssKeys =  [{'bss_relative_path' : tr['bss_relative_path']} for tr in trChFiltsPth]
+            # NOTE might be worth being able to specify how many subsets to
+            # grab in grabBinnedSpikes so we don't have too much
+            # overhead... for later
+            randomSubsets = bsi[fssKeys].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
+
+            if len(randomSubsets) < numSubsets:
+
+                bnSpOrig = bss[0]
+
+                chanInds = range(bnSpOrig.shape[1])
+
+                while len(randomSubsets) < numSubsets:
+                    # note that the trials are randomly chosen, but returned in sorted
+                    # order (balancedTriaInds does this) from first to last... I think
+                    # this'll make things easier to compare in downstream analyses that
+                    # care about changes over time... neurons being sorted on the other
+                    # hand... still for ease of comparison, maybe not for any specific
+                    # analysis I can think of
+                    if useAllTrials:
+                        trlsUse = np.arange(bnSpOrig.shape[0])
+                    else:
+                        trlsUse = bnSpOrig.balancedTrialInds(bnSpOrig.labels[labelName], minCnt = numTrialsPerCond)
+                    chansUse = np.sort(np.random.permutation(chanInds)[:numChannels])
+
+
+                    randomSubset, fssKey = self.filterBSS(filterReason, filterDescription,trialNumPerCondMin = numTrialsPerCond, condLabel = labelName, binnedSpikeSet = [bnSpOrig], trialFilter = trlsUse, channelFilter = chansUse, returnKey=returnInfo)
+                    if randomSubset not in randomSubsets:
+                        randomSubsets += [randomSubset]
+                        trlChanFilters.append((trlsUse, chansUse))
+                        fssKeys.append(fssKey)
+
+            if returnInfo:
+                return randomSubsets, trlChanFilters, bssInfo['dataset_names'][0], fssKeys
+            return randomSubsets
+
+    def grabBinnedSpikes(self, returnInfo = False, orderBy = None):
         defaultParams = loadDefaultParams()
         dataPath = Path(defaultParams['dataPath'])
 
