@@ -6,25 +6,32 @@ Joint so I can access my data! Woo!
 import sys
 from pathlib import Path
 
-from methods.GeneralMethods import loadDefaultParams
+import numpy as np
+from matplotlib import pyplot as plt
+from methods.GeneralMethods import loadDefaultParams, userChoice
 
 defaultParams = loadDefaultParams(defParamBase = ".")
 sys.path.append(defaultParams['datajointLibraryPath'])
 import datajoint as dj
 import dill as pickle
+from dill import source as dillSource
 import hashlib
 import json
+
+from sqlite3 import IntegrityError
 
 dbLocation = defaultParams['databaseHost']
 dbPort = defaultParams['databasePort']
 dataPath = defaultParams['dataPath']
 if dbPort == 'sqlite':
+#    dbLocation = 'backup20200624.db'
     dbLocation = str(Path(dataPath) / dbLocation)
 
 dj.config['database.user'] = 'emilio'
 dj.config['database.port'] = dbPort
 dj.config['database.host'] = dbLocation
 dj.config['database.password']=''
+dj.config["enable_python_native_blobs"] = True
 
 # NOTE: This was not quite what I needed after all... because I couldn't easily
 # search on the link between dataset and this
