@@ -26,6 +26,11 @@ class Dataset():
         self.cosTuningCurveParams = {'thBestPerChan': np.empty(0), 'modPerChan': np.empty(0), 'bslnPerChan': np.empty(0), 'tuningCurves': np.empty(0)}
         if preprocessor == 'Erinn':
         
+            # This is a boolean indicating trials where spikes exist... we're getting rid of all other trials...
+            spksExist = np.stack([(len(trlDat['spikes'][0][0]) and ('timestamps' in trlDat['spikes'][0][0].dtype.names) and len(trlDat['spikes'][0][0]['timestamps'][0]))>0 for trlDat in annots['Data']['TrialData'][0]])
+
+            annots['Data'] = annots['Data'][:,spksExist]
+
             self.trialStatuses = np.stack([trlParam['trialStatus'][0][0] for trlParam in annots['Data']['Overview'][0]]).squeeze()
             
             self.spikeDatTimestamps = np.stack([trlDat['spikes'][0][0]['timestamps'][0] for trlDat in annots['Data']['TrialData'][0]])
