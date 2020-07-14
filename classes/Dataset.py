@@ -249,6 +249,7 @@ class Dataset():
         
         smallestSpiketime = 0 # this should always be the case...
         if type(endMs) is list:
+            assert len(endMs) == self.trialStatuses.shape[0], "different number of dataset trials and ms locations"
             # Adding binSizeMs to the end ensures that that last spike gets counted...
             binsUse = [np.arange(sMs, eMs, binSizeMs)[np.logical_and(smallestSpiketime<=np.arange(sMs, eMs, binSizeMs), np.arange(sMs, eMs, binSizeMs)<=lrgSpTm+binSizeMs)] for sMs, eMs, lrgSpTm in zip(startMs, endMs, self.maxTimestamp)]
             startMs = np.stack([bU[0] for bU in binsUse])
