@@ -439,6 +439,8 @@ class BinnedSpikeSetProcessParams(dj.Manual):
     trial_type : enum('all', 'successful', 'failure') # type of trials analyzed
     len_smallest_trial : int # length of the shortest alignment_state for trials retained
     residuals : enum(0, 1) # whether this bss is residuals (PSTH subtracted) or not
+    dataset_trial_filters = null : blob # filter that removes trials from dataset before creating BinnedSpikeSet
+    dataset_trial_filter_description = null : varchar(200) # reason for the filter(s)
     """
 
 @schema
@@ -459,24 +461,8 @@ class BinnedSpikeSetInfo(dj.Manual):
     start_time_alignment : blob # start time in ms of the alignment_state
     start_time : blob # true start_time in ms of each trial -- start_time_alignment + start_offset
     end_time_alignment : blob # end time in ms from where each bss trial end was offset
-    end_time : blob # true end_time in ms of each trisl -- end_time_alignment + end_offset
+    end_time : blob # true end_time in ms of each trial -- end_time_alignment + end_offset
     """
-
-    class FilteredSpikeSetInfo(dj.Part):
-        definition = """
-        # for filtered spike sets
-        -> BinnedSpikeSetInfo
-        fss_rel_path_from_parent: varchar(100) # this is the directory within above's relative path where this set lives
-        fss_param_hash : char(32) # for looking this entry up
-        ---
-        fss_hash : char(32) # for the data integrity
-        trial_filter = null : blob # filter of the trial on the binned spike set info
-        trial_num : int # number of trials; useful for filtering shuffles
-        ch_filter = null : blob # filter of the channels on the binned spike set info
-        ch_num : int # number of channels; useful for filtering shuffles
-        filter_reason : enum('shuffle', 'other')
-        filter_description = null : varchar(100) # reason for filter (if not shuffle, usually)
-        """
 
     def filterBSS(self, filterReason, filterDescription, binnedSpikeSet = None, trialFilter = None, channelFilter = None):
         keys = self.fetch("KEY")
@@ -504,6 +490,7 @@ class BinnedSpikeSetInfo(dj.Manual):
             key = keys[0]
 
             bssFilterParams = dict(filter_reason = filterReason, filter_description = filterDescription)
+
             if trialFilter is not None:
                 bssFiltered = bssFiltered[trialFilter]
                 bssFilterParams.update(dict(trial_filter = trialFilter))
@@ -586,6 +573,41 @@ if __name__ == '__main__':
     dt = [{'dataset_path' : 'yo', 'dataset_meta_data' : 'toodles' }, {'dataset_path' : 'wazam', 'dataset_meta_data' : 'ciao'}]
     ds.insert(dt)
 
+@schema
+class FilterSpikeSetParams(dj.Manual):
+    definition = """
+    # for filtered spike sets
+    -> BinnedSpikeSetInfo
+    fss_param_hash : char(32) # for looking this entry up
+    ---
+    (parent_bss_relative_path) -> [nullable] BinnedSpikeSetInfo(bss_relative_path)
+    trial_filter = null : blob # filter of the trial on the binned spike set info
+    trial_num : int # number of trials; useful for filtering shuffles
+    trial_num_per_cond_min = null : int # minimum number of trials per condition; useful for filtering shuffles
+    condition_label : varchar(50) # label used to identify conditions for trial_num_per_cond_min
+    ch_filter = null : blob # filter of the channels on the binned spike set info
+    ch_num : int # number of channels; useful for filtering shuffles
+    filter_reason : enum('original', 'shuffle', 'randomSubset', 'other') # the 'original' option is for the default FSS that refers to its parent
+    filter_description = null : varchar(100) # reason for filter (if not shuffle, usually)
+    """
+        
+@schema
+class GpfaAnalysisParams(dj.Lookup):
+    definition = """
+    # gpfa analyses parameters
+    gpfa_params_id : int auto_increment # gpfa params id
+    ---
+    dimensionality : int # extraction dimensionality
+    overall_fr_thresh : float # the firing rate thresh for all the spikes before splitting by condition, where -1 lets all through (this would need to happen if residuals are being input -- though note that residuals could be calculated in function after this threshold, so this would not be -1)
+    balance_conds : enum(0, 1) # whether to have equal trials from each condition
+    sqrt_spikes : enum(0, 1) # whether to square root spike counts
+    num_conds : int # number of conditions used, only matters if combine_conditions is 'subset' - if combine_conditions is 'all', num_conds is 0
+    combine_conditions : enum('no', 'subset', 'all') # whether multiple conditions are combined
+    num_folds_crossvalidate : int # folds of crossvalidation
+    on_residuals : enum(0, 1) # flag for whether input was baseline subtraced
+    units : varchar(10) # I'm guessing this'll be Hz or count... but I guess it could be something else?
+    """
+
     dt = [{'dataset_path' : 'hey', 'dataset_meta_data' : 'bye' }, {'dataset_path' : 'boom', 'dataset_meta_data' : 'ciao'}]
     ds.insert(dt)
 
@@ -594,5 +616,34 @@ if __name__ == '__main__':
     bss = BinnedSpikeSetInfo()
     bdt = [{'dataset_id': 1, 'bss_path' : 'bsswizzle', 'bss_params' : 'bssbye' }, {'dataset_id': 2, 'bss_path' : 'bssboom', 'bss_params' : 'bsssssyyyyee'}]
     bss.insert(bdt)
+@schema
+class GpfaAnalysisInfo(dj.Manual):
+    definition = """
+    # gpfa analyses info
+    -> BinnedSpikeSetInfo
+    -> GpfaAnalysisParams
+    gpfa_rel_path_from_bss : varchar(500) # path to the GPFA output
+    ---
+    gpfa_hash : char(32) # mostly important to check data consistency if we want...
+    condition_nums : blob # will typically be a single condition, but it's a blob in case conditions are combined and it needs to be an array
+    condition_grp_fr_thresh : float # the firing rate threshold for each GPFA run (i.e. only trials for this/these condition(s))
+    label_use = "stimulusMainLabel" : varchar(50) # label to use for conditions
+    """
+
+class AnalysisRun: #(dj.Manual): NOTE uncomment inheritence!
+    definition = """
+    # analysis file/run info
+    analysis_file : varchar(100) # name of analysis file run
+    git_commit : char(32) # don't remember how long a has a git commit has
+    patch : varchar(50000) # this is  super long... but it's to keep the patch information so the analysis can be recreated
+    -> BinnedSpikeSetInfo
+    ---
+    # in case some filtered version of the above binned spike set was used...
+    -> [nullable] BinnedSpikeSetInfo
+    date : datenum # date analysis was run
+    output_files : blob # this is gonna contain output files (especially figures!) for this analysis
+    metadata : blob # this has metadata that would likely be stored by the patch as well, but in case its easier to grab from here...
+    """
+
 
     breakpoint()
