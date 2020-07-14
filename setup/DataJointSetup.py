@@ -568,10 +568,6 @@ class BinnedSpikeSetInfo(dj.Manual):
             return binnedSpikeSets, bssPaths
         return binnedSpikeSets
 
-if __name__ == '__main__':
-    ds = DatasetInfo()
-    dt = [{'dataset_path' : 'yo', 'dataset_meta_data' : 'toodles' }, {'dataset_path' : 'wazam', 'dataset_meta_data' : 'ciao'}]
-    ds.insert(dt)
 
 @schema
 class FilterSpikeSetParams(dj.Manual):
@@ -608,14 +604,8 @@ class GpfaAnalysisParams(dj.Lookup):
     units : varchar(10) # I'm guessing this'll be Hz or count... but I guess it could be something else?
     """
 
-    dt = [{'dataset_path' : 'hey', 'dataset_meta_data' : 'bye' }, {'dataset_path' : 'boom', 'dataset_meta_data' : 'ciao'}]
-    ds.insert(dt)
 
-    (ds & 'dataset_id=14').delete()
 
-    bss = BinnedSpikeSetInfo()
-    bdt = [{'dataset_id': 1, 'bss_path' : 'bsswizzle', 'bss_params' : 'bssbye' }, {'dataset_id': 2, 'bss_path' : 'bssboom', 'bss_params' : 'bsssssyyyyee'}]
-    bss.insert(bdt)
 @schema
 class GpfaAnalysisInfo(dj.Manual):
     definition = """
@@ -645,5 +635,21 @@ class AnalysisRun: #(dj.Manual): NOTE uncomment inheritence!
     metadata : blob # this has metadata that would likely be stored by the patch as well, but in case its easier to grab from here...
     """
 
+
+
+
+if __name__ == '__main__':
+#    ds = DatasetInfo()
+#    dt = [{'dataset_path' : 'yo', 'dataset_meta_data' : 'toodles' }, {'dataset_path' : 'wazam', 'dataset_meta_data' : 'ciao'}]
+#    ds.insert(dt)
+#
+#    dt = [{'dataset_path' : 'hey', 'dataset_meta_data' : 'bye' }, {'dataset_path' : 'boom', 'dataset_meta_data' : 'ciao'}]
+#    ds.insert(dt)
+#
+#    (ds & 'dataset_id=14').delete()
+#
+#    bss = BinnedSpikeSetInfo()
+#    bdt = [{'dataset_id': 1, 'bss_path' : 'bsswizzle', 'bss_params' : 'bssbye' }, {'dataset_id': 2, 'bss_path' : 'bssboom', 'bss_params' : 'bsssssyyyyee'}]
+#    bss.insert(bdt)
 
     breakpoint()
