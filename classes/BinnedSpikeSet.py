@@ -234,6 +234,9 @@ class BinnedSpikeSet(np.ndarray):
             if self.dtype == 'object':
                 out = self.copy()
                 out[:] = [np.average(np.stack(trl), axis=1) for trl in out]
+                # at this point it's no longer an object, so take on the type
+                # it shoulda been
+                out = out.astype(self[0,0].dtype)
             else:
                 out = np.average(self, axis=2)
             return out
@@ -251,6 +254,7 @@ class BinnedSpikeSet(np.ndarray):
                     trlsAsObj = [np.stack(trl) for trl in self]
                     mxLen = np.max([trl.shape[1] for trl in trlsAsObj])
                     padSelf = np.stack([np.pad(trl, ((0,0),(0,mxLen-trl.shape[1])), constant_values=np.nan) for trl in trlsAsObj])
+                    #NOTE check about labels field...
                     return np.nanmean(padSelf,axis=0)
                 else:
                     raise Exception('Can only trial average trials of different lengths if they are all aligned!')
@@ -261,7 +265,13 @@ class BinnedSpikeSet(np.ndarray):
         
     def trialStd(self):
         if self.size > 0:
-            return np.std(self, axis=0, ddof=1) #np.sqrt(self.trialAverage()) #
+            return np.std(self, axis=0, ddof=1)
+        else:
+            return None
+
+    def trialSem(self):
+        if self.size > 0:
+            return np.std(self, axis=0, ddof=1)/np.sqrt(self.shape[0])
         else:
             return None
         
@@ -659,6 +669,14 @@ class BinnedSpikeSet(np.ndarray):
             return None
         if np.any((newBinSize/self.binSize) % trlLen):
             raise Exception('BinnedSpikeSet:BadBinSize', "New bin size doesn't evenly divide trajectory. Avoiding splitting to not have odd last bin.")
+
+        # we're assuming no tuples are in here...
+        if np.asarray(newBinSize).size == 1:
+            newBinSize = np.repeat(newBinSize, len(self.start))
+
+        # this really shouldn't happen, but it checks for bad data in some sense...
+        if np.asarray(newBinSize).size != self.start.size: 
+            raise Exception('BinnedSpikeSet:BadNumberOfNewBins', "newBinSize should have either 1 element or as many elements as the number of trials")
         
         # allows for both one new bin size and multiple new bin sizes (one per trial, or this will fail earlier when doing the size checks)
         binTrialIterator = zip(self.start, self.end, newBinSize)
