@@ -824,6 +824,39 @@ class BinnedSpikeSetInfo(dj.Manual):
 
         return reBinnedSpikeSet
 
+    def generateDescriptivePlots(self, plotTypes = ['all']):
+        from methods.plotUtils.BinnedSpikeSetPlotMethods import plotResponseOverTime
+        binnedSpikes, bSInfo = self.grabBinnedSpikes(returnInfo=True)
+        if 'raster' in plotTypes or 'all' in plotTypes:
+            rasterPlotInfo = plotTypes['raster'] if 'raster' in plotTypes else {}
+            rasterPlotInfo['plotMethod'] = 'eventplot'
+            reBinnedSpikes = []
+            for bnSp, bSPath in zip(binnedSpikes, bSInfo['paths']):
+                bsPk = dict(bss_relative_path = bSPath)
+                    
+                binSizeMs = 1 # we are now binning at 1ms for this...
+                reBinnedSpikeSet = self[bsPk].rebinSpikes(binSizeMs)
+                reBinnedSpikes.append(reBinnedSpikeSet.convertUnitsTo('count'))
+
+            plotResponseOverTime(reBinnedSpikes, bSInfo['dataset_names'], rasterPlotInfo)
+
+
+        if 'psth' in plotTypes or 'all' in plotTypes:
+            psthPlotInfo = plotTypes['psth'] if 'psth' in plotTypes else {}
+            psthPlotInfo['plotMethod'] = 'plot'
+            plotResponseOverTime(binnedSpikes, bSInfo['dataset_names'], psthPlotInfo)
+
+        #%% PCA projections
+        if 'pca' in plotTypes or 'all' in plotTypes:
+            for idx, (bnSp, dsName) in enumerate(zip(binnedSpikes, bSInfo['dataset_names'])):
+                bnSp.pca(labels = bnSp.labels['stimulusMainLabel'], plot = True)
+                plt.suptitle('PCA - %s' % (dsName))
+            
+        #%% LDA projections
+        if 'lda' in plotTypes or 'all' in plotTypes:
+            for idx, (bnSp, dsName) in enumerate(zip(binnedSpikes, bSInfo['dataset_names'])):
+                bnSp.lda(bnSp.labels['stimulusMainLabel'], plot=True)
+                plt.suptitle('LDA - %s' % (dsName))
 
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):
