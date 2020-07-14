@@ -419,79 +419,238 @@ def pcaComputation(listBSS, plot=True):
 def ldaComputation(listBSS, plot=True):
     pass
 
-def gpfaComputation(listBSS, descriptions, outputPaths, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceDirs = True, baselineSubtract = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
-                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], firingRateThresh=0.5, signalDescriptor = "",plotOutput=True):
+def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceConds = True, computeResiduals = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
+                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], overallFiringRateThresh=0.5, perConditionGroupFiringRateThresh = 0.5, signalDescriptor = "",plotOutput=True, units='count'):
     
     # from classes.GPFA import GPFA
     from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
     from methods.GeneralMethods import prepareMatlab
     from multiprocessing import pool
     
-    eng = None #prepareMatlab()
-    
-    
-   
-        
+
+    gai = GpfaAnalysisInfo()
+    gap = GpfaAnalysisParams()
+
+    labelUse = 'stimulusMainLabel'
+    for dim in xDimTest:
+        gpfaParams = dict(
+            dimensionality = dim,
+            overall_fr_thresh = overallFiringRateThresh,
+            balance_conds = balanceConds,
+            sqrt_spikes = sqrtSpikes,
+            num_conds = 1 if not combineConditions else (numStimulusConditions if numStimulusConditions is not None else 0),
+            combine_conditions = 'no' if not combineConditions else ('all' if numStimulusConditions is None else numStimulusConditions),
+            num_folds_crossvalidate = crossvalidateNumFolds,
+            on_residuals = computeResiduals,
+            units = units
+        )
+
+        if len(gap[gpfaParams]) == 0:
+            gap.insert1(gpfaParams)
+
+        if type(bssExp) is list:
+            for subExp in bssExp:
+                bssExpComputed = subExp[gai[gap[gpfaParams]]]
+                bssExpToCompute = subExp - gai[gap[gpfaParams]]
+                
+                # note that this *adds* values to GpfaAnalysisInfo, so we can't
+                # just filter gai by bssExpToCompute (nothing will be there!)
+                gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh)
+
+        else:
+            bssExpComputed = bssExp[gai[gap[gpfaParams]]]
+            bssExpToCompute = bssExp - gai[gap[gpfaParams]]
+#            # NOTE CHANGE
+#            bssExpToCompute = bssExpComputed
+#            forceNewGpfaRun = True
+            
+            # note that this *adds* values to GpfaAnalysisInfo, so we can't
+            # just filter gai by bssExpToCompute (nothing will be there!)
+            gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, forceNewGpfaRun = forceNewGpfaRun)
+
+
+    # this is gonna filter the GpfaAnalysisParams (gap) which will be used to
+    # filter the infos
+    gpfaParamsAll = [{'dimensionality' : d} for d in xDimTest]
+    if type(bssExp) is list:
+        # Um.... DataJoint can apparently handle bssExp being a list of expressions
+        # and that's nuts. Unfortunately for the nuttiness, I *do* need to be able
+        # to keep these grouped together.
+        gpfaRes = []
+        gpfaInfo = []
+        lstSzs = []
+        for subExp in bssExp:
+            lstSzs.append(len(gai[subExp]))
+            gpfaResH, gpfaInfoH = gai[subExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True)
+
+            gpfaRes.append(gpfaResH)
+            gpfaInfo.append(gpfaInfoH)
+    else:
+        gpfaRes, gpfaInfo = gai[bssExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, order=True)
+
+# could probably make this work... but better to just keep the above, no?
+#    gpfaRes2, gpfaInfo2 = gai[bssExp].grabGpfaResults(returnInfo=True, order=True)
+
+
+    if type(gpfaRes) is not list:
+        gpfaRes = [gpfaRes] # for the for loop below
+        gpfaInfo = [gpfaInfo]
+
+#    breakpoint()
+    cvApproach = "logLikelihood"
+    shCovThresh = 0.95
+    lblLLErr = 'LL err over folds'
+    lblLL= 'LL mean over folds'
+
     if plotOutput:
         plotInfo = {}
         figErr = plt.figure()
         figErr.suptitle('dimensionality vs. GPFA log likelihood')
-        axs = figErr.subplots(nrows=2, ncols=len(listBSS), squeeze=False)
-        
+        # might have to go back on these lines for how to define ncols...
+        gpPathPer = [[Path(gpH).parent for gpH in gp.keys()] for gp in gpfaRes]
+        gpUnPathNum = [len(np.unique(gpP)) for gpP in gpPathPer]
+        ncols = np.max(gpUnPathNum) # len(bssExp)
+        axs = figErr.subplots(nrows=2, ncols=ncols, squeeze=False)
+
+    crossValsUse = [0]
+
     dimExp = []
     dimMoreLL = []
+    normScoreAll = []
     gpfaOutDimAll = []
     gpfaTestIndsOutAll = []
     gpfaTrainIndsOutAll = []
-    # with pool.Pool() as pool:
-    #     results = []
-    for idx, (bnSp, description, outputPath) in enumerate(zip(listBSS, descriptions, outputPaths)):
-        
-        print("*** Running GPFA for " + description.replace('\n', ' ') + " ***")
+    gpfaBinSize = []
+    gpfaCondLabels = []
+    gpfaAlignmentBins = []
+    gpfaDimsTested = []
+
+    for gpfaResHere, gpfaInfoHere in zip(gpfaRes, gpfaInfo):
+        gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
+
+        keysRes = [Path(pthAndCond).parent for pthAndCond in gpfaCrunchedResults.keys()]
+        _, smDimGrph = np.unique(keysRes, return_inverse=True)
+        dimExp.append([d['xDimBestAll'] for _, d in gpfaCrunchedResults.items()])
+        dimMoreLL.append([d['xDimScoreBestAll'] for _, d in gpfaCrunchedResults.items()])
+        normScoreAll.append([d['normalGpfaScoreAll'] for _, d in gpfaCrunchedResults.items()])
+        gpfaOutDimAll.append([d['dimResults'] for _, d in gpfaCrunchedResults.items()])
+        gpfaTestIndsOutAll.append([d['testInds'] for _, d in gpfaCrunchedResults.items()])
+        gpfaTrainIndsOutAll.append([d['trainInds'] for _, d in gpfaCrunchedResults.items()])
+        gpfaBinSize.append([d['binSize'] for _, d in gpfaCrunchedResults.items()])
+        gpfaCondLabels.append([d['condLabel'] for _, d in gpfaCrunchedResults.items()])
+        gpfaAlignmentBins.append([d['alignmentBins'] for _, d in gpfaCrunchedResults.items()])
+        gpfaDimsTested.append([d['dimsTest'] for _, d in gpfaCrunchedResults.items()])
+
 
         if plotOutput:
-            axScore = axs[0, :].flat[idx]
-            axDim = axs[1,:].flat[idx]
-            plotInfo['axScore'] = axScore
-            plotInfo['axDim'] = axDim
-        else:
-            plotInfo = None # don't plot for now...
-   
-        if type(bnSp) is list:
-            numDims = []
-            numDimsLL = []
-            gpfaOutDim = []
-            gpfaTestIndsOut = []
-            gpfaTrainIndsOut = []
-            for subsetNum, bS in enumerate(bnSp):
-                numDimsSubst, numDimsLLSubst, gpfaOutDimSubst, gpfaTestIndsOutSubst, gpfaTrainIndsOutSubst = BinnedSpikeSet.gpfa(bS, eng,description,outputPath, signalDescriptor = Path(signalDescriptor) / ("shuff_%d" % subsetNum) , forceNewGpfaRun = forceNewGpfaRun,
-                          xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
-                          timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
+            for idx, (description, dimsTest, testIndsCondAll, dimResult, normalGpfaScoreAll, binSize, condLabels, alignmentBins) in enumerate(zip(gpfaInfoHere['datasetNames'][-1], gpfaDimsTested[-1], gpfaTestIndsOutAll[-1], gpfaOutDimAll[-1], normScoreAll[-1], gpfaBinSize[-1], gpfaCondLabels[-1], gpfaAlignmentBins[-1])):
 
-                numDims.append(numDimsSubst)
-                numDimsLL.append(numDimsLLSubst)
-                gpfaOutDim.append(gpfaOutDimSubst)
-                gpfaTestIndsOut.append(gpfaTestIndsOutSubst)
-                gpfaTrainIndsOut.append(gpfaTrainIndsOutSubst)
-        else:
-            numDims, numDimsLL, gpfaOutDim, gpfaTestIndsOut, gpfaTrainIndsOut = BinnedSpikeSet.gpfa(bnSp, eng,description,outputPath, signalDescriptor = signalDescriptor, forceNewGpfaRun = forceNewGpfaRun,
-                      xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, baselineSubtract = baselineSubtract, numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
-                      timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceDirs=balanceDirs, plotInfo = plotInfo)
-            
-        dimExp.append(numDims)
-        dimMoreLL.append(numDimsLL)
-        gpfaOutDimAll.append(gpfaOutDim)
-        gpfaTestIndsOutAll.append(gpfaTestIndsOut)
-        gpfaTrainIndsOutAll.append(gpfaTrainIndsOut)
-        # 
-        # resGrouped = list(zip(*results))
-        # dimExp = list(resGrouped[0])
-        # gpfaPrepAll = list(resGrouped[1])
+                # grab first cval--they'll be the same for each cval, which is what
+                # these lists store
+                dimTest = dimsTest[0]
+                binSize = binSize[0]
+                testInds = testIndsCondAll[0]
+
+                axScore = axs[0, :].flat[smDimGrph[idx]]
+                axDim = axs[1,:].flat[smDimGrph[idx]]
+                plotInfo['axScore'] = axScore
+                plotInfo['axDim'] = axDim
+
+                if timeBeforeAndAfterStart is not None:
+                    tmValsStartBest = np.arange(timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
+                else:
+                    tmValsStartBest = np.ndarray((0,0))
+                    
+                if timeBeforeAndAfterEnd is not None:
+                    tmValsEndBest = np.arange(timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
+                else:
+                    tmValsEndBest = np.ndarray((0,0))
+
+                plotInfo['lblLL'] = lblLL
+                plotInfo['lblLLErr'] = lblLLErr
+                plotInfo['description'] = description
+                tmVals = [tmValsStartBest, tmValsEndBest]
+                visualizeGpfaResults(plotInfo, dimResult,  tmVals, cvApproach, normalGpfaScoreAll, dimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins)
+
+#        listBSS = bssExpToCompute.grabBinnedSpikes()
+#
+#        if len(bssExp[gai[gap[gpfaParams]]]) == 0:
+#            gpfaParamsHash = gap.hash()
+#            saveGpfaRelativePath = Path(dsiPks['dataset_relative_path']).parent / ('binnedSpikeSet_%s' % bSSProcParamsHash[:5]) / binnedSpikeSetDill
+#            
+#            gpfaInfoSpecParams = dict(
+#                condition_nums = numStimulusConditions
+#            )
+#        else:
+#            bssStillCompute = 
         
-    if plotOutput:
-        pass
-#        axScore.legend()
     
+   
+        
+#    if plotOutput:
+#        plotInfo = {}
+#        figErr = plt.figure()
+#        figErr.suptitle('dimensionality vs. GPFA log likelihood')
+#        axs = figErr.subplots(nrows=2, ncols=len(listBSS), squeeze=False)
+#        
+#    dimExp = []
+#    dimMoreLL = []
+#    gpfaOutDimAll = []
+#    gpfaTestIndsOutAll = []
+#    gpfaTrainIndsOutAll = []
+#    # with pool.Pool() as pool:
+#    #     results = []
+#    for idx, (bnSp, description, outputPath) in enumerate(zip(listBSS, descriptions, outputPaths)):
+#        
+#        print("*** Running GPFA for " + description.replace('\n', ' ') + " ***")
+#
+#        if plotOutput:
+#            axScore = axs[0, :].flat[idx]
+#            axDim = axs[1,:].flat[idx]
+#            plotInfo['axScore'] = axScore
+#            plotInfo['axDim'] = axDim
+#        else:
+#            plotInfo = None # don't plot for now...
+#   
+#        if type(bnSp) is list:
+#            numDims = []
+#            numDimsLL = []
+#            gpfaOutDim = []
+#            gpfaTestIndsOut = []
+#            gpfaTrainIndsOut = []
+#            for subsetNum, bS in enumerate(bnSp):
+#                numDimsSubst, numDimsLLSubst, gpfaOutDimSubst, gpfaTestIndsOutSubst, gpfaTrainIndsOutSubst = BinnedSpikeSet.gpfa(bS, outputPath,description=description, signalDescriptor = Path(signalDescriptor) / ("shuff_%d" % subsetNum) , forceNewGpfaRun = forceNewGpfaRun,
+#                          xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, 
+##                          baselineSubtract = baselineSubtract,
+#                          numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
+#                          timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceConds=balanceConds, plotInfo = plotInfo)
+#
+#                numDims.append(numDimsSubst)
+#                numDimsLL.append(numDimsLLSubst)
+#                gpfaOutDim.append(gpfaOutDimSubst)
+#                gpfaTestIndsOut.append(gpfaTestIndsOutSubst)
+#                gpfaTrainIndsOut.append(gpfaTrainIndsOutSubst)
+#        else:
+#            numDims, numDimsLL, gpfaOutDim, gpfaTestIndsOut, gpfaTrainIndsOut = BinnedSpikeSet.gpfa(bnSp, outputPath,description=description, signalDescriptor = signalDescriptor, forceNewGpfaRun = forceNewGpfaRun,
+#                      xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, 
+##                      baselineSubtract = baselineSubtract,
+#                      numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
+#                      timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceConds=balanceConds, plotInfo = plotInfo)
+#            
+#        dimExp.append(numDims)
+#        dimMoreLL.append(numDimsLL)
+#        gpfaOutDimAll.append(gpfaOutDim)
+#        gpfaTestIndsOutAll.append(gpfaTestIndsOut)
+#        gpfaTrainIndsOutAll.append(gpfaTrainIndsOut)
+#        # 
+#        # resGrouped = list(zip(*results))
+#        # dimExp = list(resGrouped[0])
+#        # gpfaPrepAll = list(resGrouped[1])
+#        
+#    if plotOutput:
+#        pass
+##        axScore.legend()
+#    
     return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
 
 #%% Plotting and descriptive
