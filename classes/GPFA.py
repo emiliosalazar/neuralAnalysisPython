@@ -9,15 +9,20 @@ from classes.MatlabConversion import MatlabConversion as mc
 import numpy as np
 import scipy as sp
 from classes.BinnedSpikeSet import BinnedSpikeSet
+from methods.GeneralMethods import prepareMatlab
+from matlab.engine import MatlabExecutionError
 
 class GPFA:
-    def __init__(self, binnedSpikes, firingRateThresh=5, sqrtSpks = True):
-        from classes.BinnedSpikeSet import BinnedSpikeSet
+    def __init__(self, binnedSpikes, firingRateThresh=5):
         if type(binnedSpikes) is list or binnedSpikes.dtype=='object':
+            # I'm honestly not really sure why this works, given that with the
+            # axis=1 in the else statement, axis 1 stays the same size, but in
+            # this statement with axis=2, axis 2 *changes size*...
             allTrlTogether = np.concatenate(binnedSpikes, axis=2)
         else:
             allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None,:,:]
         
+        allTrlTogether.timeAverage().trialAverage()
         allTrlTogether.units = binnedSpikes.units
         _, chansKeep = allTrlTogether.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
         # chansKeepCoinc = allTrlTogether.removeCoincidentSpikes()
@@ -31,7 +36,7 @@ class GPFA:
         else:
             self.binnedSpikes = [bnSp[chansKeep, :] for bnSp in binnedSpikes]
 #        breakpoint()
-        self.gpfaSeqDict = self.binSpikesToGpfaInputDict(sqrtSpks = sqrtSpks)
+        self.gpfaSeqDict = self.binSpikesToGpfaInputDict()
         self.trainInds = None
         self.testInds = None
         self.dimOutput = {}
@@ -41,14 +46,14 @@ class GPFA:
         else:
             self.binSize = binnedSpikes.binSize
     
-    def binSpikesToGpfaInputDict(self, sqrtSpks = True, binnedSpikes = None):
+    def binSpikesToGpfaInputDict(self, binnedSpikes = None):
         if binnedSpikes is None:
             binnedSpikes = self.binnedSpikes
         
         gpfaSeqDict = []
         for trlNum, trl in enumerate(binnedSpikes):
-            if sqrtSpks:
-                trl = np.sqrt(trl)
+#            if sqrtSpks:
+#                trl = np.sqrt(trl)
             gpfaSeqDict.append({'trialId':trlNum,
                             'T': (trl.shape[1])*1.0,
                             'y': mc.convertNumpyArrayToMatlab(trl)})
@@ -110,7 +115,7 @@ class GPFA:
         
         
     
-    def runGpfaInMatlab(self, fname="~/Documents/BatistaLabData/analysesOutput/gpfaTest", runDescriptor = "", condDescriptor = "", crossvalidateNum = 0, xDim = 8, eng=None, segLength = None, forceNewGpfaRun = False):
+    def runGpfaInMatlab(self, fname,   crossvalidateNum = 0, xDim = 8, eng=None, segLength = None, forceNewGpfaRun = False):
         
         # if eng is None:
         #     from matlab import engine 
@@ -122,7 +127,6 @@ class GPFA:
             seqTrainStr = "[seqTrain{:}]"
             seqTestStr = "subsref([seqTrain{:}], struct('type', '()', 'subs', {{[]}}))"
         else:
-            # NOTE: INCOMPLETE!
             self.trainInds, self.testInds =  self.computeTrainTestIndRandom(numFolds = crossvalidateNum)
             # self.trainInds, self.testInds = self.computeTrainTestIndOrdered(numFolds = crossvalidateNum)
             seqsTrain, seqsTest = self.trainAndTestSeq()
@@ -143,9 +147,6 @@ class GPFA:
         
         with Pool() as poolHere:
             res = []
-            # from matlab.engine import pythonengine
-            # engA = pythonengine.getMATLAB
-            engA = None
             for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
                 
                 res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr)))
@@ -172,7 +173,6 @@ class GPFA:
         self.dimOutput[xDim]['seqsTrainNew'] = seqsTrainNew
         self.dimOutput[xDim]['seqsTestNew'] = seqsTestNew
             
-        # self.crossvalidatedGpfaError(eng = eng)
         return allEstParams, seqsTrainNew, seqsTestNew
     
     def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None, dimsCrossvalidate = None):
@@ -207,7 +207,7 @@ class GPFA:
                         dimUsed.append(dim)
                     
                 resultsByDim = []
-                timeoutSecs = 10
+                timeoutSecs = 60
                 for ind, rs in enumerate(res):
                     try:
                         thisResult = rs.get(timeout=timeoutSecs)
@@ -215,6 +215,7 @@ class GPFA:
                         dimRedo = dimUsed[ind]
                         paramsGpfa = self.dimOutput[dimRedo]
                         thisResult = cvalSuperWrap(paramsGpfa, allSeqsTest)
+                        print("Careful we're establishing a Matlab at the top level...")
                         # lower the timeout if it already failed once...
                         timeoutSecs = 3
 
@@ -276,7 +277,7 @@ class GPFA:
             
         return normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore
     
-    def shuffleGpfaControl(self, estParams, cvalTest=0, numShuffle = 500, sqrtSpks = True, eng=None): 
+    def shuffleGpfaControl(self, estParams, cvalTest=0, numShuffle = 500,  eng=None): 
 
                     
 
@@ -286,26 +287,13 @@ class GPFA:
             res = []
             eng = None
                 
-            res.append(poolHere.apply_async(shuffParallel, (self.binnedSpikes, self.testInds, estParams, cvalTest, numShuffle, sqrtSpks, eng)))
+            res.append(poolHere.apply_async(shuffParallel, (self.binnedSpikes, self.testInds, estParams, cvalTest, numShuffle, eng)))
 
             resultsShuff = [rs.get() for rs in res]
             # resultsByVar = list(zip(*resultsByDim))
 
         return resultsShuff[0]
 
-    def projectTrajectory(self, estParams, trajectory, sqrtSpks):
-
-        seqTrajDict = GPFA.binSpikesToGpfaInputDict([], binnedSpikes = trajectory, sqrtSpks=sqrtSpks)
-        from multiprocessing import Pool
-        with Pool() as poolHere:
-            res = []
-            eng = None
-
-            res.append(poolHere.apply_async(projectTrajectory, (seqTrajDict,estParams)))
-
-            resultsTraj = [rs.get() for rs in res]
-
-        return resultsTraj[0]
 
         
 
@@ -440,7 +428,6 @@ def orthogonalize(highDimSpikes, unorthCMat):
 
 def makeKBig(params, T, covType = 'rbf', eng=None):
     if eng is None:
-        from methods.GeneralMethods import prepareMatlab
         eng = prepareMatlab()
         
     xDim = params['C'].shape[1]
@@ -469,7 +456,6 @@ def makeKBig(params, T, covType = 'rbf', eng=None):
     return KAll, KAllInv, logdetKAll
     
 def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
-    from methods.GeneralMethods import pMat, prepareMatlab
 
     print('Running GPFA crossvalidation #%d' % (cvNum+1))
     
@@ -507,7 +493,6 @@ def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, se
 
 def cvalSuperWrap(paramsGpfa, allSeqsTest):
     llTemp = []
-    from methods.GeneralMethods import prepareMatlab
     eng = prepareMatlab()
                     
     for cvNum, (paramsEst, seqsTest) in enumerate(zip(paramsGpfa['allEstParams'], allSeqsTest)):
@@ -546,7 +531,6 @@ def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yD
     from scipy.linalg import block_diag
     
     if eng is None:
-        from methods.GeneralMethods import prepareMatlab
         print('what')
         
     uniqueT = int(uniqueT)
@@ -576,7 +560,7 @@ def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yD
     ll = len(seqsUse) * val - np.sum(np.sum((Rinv @ dif) * dif)) + np.sum(np.sum((term1Mat.T @ invM) * term1Mat.T))
     return ll
 
-def shuffParallel(binnedSpikes, testInds, estParams, cvalTest, numShuffle, sqrtSpks, eng):
+def shuffParallel(binnedSpikes, testInds, estParams, cvalTest, numShuffle, eng):
 
     unShuffTestInds = testInds[cvalTest]
     shuffPerChan = []
@@ -600,7 +584,7 @@ def shuffParallel(binnedSpikes, testInds, estParams, cvalTest, numShuffle, sqrtS
     binnedSpikesShuffByTrial = binnedSpikesShuff.swapaxes(0,1) # trials first again
 
 
-    seqShuffDict = GPFA.binSpikesToGpfaInputDict([], binnedSpikes = binnedSpikesShuffByTrial, sqrtSpks=sqrtSpks)
+    seqShuffDict = GPFA.binSpikesToGpfaInputDict([], binnedSpikes = binnedSpikesShuffByTrial)
 
     seqShuffNew = projectTrajectory(seqShuffDict, estParams, eng)
     return seqShuffNew
@@ -608,7 +592,6 @@ def shuffParallel(binnedSpikes, testInds, estParams, cvalTest, numShuffle, sqrtS
 def projectTrajectory(seqDict, estParams, eng=None):
     # eng is sometimes not input...
     if eng is None:
-        from methods.GeneralMethods import pMat, prepareMatlab
         eng = prepareMatlab(None)
 
     eng.workspace['seqProj'] = seqDict

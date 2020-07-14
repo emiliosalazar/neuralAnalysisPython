@@ -1368,7 +1368,7 @@ class BinnedSpikeSet(np.ndarray):
 
             # crossvalidate dimensions as needed
             if len(dimsCVal) > 0:
-                normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(eng=eng, approach = cvApproach, dimsCrossvalidate = dimsCVal)
+                normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(approach = cvApproach, dimsCrossvalidate = dimsCVal)
                 normalGpfaScoreCurr = normalGpfaScoreAll[idx]
                 normalGpfaScoreCurr[indsCVal, :] = normalGpfaScore
                 normalGpfaScoreAll[idx] = normalGpfaScoreCurr
