@@ -44,7 +44,8 @@ def plotDimensionsAgainstEachOther(axUse, dimensionVals, tmVals, tpIndUse, lblSt
             # alignY = np.interp(0, tmVals, sq['xorth'][1,tpIndUse[0]:tpIndUse[1]])
             # alignZ = np.interp(0, tmVals, sq['xorth'][2,tpIndUse[0]:tpIndUse[1]])
             
-            alignPt = [np.interp(0,tmV, dimVal[dm,tpIndUse[0]:tpIndUse[1]]) for dm, dimVal in enumerate(dimensionVals)]
+#            alignPt = [np.interp(0,tmV, dimVal[dm,tpIndUse[0]:tpIndUse[1]]) for dm, dimVal in enumerate(dimensionVals)]
+            alignPt = [[np.interp(0,tmV, dimVal[tpIndUse[0]:tpIndUse[1]])] for dimVal in dimensionVals]
             axUse.plot(*alignPt, '*', color=colAlPt, label = lbAl[0])
         else:
             axUse.plot([np.nan], [np.nan], '*', color=colAlPt, label = lbAl[1])
@@ -61,14 +62,14 @@ def plotDimensionsAgainstEachOther(axUse, dimensionVals, tmVals, tpIndUse, lblSt
     axUse.legend()
 
 # the biggest chunk of this function is just finding which plot to plot into...
-def plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesPlotList, axesOtherList, rowsPlt, colsPlt, tmValsPlot, dimVals, dimNum, xDimBest, colorUse, labelTraj = "trajectory", linewidth=0.4, alpha = 1):
+def plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesPlotList, axesOtherList, rowsPlt, colsPlt, tmValsPlot, dimVals, dimNum, xDimBest, colorUse, labelTraj = "trajectory", linewidth=0.4, alpha = 1, axTitle="AlPoint"):
     if len(axesPlotList) + len(axesOtherList) < rowsPlt*colsPlt:
         axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
         axesPlotList.append(axesHere)
         if pltNum == 1: 
-            axesHere.set_title("dim " + str(dimNum) + " periStart")
+            axesHere.set_title("dim " + str(dimNum) + " peri" + axTitle)
         else:
-            axesHere.set_title("d"+str(dimNum)+"S")
+            axesHere.set_title("d"+str(dimNum)+axTitle[0])
     
         if pltNum <= (xDimBest - colsPlt):
             axesHere.set_xticklabels('')
@@ -91,9 +92,15 @@ def plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesPlotList, axesOthe
 
    
 
-def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, cvApproach, normalGpfaScoreAll, xDimTest, shCovThresh, crossValsUse, baselineSubtract, computeShuffles = False, sqrtSpikes = False):
-   for idx, gpfaPrep in enumerate(gpfaPrepAll):
-        print("** Plotting GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
+def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaScoreAll, xDimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins,
+            baselineSubtract = False, # setting to false default because I think I want to get rid of it entirely...
+            computeShuffles = False, sqrtSpikes = False):
+
+   from classes.BinnedSpikeSet import BinnedSpikeSet
+   colorset = BinnedSpikeSet.colorset
+
+   for idx, dimResult in enumerate(dimResults):
+        print("** Plotting GPFA for condition %d/%d **" % (idx+1, len(dimResults)))
         normalGpfaScore = normalGpfaScoreAll[idx]
         normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
 
@@ -105,7 +112,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
         elif cvApproach is "squaredError":
             xDimScoreBest = xDimTest[np.argmin(normalGpfaScoreMn)]
         
-        Cparams = [prm['C'] for prm in gpfaPrep.dimOutput[xDimScoreBest]['allEstParams']]
+        Cparams = [prm['C'] for prm in dimResult[xDimScoreBest]['allEstParams']]
         shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
         percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
         meanPercAcc = np.mean(percAcc, axis=0)
@@ -149,23 +156,22 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
         axDim.set_xticklabels(xDimTest)
 
        
-        grpSpks = groupedBalancedSpikes[idx]
+        alBins = alignmentBins[idx]
         
         tmValsStartBest = tmVals[0]
         tmValsEndBest = tmVals[1]
 
         for cValUse in [0]:# range(crossvalidateNum):
-            condLabel = grpSpks[0].labels['stimulusMainLabel']
-            binSize = grpSpks.binSize
-            colorset = grpSpks.colorset
+            condLabel = condLabels[idx]
             if baselineSubtract:
                 # NOTE: This should probably be pulled out of this function; will let it fail for now because labelMeans isn't defined
                 # meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], labelMeans[idx][None,:,:], sqrtSpks = sqrtSpikes)
-                meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], np.stack(labelMeans), sqrtSpks = sqrtSpikes)
+                meanTraj = projectTrajectory(dimResult[xDimScoreBest]['allEstParams'][cValUse], np.stack(labelMeans), sqrtSpks = sqrtSpikes)
                 
             if computeShuffles:
+                # NOTE this will fail for the moment... I'm going to ignore it until it's needed again, though
                 # this has nothing to do with baseline subtracting... I'm just being lazy
-                shuffTraj = gpfaPrep.shuffleGpfaControl(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], cvalTest = cValUse, sqrtSpks = sqrtSpikes)
+                shuffTraj = shuffleGpfaControl(dimResult[xDimScoreBest]['allEstParams'][cValUse], cvalTest = cValUse, sqrtSpks = sqrtSpikes)
 
             rowsPlt = 2
             if tmValsStartBest.size and tmValsEndBest.size:
@@ -191,7 +197,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
                 figTraj.suptitle(description + " cond " + str(condLabel.tolist()) + "")
         
             plt.figure()
-            plt.imshow(np.abs(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse]['C']),aspect="auto")
+            plt.imshow(np.abs(dimResult[xDimScoreBest]['allEstParams'][cValUse]['C']),aspect="auto")
             plt.title('C matrix (not orth)')
             plt.colorbar()
 
@@ -204,7 +210,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
 
 
 
-            seqTestUse = gpfaPrep.dimOutput[xDimScoreBest]['seqsTestNew'][cValUse] # just use the first one...
+            seqTestUse = dimResult[xDimScoreBest]['seqsTestNew'][cValUse] # just use the first one...
             lblStartTraj = 'traj start'
             lblEndTraj = 'traj end'
             lblDelayStart = 'delay start'
@@ -212,16 +218,16 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
             lblNoDelayStart = 'delay start outside traj'
             lblNoDelayEnd = 'delay end outside traj'
             lblNeuralTraj = 'neural trajectories'
-            for k, (sq, tstInd) in enumerate(zip(seqTestUse,gpfaPrep.testInds[cValUse])):
+            for k, (sq, tstInd) in enumerate(zip(seqTestUse,testInds[cValUse])):
                 # if k>5:
                     # break
-                gSp = grpSpks[tstInd]
+                alB = alBins[tstInd]
                 # sq = {}
                 # sq['xorth'] = np.concatenate((sq2['xorth'][1:], sq2['xorth'][:1]), axis=0)
                 # gSp = grpSpks[tstInd]
                 # print(gSp.alignmentBins.shape)
                 if tmValsStartBest.size:
-                    startZeroBin = gSp.alignmentBins[0]
+                    startZeroBin = alB[0]
                     fstBin = 0
                     tmBeforeStartZero = (fstBin-startZeroBin)*binSize
                     tmValsStart = tmValsStartBest[tmValsStartBest>=tmBeforeStartZero]
@@ -230,10 +236,10 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
                     
                 if tmValsEndBest.size:
                     # Only plot what we have data for...
-                    endZeroBin = gSp.alignmentBins[1]
+                    endZeroBin = alB[1]
                     # going into gSp[0] because gSp might be dtype object instead of the float64,
                     # so might have trials within the array, not accessible without
-                    lastBin = gSp[0].shape[0] # note: same as sq['xorth'].shape[1]
+                    lastBin = sq['xorth'].shape[1]
                     timeAfterEndZero = (lastBin-endZeroBin)*binSize
                     tmValsEnd = tmValsEndBest[tmValsEndBest<timeAfterEndZero]
                 else:
@@ -438,7 +444,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
                             break
                         
                         if tmValsStart.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorset[idx,:], lblNeuralTraj)
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorset[idx,:], lblNeuralTraj, axTitle = 'Start')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesStart.append(axesHere)
@@ -473,7 +479,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
                             pltNum += 1
                         
                         if tmValsEnd.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, colorset[idx,:], lblNeuralTraj)
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, colorset[idx,:], lblNeuralTraj, axTitle = 'End')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesEnd.append(axesHere)
@@ -532,7 +538,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
                             break
                         
                         if tmValsStart.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorUse = [0.5,0.5,0.5], labelTraj = lblShuffle, linewidth=0.2, alpha = 0.5)
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorUse = [0.5,0.5,0.5], labelTraj = lblShuffle, linewidth=0.2, alpha = 0.5, axTitle = 'Start')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesStart.append(axesHere)
@@ -567,7 +573,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
                             pltNum += 1
                         
                         if tmValsEnd.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, colorUse = [0.5,0.5,0.5], labelTraj = lblShuffle, linewidth=0.2, alpha = 0.5)
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, colorUse = [0.5,0.5,0.5], labelTraj = lblShuffle, linewidth=0.2, alpha = 0.5, axTitle = 'End')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesEnd.append(axesHere)
@@ -619,7 +625,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
 
                         
                         if tmValsStart.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorset[condNum,:], lblMn, linewidth=1)
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorset[condNum,:], lblMn, linewidth=1, axTitle = 'Start')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesStart.append(axesHere)
@@ -655,7 +661,7 @@ def visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, c
                             pltNum += 1
                         
                         if tmValsEnd.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, colorset[condNum,:], lblMn, linewidth=1)
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, colorset[condNum,:], lblMn, linewidth=1, axTitle = 'End')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesEnd.append(axesHere)
