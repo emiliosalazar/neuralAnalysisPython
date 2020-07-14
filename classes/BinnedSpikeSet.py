@@ -1069,41 +1069,19 @@ class BinnedSpikeSet(np.ndarray):
     # of (-250,0) tells us that the *last* bin is aligned at the alignment point
     # for the end (whatever that may be--say, the delay end), and should be plotted
     # starting -250 ms before
-    def gpfa(self, eng, description, outputPath, signalDescriptor = "", xDimTest = [2,5,8], sqrtSpikes = False,
-             labelUse = 'stimulusMainLabel', numConds=1, combineConds = False, firingRateThresh = 1, balanceDirs = True, baselineSubtract = True,forceNewGpfaRun = False,
+    def gpfa(self,  outputPathToConditions, description = "",  xDimTest = [2,5,8], sqrtSpikes = False,
+             labelUse = 'stimulusMainLabel', condNums=1, combineConds = False, overallFiringRateThresh = 1, perConditionGroupFiringRateThresh = 1, balanceConds = True, 
+             computeResiduals = True,
+             forceNewGpfaRun = False,
              crossvalidateNum = 4, timeBeforeAndAfterStart=(0,250), timeBeforeAndAfterEnd=(-250, 0), plotInfo=None):
-        from matlab import engine
         from classes.GPFA import GPFA
         from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
         from methods.GeneralMethods import prepareMatlab
+
+        assert (type(xDimTest) != list) or (type(xDimTest) == list and len(xDimTest) == 1), "gpfa on BinnedSpikes can't do multiple dimensions anymore--you'll have to loop above this!"
+        if type(xDimTest) != list:
+            xDimTest = [xDimTest]
                 
-        if signalDescriptor == "":
-            signalDescriptor = "run"
-
-        # eng was input and should be on... but let's check
-        # eng = prepareMatlab(eng)
-        eng = None;
-            
-        # dataInd = -2
-        # for dataInd in range(len(binnedSpikesAll)):
-        # for _ in range(1):
-        # onlyDelay = True
-        # initRandSt = np.random.get_state()
-        # np.random.seed(0)
-        # if onlyDelay:
-        #     trlIndsUse = BinnedSpikeSet.balancedTrialInds(binnedSpikesOnlyDelay[dataInd], datasets[dataInd].markerTargAngles)
-        #     tmValsStart = np.arange(0, 250, binSizeMs)
-        #     tmValsEnd = np.arange(-250, 0, binSizeMs)       
-        #     # tmValsStart = np.arange(0, furthestBack if furthestBack else 251, binSizeMs)
-        #     # tmValsEnd= np.arange(-furthestForward if furthestForward else 251, 0, binSizeMs)
-        #     binnedSpikesBalanced = [binnedSpikesOnlyDelay[dataInd][trl] for trl in trlIndsUse]
-        # else:
-        #     trlIndsUse = BinnedSpikeSet.balancedTrialInds(binnedSpikesAll[dataInd], datasets[dataInd].markerTargAngles)
-        #     tmValsStart = np.arange(-furthestBack, furthestBack if furthestBack else 251, binSizeMs)
-        #     tmValsEnd = np.arange(-(furthestForward if furthestForward else 251)+binSizeMs, furthestForward, binSizeMs)
-        #     binnedSpikesBalanced = [binnedSpikesAll[dataInd][trl] for trl in trlIndsUse]
-
-        # np.random.set_state(initRandSt)
         
         if type(self) is list:
             bnSpksCheck = np.concatenate(self, axis=2).view(BinnedSpikeSet)
@@ -1116,9 +1094,10 @@ class BinnedSpikeSet(np.ndarray):
             bnSpksCheck.labels = {}
             # bastardization of how BinnedSpikeSet should be used, give that labels
             # should refer to trials, and bnSpksCheck is flattened to one 'trial'
-            bnSpksCheck.labels[labelUse] = np.stack([bnSp.labels[labelUse] for bnSp in self])
+#            bnSpksCheck.labels[labelUse] = np.stack([bnSp.labels[labelUse] for bnSp in self])
             binSize = self[0].binSize
             colorset = self[0].colorset
+            bnSpksCheck.units = self.units
         else:
             bnSpksCheck = self
             binSize = self.binSize
@@ -1134,10 +1113,11 @@ class BinnedSpikeSet(np.ndarray):
         else:
             tmValsEndBest = np.ndarray((0,0))
         
-        _, chIndsUseFR = bnSpksCheck.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
+        # note that overallFiringRateThresh should be a negative number if we're inputing residuals...
+        _, chIndsUseFR = bnSpksCheck.channelsAboveThresholdFiringRate(firingRateThresh=overallFiringRateThresh)
         # binnedSpikeHighFR = self[:,chIndsUseFR,:]
         
-        if balanceDirs:
+        if balanceConds:
             trlIndsUseLabel = self.balancedTrialInds(labels=self.labels[labelUse])
             # binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]#.view(np.ndarray)
         else:
@@ -1154,63 +1134,69 @@ class BinnedSpikeSet(np.ndarray):
             binnedSpikesUse = BinnedSpikeSet(binnedSpikesUse, binSize = binSize)
             newLabels = np.stack([bnSp.labels[labelUse] for bnSp in binnedSpikesUse])
             binnedSpikesUse.labels[labelUse] = newLabels
-            if baselineSubtract:
-                raise(Exception("Can't baseline subtract trials of unequal size!"))
+#            if computeResiduals:
+#                raise(Exception("Can't baseline subtract trials of unequal size!"))
         elif self.dtype == 'object':
             binnedSpikeHighFR = self[:,chIndsUseFR]
             binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
             newLabels = binnedSpikesUse.labels[labelUse]
-            if baselineSubtract:
-                if sqrtSpikes:
-                    # we want to square root before negative numbers appear because of baseline subtracting
-                    aB = binnedSpikesUse.alignmentBins
-                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
-                    sqrtSpikes = False
-                    binnedSpikesUse.labels[labelUse] = newLabels
-                    binnedSpikesUse.alignmentBins = aB
-                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
-
-                # ROMP this might break stuff because I haven't accounted for
-                # non equal trial sizes when aligning objects for
-                # non-sparse-responses
-                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
-                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
-                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
-                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-                firingRateThresh = -1
+            if sqrtSpikes:
+                binnedSpikesUse = np.sqrt(binnedSpikesUse)
+#            if computeResiduals:
+#                if sqrtSpikes:
+#                    # we want to square root before negative numbers appear because of baseline subtracting
+#                    aB = binnedSpikesUse.alignmentBins
+#                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
+#                    sqrtSpikes = False
+#                    binnedSpikesUse.labels[labelUse] = newLabels
+#                    binnedSpikesUse.alignmentBins = aB
+#
+#                # ROMP this might break stuff because I haven't accounted for
+#                # non equal trial sizes when aligning objects for
+#                # non-sparse-responses
+#                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
+#                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
+#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
+#                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
+#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
+#                firingRateThresh = -1
         else:
             binnedSpikeHighFR = self[:,chIndsUseFR,:]
             binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
             newLabels = binnedSpikesUse.labels[labelUse]
-            if baselineSubtract:
-                if sqrtSpikes:
-                    # we want to square root before negative numbers appear because of baseline subtracting
-                    aB = binnedSpikesUse.alignmentBins
-                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
-                    sqrtSpikes = False
-                    binnedSpikesUse.labels[labelUse] = newLabels
-                    binnedSpikesUse.alignmentBins = aB
-                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
-
-                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
-                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
-                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(labelMeans)[unqInv])
-                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-                firingRateThresh = -1
+            if sqrtSpikes:
+                binnedSpikesUse = np.sqrt(binnedSpikesUse)
+#            if computeResiduals:
+#                if sqrtSpikes:
+#                    # we want to square root before negative numbers appear because of baseline subtracting
+#                    aB = binnedSpikesUse.alignmentBins
+#                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
+#                    sqrtSpikes = False
+#                    binnedSpikesUse.labels[labelUse] = newLabels
+#                    binnedSpikesUse.alignmentBins = aB
+#                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
+#
+#                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
+#                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
+#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
+#                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(labelMeans)[unqInv])
+#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
+#                firingRateThresh = -1
         
         
         uniqueTargAngle, trialsPresented = np.unique(newLabels, return_inverse=True, axis=0)
         
-        if numConds is None:
-            stimsUse = np.arange(uniqueTargAngle.shape[0])
+        if condNums is None:
+            condsUse = np.arange(uniqueTargAngle.shape[0])
         else:
-            initRandSt = np.random.get_state()
-            np.random.seed(0)
-            stimsUse = np.random.randint(0,high=uniqueTargAngle.shape[0],size=numConds)
-            stimsUse.sort() # in place sort
-            np.random.set_state(initRandSt)
+            # we allow the top level to choose random condNums if it wants them
+            condsUse = np.stack(condNums)
+#            initRandSt = np.random.get_state()
+#            np.random.seed(0)
+#            condsUse = np.random.randint(0,high=uniqueTargAngle.shape[0],size=len(condNums))
+#            condsUse.sort() # in place sort
+#            np.random.set_state(initRandSt)
+
         # binSpkAllArr = np.empty(len(binnedSpikesUse), dtype=object)
         # for idx, _ in enumerate(binSpkAllArr):
         #     binSpkAllArr[idx] = binnedSpikesUse[idx]
@@ -1222,17 +1208,56 @@ class BinnedSpikeSet(np.ndarray):
         uniqueTargAngleDeg = uniqueTargAngle*180/np.pi
         
         
+        if perConditionGroupFiringRateThresh > 0 and combineConds:
+            breakpoint()
+            # so there's a confusion if both of these are true... especially
+            # when computeResiduals is in the mix--if computeResiduals is True,
+            # we want to compute the residuals on a per-condition basis
+            # (right?) and then combine the conditions... but in order to
+            # compute the residuals, we first want to remove the low firing
+            # rate channels... but if we do that the conditions might not be
+            # combined correctly because some channels for some conditions
+            # might be kicked off. In any case, I'm not sure when we'll run
+            # into this, but when we do I will revisit.
+            raise Exception("Not sure how to order these operations, read the comment about revisiting")
         
-        grpSpksNpArr, _ = binnedSpikesUse.groupByLabel(newLabels, labelExtract=uniqueTargAngle[stimsUse]) # extract one label...
-        if combineConds and (numConds is None or numConds>1):
-            groupedBalancedSpikes = [BinnedSpikeSet(np.concatenate(grpSpksNpArr, axis=0), binSize = grpSpksNpArr[0].binSize)] # grpSpksNpArr
-            condDescriptors = ['s' + '-'.join(['%d' % stN for stN in stimsUse]) + 'Grpd']
+        grpSpksNpArr, _ = binnedSpikesUse.groupByLabel(newLabels, labelExtract=uniqueTargAngle[condsUse]) # extract one label...
+
+        if perConditionGroupFiringRateThresh > 0:
+            for idx, grpSpks in enumerate(grpSpksNpArr):
+                grpSpks, _ = grpSpks.channelsAboveThresholdFiringRate(firingRateThresh=perConditionGroupFiringRateThresh)
+                grpSpksNpArr[idx] = grpSpks
+
+            perConditionGroupFiringRateThresh = -1
+#            residGrpSpks, grpMn = grpSpksHighFR.baselineSubtract()
+#        else:
+#            residGrpSpks, grpMn = grpSpks.baselineSubtract()
+
+        if computeResiduals:
+            # Honestly maybe the below loop should always happen here instead of in the GPFA constructor
+            for idx, grpSpks in enumerate(grpSpksNpArr):
+                residGrpSpks, grpMn = grpSpks.baselineSubtract()
+
+                grpSpksNpArr[idx] = residGrpSpks
+#            else:
+#                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
+                
+
+
+        if combineConds and (condNums is None or len(condNums)>1):
+            grpSpksNpArr = [BinnedSpikeSet(np.concatenate(grpSpksNpArr, axis=0), binSize = grpSpksNpArr[0].binSize)] # grpSpksNpArr
+            condDescriptors = ['s' + '-'.join(['%d' % stN for stN in condsUse]) + 'Grpd']
         else:
-            groupedBalancedSpikes = grpSpksNpArr
-            condDescriptors = ['%d' % stN for stN in stimsUse]
+            grpSpksNpArr = grpSpksNpArr
+            condDescriptors = ['%d' % stN for stN in condsUse]
+
+
+        # simple change of variable name
+        groupedBalancedSpikes = grpSpksNpArr
             
 
         ## Start here
+        condSavePaths = []
         xDimBestAll = []
         xDimScoreBestAll = []
         gpfaPrepAll = []
