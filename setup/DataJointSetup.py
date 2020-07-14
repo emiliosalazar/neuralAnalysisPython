@@ -121,6 +121,240 @@ class DatasetInfo(dj.Manual):
 
         return datasets
 
+    def computeBinnedSpikesAroundState(self, bssProcParams, keyStateName, trialFilterLambdaDict=None, units=None):
+
+        bssi = BinnedSpikeSetInfo()
+        dsi = DatasetInfo()
+        bsspp = BinnedSpikeSetProcessParams()
+
+        bssppUse = bsspp[bssProcParams]
+
+        # Compute the lambda info, but only add once we grab the bssppUse
+        # (turns out SQLite (and maybe DataJoint)) can't filter on blobs
+        if trialFilterLambdaDict is not None:
+            trialFilterLambdaStrList = []
+            trialFilterLambdaDescStrList = []
+            for tFLDesc, tFL in trialFilterLambdaDict.items():
+                trialFilterLambdaStrList.append(tFL)
+                trialFilterLambdaDescStrList.append(tFLDesc)
+
+            trialFilterLambdaStr = " ; ".join(trialFilterLambdaStrList)
+            trialFilterLambdaDescStr = " ; ".join(trialFilterLambdaDescStrList)
+
+        # NOTE this might need a potential check to compare the trialFilters,
+        # since they are not directly searchable in the db... I'll cross that
+        # line when I get to it
+        assert len(bssppUse) <= 1, 'provided binned spike set process params are not unique'
+
+        if len(bssppUse)>0:
+            checkFilts = bssppUse.fetch('dataset_trial_filters', 'dataset_trial_filter_description', as_dict=True)[0] # can index by 0 because we know this is length one...
+            if trialFilterLambdaDict is not None:
+                if checkFilts['dataset_trial_filter_description'] == trialFilterLambdaDescStr and checkFilts['dataset_trial_filters'] == trialFilterLambdaStr:
+                    procParamId = bssppUse.fetch1('bss_params_id')
+                    # only add once you have fetched, as adding db-blobs to the
+                    # dictionary ruins the fetch
+                    bssProcParams.update(dict(
+                        dataset_trial_filters = trialFilterLambdaStr,
+                        dataset_trial_filter_description = trialFilterLambdaDescStr
+                    ))
+
+                else:
+                    raise Exception("Add code to correctly insert here...")
+            else:
+                raise Exception("How do we check that db returns are null?")
+        else:
+            # Add in the lambda info if it's there...
+            if trialFilterLambdaDict is not None:
+                bssProcParams.update(dict(
+                    dataset_trial_filters = trialFilterLambdaStr,
+                    dataset_trial_filter_description = trialFilterLambdaDescStr
+                ))
+
+            # tacky, but it doesn't return the new id, syoo...
+            currIds = bsspp.fetch('bss_params_id')
+            bsspp.insert1(bssProcParams)
+            newIds = bsspp.fetch('bss_params_id')
+            procParamId = list(set(newIds) - set(currIds))
+            assert len(procParamId) == 1, 'somehow more than one unique id exists >.>'
+            procParamId = procParamId[0]
+
+
+
+        trialType = bssProcParams['trial_type']
+        binSizeMs = bssProcParams['bin_size']
+        lenSmallestTrial = bssProcParams['len_smallest_trial']
+        setStartToStateEnd = bssProcParams['start_offset_from_location'] == 'stateEnd'
+        setEndToStateStart = bssProcParams['end_offset_from_location'] == 'stateStart'
+        firingRateThresh = bssProcParams['firing_rate_thresh']
+        returnResiduals = bssProcParams['residuals']
+        startTimeOffset = bssProcParams['start_offset']
+        endTimeOffset = bssProcParams['end_offset']
+        fanoFactorThresh = bssProcParams['fano_factor_thresh']
+
+        binnedSpikes = []
+        bssiKeys = []
+
+        for datasetInfo in self:
+            # First we want to check if we're going to compute new data or if it already exists...
+
+            binnedSpikeSetDill = 'binnedSpikeSet.dill'
+            # a nice way to distinguish the path for each BSS based on extraction parameters...
+            bSSProcParamsJson = json.dumps(bssProcParams, sort_keys=True) # needed for consistency as dicts aren't ordered
+            # encode('ascii') needed for json to be hashable...
+            bSSProcParamsHash = hashlib.md5(bSSProcParamsJson.encode('ascii')).hexdigest()
+            saveBSSRelativePath = Path(datasetInfo['dataset_relative_path']).parent / ('binnedSpikeSet_%s' % bSSProcParamsHash[:5]) / binnedSpikeSetDill
+
+
+            saveBSSPath = dataPath / saveBSSRelativePath
+
+            # Load data if it has been processed
+            if saveBSSPath.exists():
+                bssiKey = bssi[('bss_relative_path = "%s"' % str(saveBSSRelativePath))].fetch("KEY", as_dict=True)
+                with saveBSSPath.open(mode='rb') as saveBSSFh:
+                    binnedSpikesHere = pickle.load(saveBSSFh)
+
+            else:
+                # Here is the meat of the function, where the BinnedSpikeSets are actually computed...
+                dataset = self[datasetInfo].grabDatasets()
+                assert len(dataset) == 1, "More than one dataset being grabbed per key?"
+                dataset = dataset[0]
+
+                dsId = dataset.id
+                stateNameStateStart = dataset.keyStates[keyStateName]
+
+
+                # Filter by trial type
+                if trialType == 'successful':
+                    dataset = dataset.successfulTrials()
+                elif trialType == 'failure':
+                    dataset = dataset.failTrials()
+
+
+                # These extra filters are in a { description : lambda } style dictionary
+                if trialFilterLambdaDict is not None:
+                    for tFLDesc, tFL in trialFilterLambdaDict.items():
+                        lambdaFilt = eval(tFL)
+                        dataset = lambdaFilt(dataset)
+
+                alignmentStates = dataset.metastates
+                    
+                # Filter by trial length
+                startState, endState, stateNameAfter = dataset.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
+
+                startStateArr = np.asarray(startState)
+                endStateArr = np.asarray(endState)
+                timeInStateArr = endStateArr - startStateArr
+
+                dataset = dataset.filterTrials(timeInStateArr>lenSmallestTrial)
+
+                # Find appropriate start/end times for remaining trials
+                startState, endState, stateNameAfter = dataset.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
+                startStateArr = np.asarray(startState)
+                endStateArr = np.asarray(endState)
+
+                # Assign appropriate start/end time given parameters
+                if setStartToStateEnd:
+                    startTimeArr = endStateArr
+                else:
+                    startTimeArr = startStateArr
+                
+                if setEndToStateStart:
+                    endTimeArr = startStateArr
+                else:
+                    endTimeArr = endStateArr
+                    
+                # Bin spikes in the dataset based on state times computed above!
+                # Add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
+                binnedSpikesHere = dataset.binSpikeData(startMs = list(startTimeArr+startTimeOffset), endMs = list(endTimeArr+endTimeOffset+binSizeMs/20), binSizeMs=binSizeMs, alignmentPoints = list(zip(startTimeArr, endTimeArr)))
+
+                # Filter to only include high firing rate channels
+                binnedSpikesHere = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0]
+
+                # Filter for fano factor threshold, but use counts *over the trial*
+                if binnedSpikesHere.dtype == 'object':
+                    trialLengthMs = binSizeMs*np.array([bnSpTrl[0].shape[0] for bnSpTrl in binnedSpikesHere])
+                else:
+                    trialLengthMs = np.array([binnedSpikesHere.shape[2]*binSizeMs])
+                binnedCountsPerTrial = binnedSpikesHere.convertUnitsTo('count').increaseBinSize(trialLengthMs)
+
+                # Under certain processing parameters, not all trials may be
+                # the same length--since the fano factor computation depends on
+                # counts *per trial*, having different length trials really
+                # messes with things because variance in the spike count could
+                # reflect variance in the trial length. So, here, I weight
+                # spike counts by the trial length...
+                #
+                # NOTE: I believe this is okay because it's as if we were
+                # taking just a similarly sized window for each trial (under
+                # the assumption of uniform firing), but the std and mean is
+                # taken *afterwards*
+                if trialLengthMs.size > 1:
+                    binnedCountsPerTrial = binnedCountsPerTrial * trialLengthMs.max()/trialLengthMs[:,None,None]
+                _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh)
+                binnedSpikesHere = binnedSpikesHere[:,chansGood]
+
+                # Previous iteration of this code accounted for binSpikeData()
+                # returning a list... but *that* code has been updated to
+                # return object arrays if the trial lengths are different
+                binnedSpikesHere.labels['stimulusMainLabel'] = dataset.markerTargAngles
+
+                # This might fail if trial lengths are different sizes and
+                # alignment points are unequal... but we'll let it fail when it
+                # fails
+                if returnResiduals:
+                    labels = binnedSpikesHere.labels['stimulusMainLabel']
+                    binnedSpikesHere, labelBaseline = binnedSpikesHere.baselineSubtract(labels=labels)
+
+                    
+                # Save the output
+                saveBSSPath.parent.mkdir(parents=True, exist_ok = True)
+                with saveBSSPath.open(mode='wb') as saveBSSFh:
+                    pickle.dump(binnedSpikesHere, saveBSSFh)
+
+                binnedSpikeSetHereInfo = dict(
+                    bss_params_id = procParamId,
+                    bss_relative_path = str(saveBSSRelativePath),
+                    start_alignment_state = stateNameStateStart,
+                    end_alignment_state = stateNameStateStart, # in this function it's always from the start, either the end or the beginning of the start, but from the start
+                )
+
+                if len(bssi & binnedSpikeSetHereInfo) > 1:
+                    raise Exception("we've saved this processing more than once...")
+                elif len(bssi & binnedSpikeSetHereInfo) == 0:
+                    bssHash = hashlib.md5(str(binnedSpikesHere).encode('ascii')).hexdigest()
+
+
+                    addlBssInfo = dict(
+                        bss_hash = bssHash,
+                        start_time_alignment = np.array(startTimeArr),
+                        start_time = np.array(startTimeArr + startTimeOffset),
+                        end_time_alignment = np.array(endTimeArr),
+                        end_time = np.array(endTimeArr + endTimeOffset)
+                    )
+                    binnedSpikeSetHereInfo.update(addlBssInfo)
+                        
+                    dsiPks = self[datasetInfo].fetch1("KEY")
+                    binnedSpikeSetHereInfo.update(dsiPks)
+
+
+                    bssi.insert1(binnedSpikeSetHereInfo)
+
+                    bssAdded = bssi[{k : v for k, v in binnedSpikeSetHereInfo.items() if k in bssi.primary_key}]
+                    # add this binned spike set as a filtered spike set part as
+                    # well... (obviously with no filtering, hence the 'original'
+                    # reason
+                    _ = bssAdded.filterBSS(filterReason = 'original', filterDescription = 'unfiltered original', condLabel = 'stimulusMainLabel')
+
+                    bssiKey = bssAdded.fetch("KEY", as_dict=True)
+
+            if units is not None:
+                binnedSpikesHere.convertUnitsTo(units=units)
+            
+            binnedSpikes.append(binnedSpikesHere)
+            bssiKeys.append(bssiKey)
+
+        return binnedSpikes, bssiKeys
+
 @schema
 class BinnedSpikeSetProcessParams(dj.Manual):
     definition = """
