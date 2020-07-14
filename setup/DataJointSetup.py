@@ -464,7 +464,8 @@ class BinnedSpikeSetInfo(dj.Manual):
     end_time : blob # true end_time in ms of each trial -- end_time_alignment + end_offset
     """
 
-    def filterBSS(self, filterReason, filterDescription, binnedSpikeSet = None, trialFilter = None, channelFilter = None):
+    # for filtering spike sets...
+    def filterBSS(self, filterReason, filterDescription, condLabel, trialNumPerCondMin = None, binnedSpikeSet = None, trialFilter = None, channelFilter = None, returnKey = False):
         keys = self.fetch("KEY")
         if len(keys)>1:
             raise Exception("Not sure that you want to filter multiple spike sets with the same parameters...")
@@ -499,7 +500,17 @@ class BinnedSpikeSetInfo(dj.Manual):
                 bssFiltered = bssFiltered[:, channelFilter]
                 bssFilterParams.update(dict(ch_filter = channelFilter))
 
+            # we run this *after* the filtering has happened...
+            _, condCnts = np.unique(bssFiltered.labels[condLabel], axis=0, return_counts=True)
+            if trialNumPerCondMin is not None and np.min(condCnts) != trialNumPerCondMin:
+                # this would be a weird occurrence... for some reason a minimum
+                # is given but it's the incorrect minimum...
+                breakpoint()
+            trialNumPerCondMin = np.min(condCnts)
+
             bssFilterParams.update(dict(
+                    trial_num_per_cond_min = trialNumPerCondMin,
+                    condition_label = condLabel,
                     trial_num = bssFiltered.shape[0],
                     ch_num = bssFiltered.shape[1]
                 ))
@@ -508,49 +519,105 @@ class BinnedSpikeSetInfo(dj.Manual):
             defaultParams = loadDefaultParams()
             dataPath = Path(defaultParams['dataPath'])
 
-            bssPath = Path(key['bss_relative_path']).parent # because it includes the .dill file
             filteredSpikeSetDill = 'filteredSpikeSet.dill'
 
             # a nice way to distinguish the path for each filter based on extraction parameters...
             bSSFilteredProcParamsJson = json.dumps(str(bssFilterParams), sort_keys=True) # needed for consistency as dicts aren't ordered
             bSSFilteredProcParamsHash = hashlib.md5(bSSFilteredProcParamsJson.encode('ascii')).hexdigest()
 
-            pathRelativeToParent = Path('filteredSpikes_%s' % bSSFilteredProcParamsHash[:5]) / filteredSpikeSetDill
-            fullPath = dataPath / bssPath / pathRelativeToParent
+            fsp = FilterSpikeSetParams()
+            bsi = BinnedSpikeSetInfo()
+            parentPath = fsp[key]['bss_relative_path']
+            assert len(parentPath)<=1, 'Too many filter params for one bin spike set'
+            if len(parentPath) == 1:
+                parentPath = parentPath[0]
+                parFsp = fsp[bsi[('bss_relative_path="%s"' % parentPath)]]
+                parFspHash = parFsp['fss_param_hash'][0]
+                bssPathHash = ('%s_%s' % (parFspHash[:5], bSSFilteredProcParamsHash[:5]))
+                origFilter = False
+            else:
+                if filterReason != "original":
+                    breakpoint() # mostly because I'm not sure why we'd be here... if it wasn't the original one
+                parentPath = key['bss_relative_path']
+                origFilter = True
+                bssPathHash = bSSFilteredProcParamsHash[:5]
 
-            fsi = self.FilteredSpikeSetInfo()
-            existingSS = fsi[{k : v for k,v in bssFilterParams.items() if k in fsi.primary_key}] 
+            if filterReason != "original":
+                pathRelativeToParent = Path('filteredSpikes_%s' % bssPathHash) / filteredSpikeSetDill
+            else:
+                pathRelativeToParent = Path(key['bss_relative_path']).name # now it's just the parent's dill file
+
+            bssFilterParams.update(dict(
+                    fss_param_hash = bSSFilteredProcParamsHash,
+                ))
+
+            if not origFilter:
+                # note that this leaves it as null otherwise
+                bssFilterParams.update(dict(
+                        parent_bss_relative_path = parentPath,
+                    ))
+
+
+            pathRelativeToBase = Path(parentPath).parent / pathRelativeToParent
+            fullPath = dataPath / pathRelativeToBase
+            
+            # I could have checked this with the fss_param_hash if statement
+            # above, but I wanted to be more explicit here
+#            try:
+#            except AttributeError:
+#                fsi = self.__class__()
+
+#            bssFilterParamsCheck = bssFilterParams.copy()
+#            bssFilterParamsCheck.update(key)
+            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key}] 
             if len(existingSS) > 1:
                 raise Exception('Multiple filtered spike sessions have been saved with these parameters')
             elif len(existingSS) > 0:
+                print("LA")
+                prmPk = bsi[('bss_relative_path = "%s"' % str(pathRelativeToBase))].fetch("KEY",as_dict=True)[0]
                 if not fullPath.exists():
-                    print('Db record existed for FilteredSpikeSet but not file... saving file now')
+                    print('Db record existed for FilterSpikeSetParams but not file... saving file now')
                     fullPath.parent.mkdir(parents=True, exist_ok = True)
                     with fullPath.open(mode='wb') as filteredSpikeSetDillFh:
-                        pickle.dumps(bssFiltered, filteredSpikeSetDillFh)
+                        pickle.dump(bssFiltered, filteredSpikeSetDillFh)
 #                with fullPath.open(mode='rb') as filteredSpikeSetDillFh:
 #                    bssFiltered = pickle.load(filteredSpikeSetDillFh)
             else:
-                fullPath.parent.mkdir(parents=True, exist_ok = True)
-                with fullPath.open(mode='wb') as filteredSpikeSetDillFh:
-                    pickle.dump(bssFiltered, filteredSpikeSetDillFh)
+                # this check is really here in case we're dropping in the
+                # 'original' FSS, whose path is the parent, so there's not need
+                # to resave
+                if not fullPath.exists():
+                    fullPath.parent.mkdir(parents=True, exist_ok = True)
+                    with fullPath.open(mode='wb') as filteredSpikeSetDillFh:
+                        pickle.dump(bssFiltered, filteredSpikeSetDillFh)
 
                 bssFilteredHash = hashlib.md5(str(bssFiltered).encode('ascii')).hexdigest()
 
-                bssFilterInfoVals = dict(**bssFilterParams,
-                        fss_param_hash = bSSFilteredProcParamsHash,
-                        fss_rel_path_from_parent = str(pathRelativeToParent),
-                        fss_hash = bssFilteredHash
-                    )
 
-                fsi.insert1(dict(
-                        **key,
-                        **bssFilterInfoVals
+                if not origFilter:
+                    paramsNew = self.fetch(as_dict=True)[0]
+                    paramsNew['bss_relative_path'] = str(pathRelativeToBase)
+                    paramsNew['bss_hash'] = bssFilteredHash
+                    bsi.insert1(dict(
+                            **paramsNew
                     ))
-        return bssFiltered
+                    prmPk = {k : v for k,v in paramsNew.items() if k in self.primary_key}
+                    fsp.insert1(dict(
+                        **prmPk,
+                        **bssFilterParams
+                    ))
+                else:
+                    fsp.insert1(dict(
+                        **key,
+                        **bssFilterParams
+                    ))
 
-    # for filtering spike sets... note that only filterParams
-    def grabBinnedSpikes(self, returnPath = False):
+            if returnKey:
+                bssKey = dict(**prmPk)
+#                bssKey.update(dict(fss_rel_path_from_parent = bssFilterParams['fss_rel_path_from_parent']))
+                return bssFiltered, bssKey
+            return bssFiltered
+
         defaultParams = loadDefaultParams()
         dataPath = Path(defaultParams['dataPath'])
 
