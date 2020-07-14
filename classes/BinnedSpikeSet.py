@@ -162,16 +162,22 @@ class BinnedSpikeSet(np.ndarray):
     
     def __array_function__(self, func, types, args, kwargs):
         if func not in HANDLED_FUNCTIONS:
-            if type(args) == tuple:
-                newArgs = []
+            def unwrapArgs(args):
+                argOut = []
                 for ar in args:
                     if type(ar) is BinnedSpikeSet:
-                        newArgs.append(np.array(ar))
+                        argOut.append(np.array(ar))
+                    elif type(ar) is list:
+                        argOut.append(list(unwrapArgs(ar)))
+                    elif type(ar) is tuple:
+                        argOut.append(tuple(unwrapArgs(ar)))
                     else:
-                        newArgs.append(ar)
-                newArgs = tuple(newArgs)
-            else:
-                newArgs = args
+                        # we're not going to take care of any other type of iterators for now...
+                        argOut.append(ar)
+
+                return argOut
+
+            newArgs = unwrapArgs(args)
 
             return BinnedSpikeSet(func(*newArgs, **kwargs))
 #                labels=self.labels.copy() if self.labels is not None else {},
