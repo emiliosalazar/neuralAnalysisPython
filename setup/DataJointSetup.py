@@ -946,6 +946,88 @@ class GpfaAnalysisInfo(dj.Manual):
     condition_grp_fr_thresh : float # the firing rate threshold for each GPFA run (i.e. only trials for this/these condition(s))
     label_use = "stimulusMainLabel" : varchar(50) # label to use for conditions
     """
+    
+    def grabGpfaResults(self, order=True, returnInfo = False):
+        defaultParams = loadDefaultParams()
+        dataPath = Path(defaultParams['dataPath'])
+
+        gpfaResults = {}
+        gpfaOutPaths = []
+        # I should be able to get these from a db call, but returning them here
+        # makes me more comfortable that they'll be correctly paired with their
+        # gpfa results
+        bssPaths = []
+        datasetNames = []
+
+        gap = GpfaAnalysisParams()
+        dsi = DatasetInfo()
+        bsi = BinnedSpikeSetInfo()
+
+        # give some ordering here
+#        if self.fetch('fss_rel_path_from_parent').size: # not sure how to check if null...
+#            if order:
+#                gpfaPaths = (self * gap * dsi).fetch( 'gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums','dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
+#            else:
+#                gpfaPaths = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums', 'dimensionality', 'dataset_name', as_dict=True)
+#        else:
+        if order:
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums', 'dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
+        else:
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums', 'dimensionality', 'dataset_name', as_dict=True)
+
+        for info in gpfaInfo:
+            bssPath = Path(info['bss_relative_path'])
+            relPath = bssPath.parent
+            datasetName = info['dataset_name']
+#            if 'fss_rel_path_from_parent' in path:
+#                relPath /= Path(path['fss_rel_path_from_parent']).parent
+#                bssPath = bssPath.parent / path['fss_rel_path_from_parent']
+            
+            relPathToFile = relPath / info['gpfa_rel_path_from_bss']
+            fullPath = dataPath / relPathToFile
+            gpfaOutPaths.append(fullPath)
+            bssPaths.append(bssPath)
+            datasetNames.append(datasetName)
+
+
+            conditionNum = info['condition_nums']
+            relPathAndCond = relPath / str(conditionNum)
+            if relPathAndCond not in gpfaResults:
+                # set the first element to information about this run...
+                gpfaResults[relPathAndCond] = {'condition': conditionNum}
+            
+            dimensionality = info['dimensionality']
+            # note we're using numpy to load here
+            print('Loading %s' % fullPath)
+            try:
+                with np.load(fullPath, allow_pickle=True) as gpfaRes:
+                    gpfaResLoaded = dict(
+                        zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
+                    )
+            except FileNotFoundError:
+                unsavedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
+
+                condNums = unsavedGpfa['condition_nums'][0]
+                gpfaRunArgsMap = dict(
+                    labelUse = unsavedGpfa['label_use'][0],
+                    conditionNumbersGpfa = condNums,
+                    perCondGroupFiringRateThresh = unsavedGpfa['condition_grp_fr_thresh'][0]
+                )
+                
+                unsavedGpfa.computeGpfaResults(gap[unsavedGpfa],bsi[unsavedGpfa], **gpfaRunArgsMap)
+
+                with np.load(fullPath, allow_pickle=True) as gpfaRes:
+                    gpfaResLoaded = dict(
+                        zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
+                    )
+
+            gpfaResults[relPathAndCond].update({dimensionality : gpfaResLoaded})
+
+                
+
+        if returnInfo:
+            return gpfaResults, dict(gpfaOutPaths = gpfaOutPaths, bssPaths = bssPaths, datasetNames = datasetNames)
+        return gpfaResults
 
     def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, forceNewGpfaRun = False):
         defaultParams = loadDefaultParams()
