@@ -947,6 +947,91 @@ class GpfaAnalysisInfo(dj.Manual):
     label_use = "stimulusMainLabel" : varchar(50) # label to use for conditions
     """
 
+    def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, forceNewGpfaRun = False):
+        defaultParams = loadDefaultParams()
+        dataPath = Path(defaultParams['dataPath'])
+
+        bssKeys = bsiOrFsi.fetch("KEY")
+        # gap is GpfaAnalysisParams()
+        gapKey = gap.fetch("KEY")
+
+        assert len(gapKey) == 1, "Can only compute one gapKey at a time for now..."
+        gapKey = gapKey[0]
+
+
+        gpfaParamsHash = gap.hash()
+        gpfaParams = gap.fetch(as_dict=True)[0]
+        # the id isn't one of the params...
+        units = gpfaParams.pop('units')
+        gpfaParams.pop('gpfa_params_id', None)
+        gpfaParamsMap = dict(
+            dimensionality = 'xDimTest',
+            firing_rate_thresh = 'overallFiringRateThresh',
+            balance_conds = 'balanceConds',
+            sqrt_spikes = 'sqrtSpikes',
+            combine_conditions = 'combineConds',
+            num_folds_crossvalidate = 'crossvalidateNum',
+        )
+        # changing up the key names to fit into the gpfa function
+        gpfaParamsForCall = {gpfaParamsMap[k] : v for k,v in gpfaParams.items() if k in gpfaParamsMap}
+
+        cc = gpfaParamsForCall['combineConds']
+        gpfaParamsForCall['combineConds'] = False if cc == 'no' else True
+        # remember that gpfaParamsForCall['numConds'] just tells us how many
+        # conditions *per extraction*, not *which* conditions--so that's why
+        # there's a conditionNumbersGpfa input.
+        #
+        # Put another way, say combine_conditions='no'; in that case, num_conds
+        # (from gap) will *always* be 1, because you're not combining
+        # conditions, so each extraction is from only one condition! But
+        # numConds in bS.gpfa() asks us *which* conditions, which is what this
+        # is now changed to.  Note that numConds=None actually means *all*
+        # conditions, but it's unclear how many conditions each bS will have
+        # (which is actually why this is not stored in the GpfaAnalysisParams
+        # table
+        gpfaParamsForCall['condNums'] = conditionNumbersGpfa # if cc == 'no' else nc
+        gpfaParamsForCall['perConditionGroupFiringRateThresh'] = perCondGroupFiringRateThresh
+
+
+        for key in bssKeys:
+            relPath = Path(key['bss_relative_path']).parent 
+#            relPath /= Path(key['fss_rel_path_from_parent']).parent if 'fss_rel_path_from_parent' in key else ""
+            gpfaRelPathFromBss = Path('gpfa') / ('params_%s' % gpfaParamsHash[:5] )
+            fullPathToConditions = dataPath / relPath / gpfaRelPathFromBss
+            binnedSpikeSet = bsiOrFsi[key].grabBinnedSpikes()
+
+            assert len(binnedSpikeSet)==1, "Too many BSS with key"
+            bss = binnedSpikeSet[0]
+            bss = bss.convertUnitsTo(units)
+
+            retVals = bss.gpfa(fullPathToConditions, forceNewGpfaRun = forceNewGpfaRun, **gpfaParamsForCall)
+            condInfo = retVals[-1]
+            gpfaPrepComp = retVals[2]
+
+
+            for cI, gPC in zip(condInfo, gpfaPrepComp):
+                conditionNumsUsed = np.array([cI[0]]) # so it can be saved in DataJoint
+                conditionSavePaths = str(cI[1]) # so it can be saved in DataJoint
+
+                gpfaHash = hashlib.md5(str(gPC).encode('ascii')).hexdigest()
+                try:
+                    self.insert1(dict(
+                        **key,
+                        **gapKey,
+                        gpfa_rel_path_from_bss = str(Path(conditionSavePaths).relative_to(dataPath / relPath)), 
+                        gpfa_hash = gpfaHash, 
+                        condition_nums = conditionNumsUsed, 
+                        condition_grp_fr_thresh = perCondGroupFiringRateThresh,
+                        label_use = labelUse
+                    ))
+                except IntegrityError as e:
+                    if str(e).find("UNIQUE constraint failed") != -1 and forceNewGpfaRun:
+                        print("Be careful using this... GPFA was forced to run again without changing recorded parameters--could result in data inconsistency issues!")
+                    else:
+                        pass
+#                        raise e
+
+
 class AnalysisRun: #(dj.Manual): NOTE uncomment inheritence!
     definition = """
     # analysis file/run info
