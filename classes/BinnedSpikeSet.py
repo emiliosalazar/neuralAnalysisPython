@@ -1435,7 +1435,7 @@ class BinnedSpikeSet(np.ndarray):
             plotInfo['lblLLErr'] = lblLLErr
             plotInfo['description'] = description
             tmVals = [tmValsStartBest, tmValsEndBest]
-            visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, cvApproach, normalGpfaScoreAll, xDimTest, shCovThresh, crossValsUse, baselineSubtract)
+            visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, cvApproach, normalGpfaScoreAll, xDimTest, shCovThresh, crossValsUse )
 
             
         
