@@ -24,6 +24,7 @@ class Dataset():
         annots = LoadDataset(dataMatPath)
         print("data loaded")
         self.cosTuningCurveParams = {'thBestPerChan': np.empty(0), 'modPerChan': np.empty(0), 'bslnPerChan': np.empty(0), 'tuningCurves': np.empty(0)}
+        self.trialLabels = {}
         if preprocessor == 'Erinn':
         
             # This is a boolean indicating trials where spikes exist... we're getting rid of all other trials...
@@ -142,6 +143,11 @@ class Dataset():
             
             if 'cue' in annots['S']:
                 self.markerTargAngles = np.vstack([np.array([cue[0], rfOri[0]]).T for cue, rfOri in zip(annots['S']['cue'][0], annots['S']['rfOri'][0])])*np.pi # /*180 is to convert to dtype=float64 for matching to others
+                self.trialLabels['cueLocation'] = np.vstack([np.array([loc[0]]).T for loc in annots['S']['cue'][0]]) # sequence length
+                self.trialLabels['rfOrientation'] = np.vstack([np.array([loc[0]]).T for loc in annots['S']['rfOri'][0]]) # sequence length
+                self.trialLabels['sequenceLength'] = np.vstack([np.array([loc[0]]).T for loc in annots['S']['sequenceLength'][0]]) # sequence length
+                self.trialLabels['sequencePosition'] = np.vstack([np.array([pos[0]]).T for pos in annots['S']['sequencePosition'][0]]) # sequence position
+
             elif 'angle' in annots['S']:
                 self.markerTargAngles = np.vstack([np.array([cue[0], distance[0]]).T for cue, distance in zip(annots['S']['angle'][0],annots['S']['distance'][0])])/180*np.pi 
             self.trialStatuses = np.stack([stat[0,0] for stat in annots['S']['status'][0]])
@@ -181,6 +187,14 @@ class Dataset():
         filteredTrials.spikeDatChannels = filteredTrials.spikeDatChannels[mask, :]
         filteredTrials.spikeDatSort = filteredTrials.spikeDatSort[mask, :]
         filteredTrials.markerTargAngles = filteredTrials.markerTargAngles[mask, :]
+        if not hasattr(filteredTrials, 'trialLabels'):
+            filteredTrials.trialLabels = {}
+        if len(filteredTrials.trialLabels) > 0:
+            filtTrialLabels = copy(filteredTrials.trialLabels)
+            for label, values in filtTrialLabels.items():
+                filtTrialLabels[label] = values[mask,:]
+
+            filteredTrials.trialLabels = filtTrialLabels
         filteredTrials.stateNames = filteredTrials.stateNames
         filteredTrials.statesPresented = [filteredTrials.statesPresented[hr] for hr in range(0, len(filteredTrials.statesPresented)) if mask[hr]]
         filteredTrials.cosTuningCurveParams = {'thBestPerChan': np.empty(0), 'modPerChan': np.empty(0), 'bslnPerChan': np.empty(0), 'tuningCurves': np.empty(0)}
@@ -276,7 +290,8 @@ class Dataset():
                                             start = startMs,
                                             end = endMs,
                                             alignmentBins = alignmentBins,
-                                            units = 'Hz')
+                                            units = 'Hz',
+                                            labels = self.trialLabels)
         else:
             spikeDatBinned = spikeDatBinned/(binSizeMs/1000)
             spikeDatBinned = spikeDatBinned.view(BinnedSpikeSet)
@@ -285,6 +300,7 @@ class Dataset():
             spikeDatBinned.end = endMs
             spikeDatBinned.alignmentBins = alignmentBins
             spikeDatBinned.units = 'Hz'
+            spikeDatBinned.labels = self.trialLabels
         
         
             
