@@ -324,6 +324,7 @@ def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssExp, maxNumTr
 #%% Analyses on binned spike sets
 def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMainLabel'):
     
+    groupedSpikesAll = []
     groupedSpikesTrialAvg = []
     grpLabels = []
     for binnedSpikes in binnedSpikesListToGroup:
@@ -355,10 +356,13 @@ def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMa
         
         # groupedSpikesEnd = dataSt.groupSpikes(trialsPresented, uniqueTargAngle, binnedSpikes = binnedSpikesHereEnd)
         # groupedSpikesShortStart = dataSt.groupSpikes(trialsPresented, uniqueTargAngle, binnedSpikes = binnedSpikesHereShortStart)
-        alignmentBinsAll = binnedSpikes.alignmentBins[0]
-        targAvgList, targStdList = zip(*[(groupedSpikes[targ].trialAverage(), groupedSpikes[targ].trialStd()) for targ in range(0, len(groupedSpikes))])
-        targTmTrcAvgArr = BinnedSpikeSet(np.stack(targAvgList), start=binnedSpikes.start, end = binnedSpikes.end, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel}, alignmentBins = alignmentBinsAll)
-        targTmTrcStdArr = BinnedSpikeSet(np.stack(targStdList), start=binnedSpikes.start, end = binnedSpikes.end, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel}, alignmentBins = alignmentBinsAll)
+        alignmentBinsAll = binnedSpikes.alignmentBins[0] if binnedSpikes.alignmentBins is not None else None
+        stAll = binnedSpikes.start
+        endAll = binnedSpikes.end 
+        targAvgList, targSemList = zip(*[(groupedSpikes[targ].trialAverage(), groupedSpikes[targ].trialSem()) for targ in range(0, len(groupedSpikes))])
+#        breakpoint()
+        targTmTrcAvgArr = BinnedSpikeSet(np.stack(targAvgList), start=stAll, end = endAll, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel}, alignmentBins = alignmentBinsAll)
+        targTmTrcSemArr = BinnedSpikeSet(np.stack(targSemList), start=stAll, end = endAll, binSize = binnedSpikes.binSize, labels = {labelUse: uniqueLabel}, alignmentBins = alignmentBinsAll)
         # targAvgListEnd, targStdListEnd = zip(*[(groupedSpikesEnd[targ].trialAverage(), groupedSpikesEnd[targ].trialStd()) for targ in range(0, len(groupedSpikesEnd))])
         # targTmTrcAvgEndArr = np.stack(targAvgListEnd).view(BinnedSpikeSet)
         # targTmTrcStdEndArr = np.stack(targStdListEnd).view(BinnedSpikeSet)
@@ -368,11 +372,12 @@ def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMa
         # targTmTrcShrtStartStdArr = np.stack(targStdShrtStartList).view(BinnedSpikeSet)
         
         # groupedSpikesTrialShortStartAvg.append([targTmTrcShrtStartAvgArr, targTmTrcShrtStartStdArr])
-        groupedSpikesTrialAvg.append([targTmTrcAvgArr, targTmTrcStdArr])
+        groupedSpikesAll.append(groupedSpikes)
+        groupedSpikesTrialAvg.append([targTmTrcAvgArr, targTmTrcSemArr])
         # groupedSpikesEndTrialAvg.append([targTmTrcAvgEndArr, targTmTrcStdEndArr])
         grpLabels.append(uniqueTargAngle)
     
-    return groupedSpikesTrialAvg, grpLabels
+    return groupedSpikesTrialAvg, groupedSpikesAll, grpLabels
     
 
 def dimensionalityComputation(listBSS, descriptions, labelUse='stimulusMainLabel', maxDims = 30, baselineSubtract = True, useAllGroupings = False, minWiGroupFR = 0.5, numberNeuronsMatch = None, plot=True):
