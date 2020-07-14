@@ -923,7 +923,14 @@ class GpfaAnalysisParams(dj.Lookup):
     on_residuals : enum(0, 1) # flag for whether input was baseline subtraced
     units : varchar(10) # I'm guessing this'll be Hz or count... but I guess it could be something else?
     """
+    def hash(self):
+        assert len(self)==1, "Can't hash more than one entry at once"
 
+        params = self.fetch(as_dict=True)[0]
+        params.pop('gpfa_params_id')
+        paramsJson = json.dumps(params, sort_keys=True)
+
+        return hashlib.md5(paramsJson.encode('ascii')).hexdigest()
 
 
 @schema
