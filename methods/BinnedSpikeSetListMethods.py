@@ -230,47 +230,95 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
 # is referred to as 'neuron' in the method name could well be a thresholded
 # channel with multineuron activity... but this nomencalture reminds us what
 # the purpose is...
-def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(binnedSpikesList, numSubsamples = 1, labelName='stimulusMainLabel'):
-    minNumNeur = np.min([bnSp.shape[1] for bnSp in binnedSpikesList])
-    numTrls = [np.unique(bnSp.labels[labelName],axis=0,return_counts=True)[1] for bnSp in binnedSpikesList]
-    minNumTrlPerCond = np.min(np.hstack(numTrls))
+def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssExp, maxNumTrlPerCond, maxNumNeuron, labelName, numSubsamples = 1,  extraOpts = None, order=True):
+    # I do, unfortunately, have to load them twice here--once up here to
+    # compute the neuron/trial nums, and again below to make sure they're well
+    # aligned
 
+    dsi = DatasetInfo()
 
-    initRandSt = np.random.get_state()
+    if order:
+        bssKeys = bssExp.fetch('KEY', order_by='dataset_id')
+    else:
+        bssKeys = bssExp.fetch('KEY')
+
+    subsmpKeys = []
+#    initRandSt = np.random.get_state()
     bnSpSubsamples = []
     trlNeurSubsamples = []
-    for bnSpOrig in binnedSpikesList:
+    datasetNames = []
+    brainAreas = []
+    tasks = []
+    subsampleExpressions = []
+    fsp = FilterSpikeSetParams()
+    bsi = BinnedSpikeSetInfo()
+    for bssKeyForOne in bssKeys:
         # reset the seed for every binned spike so we know that whenever a set
         # of data comes through here it gets split up identically... well...
         # assuming the same minima up there...
-        np.random.seed(0)
-        trlInds = range(bnSpOrig.shape[0])
-        neuronInds = range(bnSpOrig.shape[1])
-        bnSpHereSubsample = []
-        trlNeurHereSubsamples = []
-        for newSubset in range(numSubsamples):
-            # note that the trials are randomly chosen, but returned in sorted
-            # order (balancedTriaInds does this) from first to last... I think
-            # this'll make things easier to compare in downstream analyses that
-            # care about changes over time... neurons being sorted on the other
-            # hand... still for ease of comparison, maybe not for any specific
-            # analysis I can think of
-            trlsUse = bnSpOrig.balancedTrialInds(bnSpOrig.labels[labelName], minCnt = minNumTrlPerCond)
-            neuronsUse = np.sort(np.random.permutation(neuronInds)[:minNumNeur])
-            bnSpHereSubsample.append(bnSpOrig[trlsUse][:,neuronsUse])
-            trlNeurHereSubsamples.append((trlsUse, neuronsUse))
+        bnSpOrigInfo = bssExp[bssKeyForOne]
+        if extraOpts:
+            extraFilt = []
+            extraDescription = []
+            anyMatch = False
+            for extraOptExp, filterParams in extraOpts.items():
+                match = bssExp[extraOptExp][bssKeyForOne]
+                filterLambda = filterParams['filter']
+                filterDescription = filterParams['description']
+                if len(match):
+                    anyMatch = True
+                    extraFilt.append(filterLambda(match))
+                    extraDescription.append(filterDescription)
+
+            if anyMatch:
+                totalFilt = np.concatenate(extraFilt,axis=1)
+                totalFilt = np.all(totalFilt,axis=1)
+                _, filtBssKeys = bnSpOrigInfo.filterBSS(filterReason = "other", filterDescription = "; ".join(extraDescription), condLabel=labelName, trialFilter = totalFilt, returnKey = True)
+                bnSpOrigInfo = bsi[filtBssKeys]
+
+
+        bnSpHereSubsample, trlNeurHereSubsamples, datasetName, subsampleKeyHere = bnSpOrigInfo.computeRandomSubsets("match for comparisons", numTrialsPerCond = maxNumTrlPerCond, numChannels = maxNumNeuron, labelName = labelName, numSubsets = numSubsamples, returnInfo = True)
+
+        brainArea = dsi[bnSpOrigInfo].fetch('brain_area')[0] # returns array, grab the value (string)
+        task = dsi[bnSpOrigInfo].fetch('task')[0]
+#        bnSpOrig = bnSpOrigInfo.grabBinnedSpikes()
+#        assert len(bnSpOrig) == 1, "Should only have one BSS to filter each time!"
+#        bnSpOrig = bnSpOrig[0]
+#        np.random.seed(0)
+#        trlInds = range(bnSpOrig.shape[0])
+#        neuronInds = range(bnSpOrig.shape[1])
+#        bnSpHereSubsample = []
+#        trlNeurHereSubsamples = []
+#        for newSubset in range(numSubsamples):
+#            # note that the trials are randomly chosen, but returned in sorted
+#            # order (balancedTriaInds does this) from first to last... I think
+#            # this'll make things easier to compare in downstream analyses that
+#            # care about changes over time... neurons being sorted on the other
+#            # hand... still for ease of comparison, maybe not for any specific
+#            # analysis I can think of
+#            trlsUse = bnSpOrig.balancedTrialInds(bnSpOrig.labels[labelName], minCnt = maxNumTrlPerCond)
+#            neuronsUse = np.sort(np.random.permutation(neuronInds)[:maxNumNeur])
+#
+#            bnSpHereSubsample.append(bnSpOrigInfo.filterBSS("shuffle", "match for area comparisons", binnedSpikeSet=bnSpOrig, trialFilter = nonChoiceTrials, channelFilter = channelsUse, returnExisting=True))
+#            trlNeurHereSubsamples.append((trlsUse, neuronsUse))
+
 
         bnSpSubsamples.append(bnSpHereSubsample)
         trlNeurSubsamples.append(trlNeurHereSubsamples)
+        subsampleExpressions.append(bsi[subsampleKeyHere])
+        subsmpKeys.append(subsampleKeyHere)
+        datasetNames.append(datasetName)
+        brainAreas.append(brainArea)
+        tasks.append(task)
 
 
 
 
 
 
-    np.random.set_state(initRandSt)
+#    np.random.set_state(initRandSt)
 
-    return bnSpSubsamples, trlNeurSubsamples, minNumTrlPerCond, minNumNeur
+    return bnSpSubsamples, subsampleExpressions, datasetNames, brainAreas, tasks
     
 
 #%% Analyses on binned spike sets
