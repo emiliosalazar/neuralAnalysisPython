@@ -698,7 +698,6 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
         title = 'firing rate'
         xlabel = 'Firing Rate (Hz)'
         
-    ax.legend(loc="upper right")
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel('Probability')
@@ -735,7 +734,7 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
                 elif units == 'Hz':
                     scMn = bS.avgFiringRateByChannel()
                     scStd = bS.stdFiringRateByChannel()
-                ax.scatter(scMn, scStd**2, color = 'C%d' % colInd)
+                ax.scatter(scMn, scStd**2, label = desc, color = 'C%d' % colInd)
         else:
             units = bnSp.units # replace every time, but should be the same for all...
             if units == 'count':
@@ -744,12 +743,14 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
             elif units == 'Hz':
                 scMn = bnSp.avgFiringRateByChannel()
                 scStd = bnSp.stdFiringRateByChannel()
-            ax.scatter(scMn, scStd**2, color = 'C%d' % colInd)
+            ax.scatter(scMn, scStd**2, label=desc, color = 'C%d' % colInd)
        
     maxX = np.max(ax.get_xlim())
     maxY = np.max(ax.get_ylim())
     maxDiagLine = np.min([maxX, maxY])
     ax.plot([0,maxDiagLine],[0,maxDiagLine], linestyle='--')
+    # 4 is kind of mini... but they take up lots of space...
+    ax.legend(loc="upper left", prop={'size':4})
 
     if units == 'count':
         xlabel = 'Spike Count'
