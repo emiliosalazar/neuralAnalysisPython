@@ -1380,8 +1380,11 @@ def implements(numpy_function):
 @implements(np.concatenate)
 def concatenate(arrays, axis=0, out=None):
     binSizes = np.stack([arr.binSize for arr in arrays])
+    units = np.stack([arr.units for arr in arrays])
     if not np.all(binSizes == binSizes[0]):
         raise(Exception("Can't (shouldn't?) concatenate BinnedSpikeSets with different bin sizes!"))
+    if not np.all(units == units[0]):
+        raise(Exception("Can't (shouldn't?) concatenate BinnedSpikeSets with different units!"))
     from itertools import chain
     if type(arrays) is list:
         arrayNd = [arr.view(np.ndarray) for arr in arrays]
@@ -1394,7 +1397,7 @@ def concatenate(arrays, axis=0, out=None):
     else:
         raise(Exception("Concatenating anything but lists of BinnedSpikeSet not implemented yet!"))
         
-    concatTrad = np.concatenate(arrayNd, axis = axis)
+    concatTrad = np.concatenate(arrayNd, axis = axis, out = out)
     if axis == 0:
         concatStartInit = [arr.start for arr in arrays]
         concatStart = list(chain(*concatStartInit))
@@ -1409,12 +1412,254 @@ def concatenate(arrays, axis=0, out=None):
             
         concatAlBinsInit = np.stack([arr.alignmentBins for arr in arrays])
         concatAlBins = list(chain(*concatAlBinsInit))
-        return BinnedSpikeSet(concatTrad, start=concatStart, end=concatEnd, binSize=binSizes[0], labels=newLabels, alignmentBins=concatAlBins)
+        return BinnedSpikeSet(concatTrad, start=concatStart, end=concatEnd, binSize=binSizes[0], labels=newLabels, alignmentBins=concatAlBins, units = self.units)
     elif axis < 3:
-        return BinnedSpikeSet(concatTrad, start=None, end=None, binSize=binSizes[0], labels=None, alignmentBins=None)
+        # TODO for axis = 1 (each channel is its own trial) we can just expand start/end/alignment bins to reflect change
+        # TODO for axis = 2 (one trial that's really long) we could just offset start/end/alignmentBins so there's many in one trial that are appropriately offshifted
+        return BinnedSpikeSet(concatTrad, start=None, end=None, binSize=binSizes[0], labels={}, alignmentBins=None, units = units[0])
     else:
         raise(Exception("Not really sure what concatenating in more than 3 dims means... let's talk later"))
+
+# implementation of stack for BinnedSpikeSet objects
+@implements(np.stack)
+def stack(arrays, axis=0, out=None):
+    binSizes = np.stack([arr.binSize for arr in arrays])
+    units = np.stack([arr.units for arr in arrays])
+    if not np.all(binSizes == binSizes[0]):
+        raise(Exception("Can't (shouldn't?) concatenate BinnedSpikeSets with different bin sizes!"))
+    if not np.all(units == units[0]):
+        raise(Exception("Can't (shouldn't?) concatenate BinnedSpikeSets with different units!"))
+    from itertools import chain
+    if type(arrays) in [list, tuple]:
+        # Convert tuples into lists again... np.stack on ndarrays handles them the same, methinks...
+        arrayNd = [arr.view(np.ndarray) for arr in arrays]
+    elif  type(arrays) is BinnedSpikeSet and arrays.dtype=='object':
+        # we're converting from a BinnedSpikeSet trl x chan object whose elements
+        # are spike trains, into a # trials length list of single trials 1 x trl x chan
+        arrayNd = [np.stack(arr.tolist())[None,:,:] for arr in arrays]
+    elif type(arrays) is BinnedSpikeSet: # and it's not an object
+        arrayNd = arrays.view(np.ndarray)
+    else:
+        raise(Exception("Stacking anything but lists of BinnedSpikeSet not implemented yet!"))
+        
+    stackTrad = np.stack(arrayNd, axis = axis, out=out)
+    if axis == 0:
+        stackStart = np.stack([arr.start for arr in arrays])
+        if np.all(stackStart==None):
+            stackStart = None
+
+        stackEnd = np.stack([arr.end for arr in arrays])
+        if np.all(stackEnd==None):
+            stackEnd = None
+        
+        unLabelKeys = np.unique([arr.labels.keys() for arr in arrays])
+        newLabels = {}
+        for key in unLabelKeys:
+            # might need to return to the below if keys start having to be lists...
+            keyVals = np.stack([arr.labels[list(key)[0]] for arr in arrays])
+            newLabels[list(key)[0]] = keyVals # list(chain(*keyVals))
+            
+        stackAlBins = np.stack([arr.alignmentBins for arr in arrays])
+        if np.all(stackAlBins == None):
+            stackAlBins = None
+
+        return BinnedSpikeSet(stackTrad, start=stackStart, end=stackEnd, binSize=binSizes[0], labels=newLabels, alignmentBins=stackAlBins, units = units[0])
+    elif axis < 3:
+        # TODO for axis = 1 (each channel is its own trial) we can just expand start/end/alignment bins to reflect change
+        # TODO for axis = 2 (one trial that's really long) we could just offset start/end/alignmentBins so there's many in one trial that are appropriately offshifted
+        return BinnedSpikeSet(stackTrad, start=None, end=None, binSize=binSizes[0], labels=None, alignmentBins=None, units = units[0])
+    else:
+        raise(Exception("Not really sure what concatenating in more than 3 dims means... let's talk later"))
+
+# implementation of squeeze for BinnedSpikeSet objects
+@implements(np.squeeze)
+def squeeze(array, axis=None):
+    binSize = array.binSize
+    units = array.units
+
+    from itertools import chain
+    if  type(array) is BinnedSpikeSet and array.dtype=='object':
+        if axis < 3:
+            raise Exception("Can't really squeeze object arrays for the moment...")
+        # NOTE I think numpy can deal with object averaging... we'll have to see...
+        arrayNd = array.view(np.ndarray)
+    elif type(array) is BinnedSpikeSet: # and it's not an object
+        arrayNd = array.view(np.ndarray)
+    else:
+        raise(Exception("Squeezing anything but lists of BinnedSpikeSet not implemented yet!"))
+        
+    squeezeTrad = np.squeeze(arrayNd, axis = axis)
     
+    # note that we're just letting all the metadata be carried forward here,
+    # even though axes may have been wiped out... dual reason is that I don't
+    # want to take the effort to figure out which axis was wiped out and I also
+    # am pretty sure the indexing to get to a singleton dimension will
+    # appropriately take care of most of this metadata anyway
+    return BinnedSpikeSet(squeezeTrad, start=array.start, end=array.end, binSize=binSize, labels=array.labels, alignmentBins=array.alignmentBins, units = units)
+
+# implementation of average for BinnedSpikeSet objects
+@implements(np.average)
+def average(array, axis=None, weights=None, returned=False):
+    binSize = array.binSize
+    units = array.units
+
+    from itertools import chain
+    if  type(array) is BinnedSpikeSet and array.dtype=='object':
+        if axis < 3:
+            raise Exception("Can't really average object arrays for the moment...")
+        # NOTE I think numpy can deal with object averaging... we'll have to see...
+        arrayNd = array.view(np.ndarray)
+    elif type(array) is BinnedSpikeSet: # and it's not an object
+        arrayNd = array.view(np.ndarray)
+    else:
+        raise(Exception("Averaging anything but lists of BinnedSpikeSet not implemented yet!"))
+        
+    avgTrad, sumOfWeights = np.average(arrayNd, axis = axis, weights=weights, returned = True)
+    if axis == 0:
+        # Keep start and end vals if they happen to be the same for the entire array... (unlikely, but eh)
+        startVals = array.start
+        if startVals is not None is not None and len(np.unique(startVals, axis=0)) == 1:
+            startVal = startVals[0]
+        else:
+            startVal = None
+
+        endVals = array.end
+        if endVals is not None is not None and len(np.unique(endVals, axis=0)) == 1:
+            endVal = endVals[0]
+        else:
+            endVal = None
+        
+        unLabelKeys = np.unique(array.labels.keys())[0]
+        newLabels = {}
+        for key in unLabelKeys:
+            # might need to return to the below if keys start having to be lists...
+            keyVals = array.labels[key]
+            if len(np.unique(keyVals, axis=0)) == 1:
+                newLabels[key] = keyVals[0] # list(chain(*keyVals))
+            
+        # Keep alignment bin if they happen to all be the same (unlikely, but meh)
+        alBins = array.alignmentBins
+        if alBins is not None and len(np.unique(alBins, axis=0)) == 1:
+            alBin = alBins[0]
+        else:
+            alBin = None
+
+        binSpikeAvgOut = BinnedSpikeSet(avgTrad, start=startVal, end=endVal, binSize=binSize, labels=newLabels, alignmentBins=alBin, units = units)
+    elif axis == 1:
+        # as long as we're averaging across channels, we can keep everything
+        binSpikeAvgOut = BinnedSpikeSet(avgTrad, start=array.start, end=array.end, binSize=binSize, labels=array.labels, alignmentBins=array.alignmentBins, units = units)
+    elif axis == 2:
+        # when averaging across time, we get rid of most time related
+        # metadata... for bin size, though, we treat this return value as a bin
+        # across the entire duration--up to the user to understand that it's an
+        # average not a count
+        binSize = binSize*array.shape[2]
+        binSpikeAvgOut = BinnedSpikeSet(avgTrad, start=None, end=None, binSize=None, labels=array.labels, alignmentBins=None, units = units)
+    elif axis is None:
+        # when averaging the flattened array (which is what None represents),
+        # the labels might still make sense, but all time related things are
+        # gone... except for the bin size, which we return as the total length
+        # of time averaged
+        unLabelKeys = np.unique(array.labels.keys())[0]
+        newLabels = {}
+        for key in unLabelKeys:
+            # might need to return to the below if keys start having to be lists...
+            keyVals = array.labels[key]
+            if len(np.unique(keyVals, axis=0)) == 1:
+                newLabels[key] = keyVals[0] # list(chain(*keyVals))
+
+        binSize = binSize*array.shape[2]
+
+        binSpikeAvgOut = BinnedSpikeSet(avgTrad, start=None, end=None, binSize=binSize, labels=newLabels, alignmentBins=None, units = units)
+    else:
+        raise(Exception("Not really sure what averaging in more than 3 dims means... let's talk later"))
+
+    if returned:
+        return binSpikeAvgOut, sumOfWeights
+    return binSpikeAvgOut
+
+# implementation of std for BinnedSpikeSet objects
+@implements(np.std)
+def std(array, axis=None, dtype=None, out=None, ddof = 0, keepdims = np._NoValue):
+    binSize = array.binSize
+    units = array.units
+
+    from itertools import chain
+    if  type(array) is BinnedSpikeSet and array.dtype=='object':
+        if axis < 3:
+            raise Exception("Can't really std object arrays for the moment...")
+        # NOTE I think numpy can deal with object averaging... we'll have to see...
+        arrayNd = array.view(np.ndarray)
+    elif type(array) is BinnedSpikeSet: # and it's not an object
+        arrayNd = array.view(np.ndarray)
+    else:
+        raise(Exception("Stding anything but lists of BinnedSpikeSet not implemented yet!"))
+        
+    stdTrad = np.std(arrayNd, axis = axis, dtype=dtype, out=out, ddof = ddof, keepdims = keepdims)
+    if axis == 0:
+        # Keep start and end vals if they happen to be the same for the entire array... (unlikely, but eh)
+        startVals = array.start
+        if startVals is not None and len(np.unique(startVals, axis=0)) == 1:
+            startVal = startVals[0]
+        else:
+            startVal = None
+
+        endVals = array.end
+        if endVals is not None and len(np.unique(endVals, axis=0)) == 1:
+            endVal = endVals[0]
+        else:
+            endVal = None
+        
+        unLabelKeys = np.unique(array.labels.keys())[0]
+        newLabels = {}
+        for key in unLabelKeys:
+            # might need to return to the below if keys start having to be lists...
+            keyVals = array.labels[key]
+            if len(np.unique(keyVals, axis=0)) == 1:
+                newLabels[key] = keyVals[0] # list(chain(*keyVals))
+            
+        # Keep alignment bin if they happen to all be the same (unlikely, but meh)
+        alBins = array.alignmentBins
+        if alBins is not None and len(np.unique(alBins, axis=0)) == 1:
+            alBin = alBins[0]
+        else:
+            alBin = None
+
+        binSpikeStdOut = BinnedSpikeSet(stdTrad, start=startVal, end=endVal, binSize=binSize, labels=newLabels, alignmentBins=alBin, units = units)
+    elif axis == 1:
+        # as long as we're averaging across channels, we can keep everything
+        binSpikeStdOut = BinnedSpikeSet(stdTrad, start=array.start, end=array.end, binSize=binSize, labels=array.labels, alignmentBins=array.alignmentBins, units = units)
+    elif axis == 2:
+        # when averaging across time, we get rid of most time related
+        # metadata... for bin size, though, we treat this return value as a bin
+        # across the entire duration--up to the user to understand that it's an
+        # average not a count
+        binSize = binSize*array.shape[2]
+        binSpikeStdOut = BinnedSpikeSet(stdTrad, start=None, end=None, binSize=None, labels=array.labels, alignmentBins=None, units = units)
+    elif axis is None:
+        # when averaging the flattened array (which is what None represents),
+        # the labels might still make sense, but all time related things are
+        # gone... except for the bin size, which we return as the total length
+        # of time averaged
+        unLabelKeys = np.unique(array.labels.keys())[0]
+        newLabels = {}
+        for key in unLabelKeys:
+            # might need to return to the below if keys start having to be lists...
+            keyVals = array.labels[key]
+            if len(np.unique(keyVals, axis=0)) == 1:
+                newLabels[key] = keyVals[0] # list(chain(*keyVals))
+
+        if array.ndim == 3:
+            binSize = binSize*array.shape[2]
+        else:
+            binSize = binSize
+
+        binSpikeStdOut = BinnedSpikeSet(stdTrad, start=None, end=None, binSize=binSize, labels=newLabels, alignmentBins=None, units = units)
+    else:
+        raise(Exception("Not really sure what stding in more than 3 dims means... let's talk later"))
+
+    return binSpikeStdOut
+
 @implements(np.copyto)
 def copyto(arr, fill_val, **kwargs):
     return np.copyto(np.array(arr), fill_val, **kwargs)
