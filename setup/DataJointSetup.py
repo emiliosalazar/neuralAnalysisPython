@@ -355,6 +355,74 @@ class DatasetInfo(dj.Manual):
 
         return binnedSpikes, bssiKeys
 
+    @staticmethod
+    def rmFilesByKey(key, quickDelete=False):
+        defaultParams = loadDefaultParams()
+        dataPath = Path(defaultParams['dataPath'])
+
+        relPath = Path(key['dataset_relative_path']).parent 
+        fullPath = dataPath / relPath
+
+        allFolderPaths = [str(pth) for pth in fullPath.glob('**/*')]
+        if len(allFolderPaths) == 0:
+            print('No dataset files to delete. Removing entry from db.')
+            return True
+        info = "About to delete\n\n" + "\n".join(allFolderPaths) + "\n\nand their contents."
+        prompt = "Please confirm:"
+        if True:#not quickDelete:
+            response = userChoice(prompt, info, choices=("yes", "no"), default="no")
+        if quickDelete or response=="yes":
+
+            from shutil import rmtree
+            rmtree(fullPath)
+
+        return quickDelete or response == 'yes'
+        
+    @classmethod
+    def rmFilesByKeyList(cls, keyList, keysDeletedList, quickDelete=False):
+        for key in keyList:
+            cls.rmFilesByKey(key, quickDelete=quickDelete)
+            # this is meant to track the deleted keys for error handling--since
+            # it's a reference, that calling function can see it, and
+            # appropriately delete database entries whose keys have already
+            # been used to delete files...
+            keysDeletedList.append(key)
+
+    def delete(self, quickDelete = False):
+        print('zoqmh')
+        dsiKeys = self.fetch('KEY') # always a dict
+
+
+        for key in dsiKeys:
+            if len(self[key]) == 0:
+                # this condition might be reached if a parent BSS was deleted
+                # before the filtered child...
+                breakpoint()
+                continue
+
+            deleteDbEntry = self.rmFilesByKey(key, quickDelete=quickDelete)
+
+            if deleteDbEntry:
+                with dj.config(safemode = not quickDelete) as cfg: 
+                    # this syntax creates a super instance of *just* the subset of
+                    # self--so that we don't delete all of self in one go
+                    # accidentally!
+                    super(DatasetInfo, self[key]).delete()
+
+    def delete_quick(self, get_count = False):
+        print('qlnxo')
+        dsiKeys = self.fetch('KEY') # always a dict
+        try:
+            keysDelList = []
+            self.rmFilesByKeyList(dsiKeys, keysDelList, quickDelete=True)
+        except Exception as e:
+            print(e)
+            print('Failed to delete one or more files for above reason... deleting database entries of files deleted')
+            return super(DatasetInfo, self[keysDelList]).delete_quick(get_count = get_count)
+        else:
+            return super(DatasetInfo, self[dsiKeys]).delete_quick(get_count = get_count)
+
+
 @schema
 class BinnedSpikeSetProcessParams(dj.Manual):
     definition = """
