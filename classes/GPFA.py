@@ -60,20 +60,20 @@ class GPFA:
         
         return gpfaSeqDict
     
-    # Lookie, past me thought this wouldn't be used much! Now it's the only
-    # thing being used >.> 
+    # train and test inds are computed as randomly dispersed to avoid
+    # session-long signals from messing with the overall training (i.e. a
+    # session-length increase in baseline would show up if the trials used to
+    # train weren't randomized across teh session)
     #
-    # This probably won't be used much, but it's here for generating random 
-    # crossvalidation train/test sequences. Since it's unclear whether sequential
-    # ones would overlap, however, it makes more sense to use the function that
-    # generates them in order
-    # NOTE should be updated to return numFolds sets of sequences!
-    def computeTrainTestIndRandom(self, numFolds = 4):
+    # the initSeed input is there in case one of the cross validations fails
+    # and a new set of inds needs to be found--this has only happened once in
+    # all my experience, so I expect it to be rarely used
+    def computeTrainTestIndRandom(self, numFolds = 4, initSeed = 0):
         seqAll = self.gpfaSeqDict
         numTrls = len(seqAll)
         
         initSt = np.random.get_state()
-        np.random.seed(seed=0)
+        np.random.seed(seed=initSeed)
         testInds = []
         trainInds = []
         for fld in range(numFolds):
@@ -155,10 +155,45 @@ class GPFA:
             # print('blah')
             # sleep(20)
             # print('bleh')
-            resultsByCrossVal = [rs.get() for rs in res]    
+            resultsByCrossVal = [[]] * len(res) # empty set of lists
+            badCrossVals = []
+            for cvNum, rs in enumerate(res):
+                try:
+                    resultsByCrossVal[cvNum] = rs.get()
+                except MatlabExecutionError as e:
+                    # something failed with one of the crossvalidations... so act as if it didn't happen!
+                    badCrossVals.append(cvNum)
+                    continue
+
+            if len(badCrossVals) != 0:
+                # set initSeed to 1 just so it's different from 0...
+                trainInds, testInds = self.computeTrainTestIndRandom(numFolds = crossvalidateNum, initSeed = 1)
+                for bCVNum in badCrossVals:
+                    success = False
+                    while trainInds:
+                        self.trainInds[bCVNum] = trainInds.pop()
+                        self.testInds[bCVNum] = testInds.pop()
+                        seqsTrain, seqsTest = self.trainAndTestSeq()
+
+                        # now we're doing it as a pool because if we do it on
+                        # the main process Matlab won't run again until we
+                        # restart Python >.>
+                        resNew = poolHere.apply_async(parallelGpfa, (fname, bCVNum, xDim, seqsTrain[bCVNum], seqsTest[bCVNum], forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr))
+                        try:
+                            resultsByCrossVal[bCVNum] = resNew.get()
+                        except MatlabExecutionError as e:
+                            pass
+                        else:
+                            success = True
+                            break
+                    if not success:
+                        print("Something went wrong with crossval #%d... this GPFA will now have one less crossvalidation!" % bCVNum)
+
+
             
-            poolHere.close()
-            poolHere.join()
+#            poolHere.close()
+#            poolHere.join()
+#            breakpoint()
             
             resultsByVar = list(zip(*resultsByCrossVal))
             allEstParams = resultsByVar[0]
