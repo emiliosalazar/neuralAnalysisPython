@@ -946,8 +946,10 @@ class BinnedSpikeSet(np.ndarray):
     def residualCorrelations(self, labels, separateNoiseCorrForLabels=False, plot=False, figTitle = "", normalize=False):
         residualSpikes, overallBaseline = self.baselineSubtract(labels=labels)
         unq, unqInv = np.unique(labels, return_inverse=True, axis=0)
-        residualSpikesGoodChans, chansGood = residualSpikes.channelsNotRespondingSparsely(zeroRate = np.array(overallBaseline)[unqInv])
-        residualSpikesGoodChans, chansGood = residualSpikesGoodChans.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
+        residualSpikesGoodChans = residualSpikes
+        chansGood = np.arange(residualSpikesGoodChans.shape[1])
+#        residualSpikesGoodChans, chansGood = residualSpikes.channelsNotRespondingSparsely(zeroRate = np.array(overallBaseline)[unqInv])
+#        residualSpikesGoodChans, chansGood = residualSpikesGoodChans.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
         
         
         chanFirst = residualSpikesGoodChans.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
@@ -1013,8 +1015,8 @@ class BinnedSpikeSet(np.ndarray):
                     
                     upTriInd = np.triu_indices(corrLblSpks.shape[0], 1)
                     imgs.append(axsCorr.flat[lblNum].imshow(corrLblSpks))
-                    minCorr = np.minimum(np.min(corrLblSpks.flat), minCorr)
-                    maxCorr = np.maximum(np.max(corrLblSpks.flat), maxCorr)
+                    minCorr = np.minimum(np.nanmin(corrLblSpks.flat), minCorr)
+                    maxCorr = np.maximum(np.nanmax(corrLblSpks.flat), maxCorr)
                     
                     axsHist.flat[lblNum].hist(corrLblSpks[upTriInd].flat)
                 
@@ -1034,8 +1036,8 @@ class BinnedSpikeSet(np.ndarray):
             
             if plot:
                 imgs.append(axsCorr.imshow(corrSpksPerCond))
-                minCorr = np.min(corrSpksPerCond.flat)
-                maxCorr = np.max(corrSpksPerCond.flat)
+                minCorr = np.nanmin(corrSpksPerCond.flat)
+                maxCorr = np.nanmax(corrSpksPerCond.flat)
                 
                 axsHist.hist(corrSpksPerCond.flat)
 
