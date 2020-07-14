@@ -730,15 +730,58 @@ class BinnedSpikeSetInfo(dj.Manual):
         binnedSpikeSets = []
 
         # give some ordering here
-        bssPaths = self.fetch('bss_relative_path')
+        # putting this in a list for some fancy shit below with zip to work if there is no fss_rel_path_from_parent
+        dsi = DatasetInfo()
+        fsp = FilterSpikeSetParams()
+        bsi = BinnedSpikeSetInfo()
+        relPaths = []
+        dsNames = []
+        bssPaths = (self * dsi).fetch('bss_relative_path', 'dataset_name', order_by=orderBy, as_dict=True)
+        try:
+            fssPaths = self.fetch('fss_rel_path_from_parent')
+        except:
+            fssPaths = None
+        else:
+            bssPaths = (self * dsi).fetch('bss_relative_path', 'fss_rel_path_from_parent', 'dataset_name', order_by=orderBy, as_dict=True)
         for path in bssPaths:
-            fullPath = dataPath / path
-            with fullPath.open(mode='rb') as binnedSpikeSetDillFh:
-                bss = pickle.load(binnedSpikeSetDillFh)
-                binnedSpikeSets.append(bss)
+            if 'fss_rel_path_from_parent' in path:
+                relPath = Path(path['bss_relative_path']).parent / path['fss_rel_path_from_parent']
+#                print(relPath)
+            else:
+                relPath = path['bss_relative_path']
+            relPaths.append(relPath)
+            dsNames.append(path['dataset_name'])
+            fullPath = dataPath / relPath
+            try:
+                with fullPath.open(mode='rb') as binnedSpikeSetDillFh:
+                    bss = pickle.load(binnedSpikeSetDillFh)
+                    binnedSpikeSets.append(bss)
+            except FileNotFoundError:
+                if fsp[self]['reason'] == 'original':
+                    raise Exception('consider coming back here to force a recomputation of the binned spike sets...')
+                else:
+                    filterParams = fsp[path]
+                    assert len(filterParams)==1, "More than one filter parameter here..."
+                    # probably a sql or sqlite restriction, but we can't
+                    # project to a key without reassigning that key, which is
+                    # what temp is doing here
+                    bsiParent = bsi[filterParams.proj(bss_relative_path='parent_bss_relative_path', temp='bss_relative_path')]
+                    bssParent = bsiParent.grabBinnedSpikes()
+                    assert len(bssParent)==1, "Not sure why, but more than one parent found...?"
+                    bssParent = bssParent[0]
+                    trialFilt = filterParams['trial_filter'][0]
+                    chFilt = filterParams['ch_filter'][0]
+                    bssChild = bssParent[trialFilt][:,chFilt]
 
-        if returnPath:
-            return binnedSpikeSets, bssPaths
+                    fullPath.parent.mkdir(parents=True) # I want to let it error if the directory exists for now... not sure why that would happen...
+                    with fullPath.open(mode='wb') as binnedSpikeSetDillFh:
+                        pickle.dump(bssChild, binnedSpikeSetDillFh)
+
+                    binnedSpikeSets.append(bssChild)
+
+
+        if returnInfo:
+            return binnedSpikeSets, dict(paths = relPaths, dataset_names=dsNames)
         return binnedSpikeSets
 
 
