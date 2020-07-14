@@ -158,7 +158,30 @@ class BinnedSpikeSet(np.ndarray):
         except: 
             pass
         # print("0")
-        return super().__getitem__(item)
+        try:
+            return super().__getitem__(item)
+        except IndexError as e:
+#            print(item)
+            if self.dtype == 'object' and type(item) is tuple and len(item)==3:
+#                breakpoint()
+                trlUse = item[0]
+                trl = self[trlUse]
+                if len(trl.shape) < len(self.shape): # we lost a dimension
+                    npArr = np.stack(trl)[item[1],item[2]]
+                else:
+                    npArr = np.stack([np.stack(bT)[item[1],item[2]] for bT in trl])
+
+                newBinSet = BinnedSpikeSet(
+                                npArr,
+                                start=self[trlUse].start.copy(),
+                                end=self[trlUse].end.copy(),
+                                binSize = self.binSize,
+                                labels = self[trlUse].labels.copy(),
+                                alignmentBins = self[trlUse].alignmentBins.copy(),
+                                units=self.units
+                                )
+                return newBinSet
+            raise(e)
     
     def __array_function__(self, func, types, args, kwargs):
         if func not in HANDLED_FUNCTIONS:
