@@ -2,9 +2,6 @@
 __pycache__/
 *.pyc
 paramDefs.txt
-*.swp
-*.swo
-*.swm
-*.swn
+*.sw*
 *.orig
 *.pdf
