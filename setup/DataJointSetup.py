@@ -1113,6 +1113,91 @@ class GpfaAnalysisInfo(dj.Manual):
                         pass
 #                        raise e
 
+    @staticmethod
+    def rmFilesByKey(key, quickDelete=False):
+        defaultParams = loadDefaultParams()
+        dataPath = Path(defaultParams['dataPath'])
+
+        relPath = Path(key['bss_relative_path']).parent 
+
+        relPath /= Path(key['gpfa_rel_path_from_bss'])
+        fullPath = dataPath / relPath
+        gpfaResultFilepaths = [str(pth) for pth in fullPath.parent.glob('**/*')]
+        if len(gpfaResultFilepaths) == 0:
+            print('No GPFA result files to delete. Removing entry from db.')
+            return True
+
+        info = "About to delete\n\n" + "\n".join(gpfaResultFilepaths) + "\n\n"
+        prompt = "Please confirm:"
+        if not quickDelete:
+            response = userChoice(prompt, info, choices=("yes", "no"), default="no")
+        if quickDelete or response == "yes":
+            [Path(pth).unlink() for pth in gpfaResultFilepaths]
+        
+        fullPath.parent.rmdir()
+        try:
+            # if all conditions get erased... just a way to clear up the file system
+            fullPath.parent.parent.rmdir()
+        except OSError as e:
+            # probably still a file in the folder, so just carry on
+            print(e)
+            pass
+
+        return quickDelete or response == 'yes'
+        
+    @classmethod
+    def rmFilesByKeyList(cls, keyList, keysDeletedList, quickDelete=False):
+        for key in keyList:
+            cls.rmFilesByKey(key, quickDelete=quickDelete)
+            # this is meant to track the deleted keys for error handling--since
+            # it's a reference, that calling function can see it, and
+            # appropriately delete database entries whose keys have already
+            # been used to delete files...
+            keysDeletedList.append(key)
+
+    def delete(self,quickDelete=False):
+        print('zxczm')
+        gaiKeys = self.fetch('KEY') # always a dict
+
+        if quickDelete:
+            info = "About to delete %d entries" % len(gaiKeys)
+            prompt = "Are you sure?"
+            response = userChoice(prompt, info, choices=("yes", "no"), default="no")
+            if response == "yes":
+                quickDelete = True
+            else:
+                quickDelete = False
+                return
+
+
+        for key in gaiKeys:
+            deleteDbEntry = self.rmFilesByKey(key, quickDelete=quickDelete)
+
+            if deleteDbEntry:
+                with dj.config(safemode = not quickDelete) as cfg: 
+                    # this syntax creates a super instance of *just* the subset of
+                    # self--so that we don't delete all of self in one go
+                    # accidentally!
+                    super(GpfaAnalysisInfo, self[key]).delete()
+
+    def delete_quick(self, get_count = False):
+        print('woiqu')
+        gaiKeys = self.fetch('KEY') # always a dict
+        try:
+            keysDelList = []
+            self.rmFilesByKeyList(gaiKeys, keysDelList, quickDelete=True)
+        except Exception as e:
+            print(e)
+            print('Failed to delete one or more files for above reason... deleting database entries of files deleted')
+            return super(GpfaAnalysisInfo, self[keysDelList]).delete_quick(get_count = get_count)
+        else:
+            return super(GpfaAnalysisInfo, self[gaiKeys]).delete_quick(get_count = get_count)
+
+
+    def drop(self):
+        self.delete() # take care of all those paths first...
+        super().drop()
+
 
 class AnalysisRun: #(dj.Manual): NOTE uncomment inheritence!
     definition = """
