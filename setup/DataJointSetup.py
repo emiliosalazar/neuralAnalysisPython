@@ -870,6 +870,42 @@ class FilterSpikeSetParams(dj.Manual):
     filter_reason : enum('original', 'shuffle', 'randomSubset', 'other') # the 'original' option is for the default FSS that refers to its parent
     filter_description = null : varchar(100) # reason for filter (if not shuffle, usually)
     """
+    # if a parent BSS induces an entry in this table to be deleted, then all
+    # the children should be deleted as well...
+    def delete(self, quickDelete = False):
+        # NOTE if an FSS gets deleted because its parent got deleted, we need
+        # to make sure to delete the child! On the other hand, if its deleted
+        # because its reference child is deleted, we can just delete the child.
+        # So here I'm basically gonna say that if you're deleting an FSS...
+        # delete the child as well (that'll cascade down to deleting the FSS of
+        # any grandchildren and so on, so we'd be good there...
+        print('aawiq')
+        fspKeys = self.fetch("KEY")
+        bsi = BinnedSpikeSetInfo()
+
+        for key in fspKeys:
+            bsi[self[key]].delete()
+            with dj.config(safemode = not quickDelete) as cfg: 
+                super(FilterSpikeSetParams, self[key]).delete()
+
+    def delete_quick(self, get_count=False):
+        print('blamslk')
+        fspKeys = self.fetch("KEY")
+        bsi = BinnedSpikeSetInfo()
+
+        fsp = FilterSpikeSetParams()
+        fspProjBsiPathToParent = self.proj(parent_bss_relative_path = 'bss_relative_path')
+        parentBsiPaths = fspProjBsiPathToParent.fetch('parent_bss_relative_path', as_dict=True)
+        fspWithParentlessBsi = fsp[parentBsiPaths]
+        childBsi = bsi[fspWithParentlessBsi]
+
+        # can't be a delete_quick because this has to percolate to all of *its*
+        # connections... (and the QueryExpression quick_delete does not delete
+        # dependencies)... but at least for the purposes of my code I can have
+        # it be a quickDelete
+        childBsi.delete(quickDelete=True)
+
+        return super(FilterSpikeSetParams, self[fspKeys]).delete_quick(get_count = get_count)
         
 @schema
 class GpfaAnalysisParams(dj.Lookup):
