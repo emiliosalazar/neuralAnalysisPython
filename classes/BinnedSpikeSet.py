@@ -1413,9 +1413,9 @@ class BinnedSpikeSet(np.ndarray):
                 t = time()
                 for idxXdim, xDim in enumerate(xDimTest):
                     if not loadedSaved[idx][xDim]:
-                        fullOutputPath = outputPath / "gpfa" / (str(signalDescriptor)) / ("cond" + str(condDescriptors[idx]))
-                        preSavedDataPath = fullOutputPath / ("procResDim%d.npz" % xDim)
-                        np.savez(preSavedDataPath, dimOutput=gpfaPrep.dimOutput[xDim], testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, normalGpfaScore=normalGpfaScore[idxXdim,:])
+                        fullOutputPath = outputPathToConditions /  ("cond" + str(condDescriptors[idx]))
+                        preSavedDataPath = fullOutputPath / ("gpfaResultsDim%d.npz" % xDim)
+                        np.savez(preSavedDataPath, dimOutput=gpfaPrep.dimOutput[xDim], testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, normalGpfaScore=normalGpfaScore[idxXdim,:], alignmentBins = groupedBalancedSpikes[idx].alignmentBins, condLabel = groupedBalancedSpikes[idx][0].labels[labelUse], binSize = groupedBalancedSpikes[idx].binSize  )
 
                 tElapse = time()-t
                 print("Output saved in %d seconds" % tElapse)
@@ -1441,11 +1441,15 @@ class BinnedSpikeSet(np.ndarray):
         
             
 
-        gpfaPrepDimOutputAll = [gpfa.dimOutput for gpfa in gpfaPrepAll]
-        gpfaTestIndsAll = [gpfa.testInds for gpfa in gpfaPrepAll]
-        gpfaTrainIndsAll = [gpfa.trainInds for gpfa in gpfaPrepAll]
+        # using getattr here allows me to preset gpfaPrepAll to an empty array
+        # and have the outputs be empty arrays if nothing happens (i.e. an
+        # error with gpfa--or a handled mistake where there are too few neurons
+        # for the desired dimension, for example
+        gpfaPrepDimOutputAll = [getattr(gpfa, 'dimOutput', None) for gpfa in gpfaPrepAll]
+        gpfaTestIndsAll = [getattr(gpfa, 'testInds', None) for gpfa in gpfaPrepAll]
+        gpfaTrainIndsAll = [getattr(gpfa, 'trainInds', None) for gpfa in gpfaPrepAll]
 
-        return xDimBestAll, xDimScoreBestAll, gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll
+        return xDimBestAll, xDimScoreBestAll, gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll, list(zip(condsUse, condSavePaths))
 
 #%% implementation of some np functions
 
