@@ -19,7 +19,7 @@ class Dataset():
                          [56,108,176],[240,2,127],[191,91,23],[102,102,102]])/255
     colorsetMayavi = [tuple(col) for col in colorset]
     
-    def __init__(self, dataMatPath, preprocessor, notChan=None, removeCoincidentChans = True, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1, metastates = [], keyStates = []):
+    def __init__(self, dataMatPath, preprocessor, notChan=None, checkNumTrls=0.1, metastates = [], keyStates = []):
         print("loading data")
         annots = LoadDataset(dataMatPath)
         print("data loaded")
@@ -198,24 +198,26 @@ class Dataset():
         filteredTrials.maxTimestamp = filteredTrials.maxTimestamp[mask]
         if filteredTrials.kinematics is not None:
             filteredTrials.kinematics = filteredTrials.kinematics[mask]
-        return filteredTrials
+        return filteredTrials, mask
         
     def successfulTrials(self):
-        successfulTrials = self.filterTrials(self.trialStatuses==1)
-        return successfulTrials
+        successfulTrialsLog = self.trialStatuses==1
+        successfulTrials, maskFilt = self.filterTrials(successfulTrialsLog)
+        return successfulTrials, maskFilt
         
     def failTrials(self):
-        failTrials = self.filterTrials(self.trialStatuses==0)
-        return failTrials
+        failTrialsLog = self.trialStatuses == 0
+        failTrials, maskFilt = self.filterTrials(failTrialsLog)
+        return failTrials, maskFilt
         
     def filterOutState(self, stateName):
         targetWithState = self.trialsWithState(stateName)
         trialsWithoutStateLog = np.logical_not(targetWithState)
-        datasetWithoutState = self.filterTrials(trialsWithoutStateLog)
-        return datasetWithoutState
+        datasetWithoutState, maskFilt = self.filterTrials(trialsWithoutStateLog)
+        return datasetWithoutState, maskFilt
     
-    def filterOutCatch(self):
-        return self.filterOutState('Catch')
+#    def filterOutCatch(self):
+#        return self.filterOutState('Catch')
 #        stNm = self.stateNames
 #        #stNm = stNm[None, :]
 #        stNm = np.repeat(stNm, len(self.statesPresented), axis=0)

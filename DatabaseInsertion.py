@@ -196,8 +196,22 @@ for dataUse in data[dataUseLogical]:
             
     else:
         print('processing data set ' + dataUse['description'])
-        datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = notChan, removeCoincidentChans=removeCoincidentChans, coincidenceTime=coincidenceTime, coincidenceThresh=coincidenceThresh, checkNumTrls=checkNumTrls, metastates = dataUse['alignmentStates'], keyStates = dataUse['keyStates'])
+        datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = notChan, checkNumTrls=checkNumTrls, metastates = dataUse['alignmentStates'], keyStates = dataUse['keyStates'])
 
+        
+        # first, removed explicitly ignored channels
+        if notChan is not None:
+            datasetHere.removeChannels(notChan)
+
+        # now, initialize a logical with all the channels
+        chansKeepLog = datasetHere.maskAgainstChannels([])
+
+        # remove non-coincident spikes
+        if removeCoincidentChans:
+            chansKeepLog &= datasetHere.findCoincidentSpikeChannels(coincidenceTime=coincidenceTime, coincidenceThresh=coincidenceThresh, checkNumTrls=checkNumTrls)[0]
+
+        chansKeepNums = np.where(chansKeepLog)[0]
+        datasetHere.keepChannels(chansKeepNums)
 
         dataDillPath.parent.mkdir(parents=True, exist_ok = True)
         with dataDillPath.open(mode='wb') as datasetDillFh:
