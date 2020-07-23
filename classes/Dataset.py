@@ -167,10 +167,6 @@ class Dataset():
         self.minTimestamp = np.min(allComboTimestamps)
         self.maxTimestamp = np.stack([np.max(np.concatenate(spDT.flatten(), axis=1)) for spDT in self.spikeDatTimestamps])
         
-        if notChan is not None:
-            self.removeChannels(notChan)
-        if removeCoincidentChans:
-            self.removeCoincidentSpikes(coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1)
 
         self.id = None
         self.metastates = metastates # these are states that don't refer to what the monkey is seeing, but rather some state of the session itself (for alignment purposes, say)
@@ -310,7 +306,7 @@ class Dataset():
     # coincidenceTime is how close spikes need to be, in ms, to be considered coincicdent, 
     # coincidenceThresh in percent/100 (i.e. 20% = 0.2)
     # checkNumTrls is the percentage of trials to go through
-    def removeCoincidentSpikes(self, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1):
+    def findCoincidentSpikeChannels(self, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1):
         
         
         # spikeCountOverallPerChan = [len(trlStmps)]
@@ -331,28 +327,74 @@ class Dataset():
                 print(str(100*numRound/(len(idxesUse)-1)) + "% done")
             if numRound == len(idxesUse)-1:
                 print("100% done")
-            trlTmstmp = self.spikeDatTimestamps[trlIdx]
-            for idx1, ch1 in enumerate(trlTmstmp):
+            trlChTmstmp = self.spikeDatTimestamps[trlIdx]
+            for idx1, ch1 in enumerate(trlChTmstmp):
                 # print(str(idx1))
-                for idx2, ch2 in enumerate(trlTmstmp):
+                for idx2, ch2 in enumerate(trlChTmstmp):
                     if idx2>idx1:
                         ch1ch2TDiff = ch1 - ch2.T
                         coincCnt[idx1, idx2] = coincCnt[idx1, idx2]+np.where(abs(ch1ch2TDiff)<coincidenceTime)[0].shape[0]
                         coincCnt[idx2, idx1] = coincCnt[idx1, idx2]
                     
+        # each column of coincProp is the proportion of *that column* channel's
+        # spikes that are coincident with a given *row* channel's spikes (this
+        # is because broadcasting works on trailing dimensions *first*--so the
+        # columns here)
         coincProp = coincCnt/spikeCountOverallPerChan
         
-        chansKeep = np.unique(np.where((coincProp<coincidenceThresh) & (spikeCountOverallPerChan != 0))[1]) # every column is the division with that channel's spike count
-        badChans = np.unique(np.where((coincProp>=coincidenceThresh) & (spikeCountOverallPerChan != 0))[1]) # every column is the division with channel's spike count
-        print("Removed channels " + str(badChans))
-        
-        self.keepChannels(chansKeep)
+        chanPairsGoodLogical = (coincProp<coincidenceThresh) & (spikeCountOverallPerChan != 0)[:,None] & (spikeCountOverallPerChan != 0)[:,None].T # every column is the division with that channel's spike count
+        chanPairsBadLogicalOrig = (coincProp>=coincidenceThresh) | (spikeCountOverallPerChan == 0)[:,None] | (spikeCountOverallPerChan == 0)[:,None].T# every column is the division with channel's spike count
+
+        # NOTE: current heuristic for bad channels is as follows: we want no
+        # channels that are coincident with other channels; however, if we
+        # remove one channel, we're by definition removing another channel's
+        # coincidence as well... so we're going to remove most
+        # coincidences--either too many channels coincident with the current
+        # channel, or the current channel coincident with too many channels--to
+        # least coincidences until there are no coincidences left above the
+        # threshold
+        chanPairsBadLogical = chanPairsBadLogicalOrig.copy()
+        badChans = []
+        timesOtherChannelsCoincidentToThisChannelOrig = chanPairsBadLogical.sum(axis=1)
+        timesThisChannelCoincidentToOtherChannelsOrig = chanPairsBadLogical.sum(axis=0)
+
+        # doing it this way so that at the breakpoint below you can get an easy
+        # overview of what things were like to start with
+        timesOtherChannelsCoincidentToThisChannel = timesOtherChannelsCoincidentToThisChannelOrig
+        timesThisChannelCoincidentToOtherChannels = timesThisChannelCoincidentToOtherChannelsOrig 
+        while timesOtherChannelsCoincidentToThisChannel.sum() + timesThisChannelCoincidentToOtherChannels.sum() > 0:
+            mxOthCh = timesOtherChannelsCoincidentToThisChannel.max()
+            mxThsCh = timesThisChannelCoincidentToOtherChannels.max()
+            
+            if mxThsCh >= mxOthCh:
+                chRem = timesThisChannelCoincidentToOtherChannels.argmax()
+            else:
+                chRem = timesOtherChannelsCoincidentToThisChannel.argmax()
+
+            badChans.append(chRem)
+            chanPairsBadLogical[:,chRem] = False
+            chanPairsBadLogical[chRem,:] = False
+            
+    
+            timesOtherChannelsCoincidentToThisChannel = chanPairsBadLogical.sum(axis=1)
+            timesThisChannelCoincidentToOtherChannels = chanPairsBadLogical.sum(axis=0)
+
+        chansKeepLog = np.full(trlChTmstmp.shape, True)
+        chansKeepLog[badChans] = False
+
+        badChansLog = ~chansKeepLog
+
+        if badChansLog.nonzero()[0].size > 0:
+            print("Removed channels " + str(list(badChansLog.nonzero()[0])))
+        else:
+            print("No coincident channels to remove")
+        print('Worth a manual review here, methinks')
+        breakpoint()
         
         # reset random state
         np.random.set_state(initSt)
         
-        # in place change, though returns channels with too much coincidence if desired...
-        return chansKeep
+        return chansKeepLog, badChansLog
     
     def removeChannels(self, notChan):
         keepChanMask = self.maskAgainstChannels(notChan)
