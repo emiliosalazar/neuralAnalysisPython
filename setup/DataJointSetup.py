@@ -405,14 +405,27 @@ class DatasetInfo(dj.Manual):
         print('qlnxo')
         dsiKeys = self.fetch('KEY') # always a dict
         try:
-            keysDelList = []
-            self.rmFilesByKeyList(dsiKeys, keysDelList, quickDelete=True)
+            delRet = super(DatasetInfo, self[dsiKeys]).delete_quick(get_count = get_count)
         except Exception as e:
-            print(e)
-            print('Failed to delete one or more files for above reason... deleting database entries of files deleted')
-            return super(DatasetInfo, self[keysDelList]).delete_quick(get_count = get_count)
+            raise(e)
         else:
-            return super(DatasetInfo, self[dsiKeys]).delete_quick(get_count = get_count)
+            try:
+                keysDelList = []
+                self.rmFilesByKeyList(dsiKeys, keysDelList, quickDelete=True)
+            except Exception as e:
+                print(e)
+                pthsDeleted = [ky['dataset_relative_path'] for ky in keysDelList]
+                pthsNotDelete = [ky['dataset_relative_path'] for ky in bsiKeys if ky not in keysDelList]
+                print('Only managed to delete:\n' + '\n'.join(pthsDeleted))
+                print('\n')
+                print('NOTE: did not delete these paths:\n' + '\n'.join(pthsNotDelete) + '\nEVEN THOUGH DATABASE ENTRIES DELETED')
+            finally:
+                # So why is this a finally statement? Because even if we crap
+                # out on deletion of files, I want to actually continue the
+                # caller's calls and return a delRet to keep the database
+                # consistent...
+                return delRet
+
 
 
 @schema
@@ -864,7 +877,7 @@ class BinnedSpikeSetInfo(dj.Manual):
             return True
         info = "About to delete\n\n" + "\n".join(allFolderPaths) + "\n\nand their contents."
         prompt = "Please confirm:"
-        if True:#not quickDelete:
+        if not quickDelete:
             response = userChoice(prompt, info, choices=("yes", "no"), default="no")
         if quickDelete or response=="yes":
 
@@ -908,14 +921,26 @@ class BinnedSpikeSetInfo(dj.Manual):
         print('llkww')
         bsiKeys = self.fetch('KEY') # always a dict
         try:
-            keysDelList = []
-            self.rmFilesByKeyList(bsiKeys, keysDelList, quickDelete=True)
+            delRet = super(BinnedSpikeSetInfo, self[bsiKeys]).delete_quick(get_count = get_count)
         except Exception as e:
-            print(e)
-            print('Failed to delete one or more files for above reason... deleting database entries of files deleted')
-            return super(BinnedSpikeSetInfo, self[keysDelList]).delete_quick(get_count = get_count)
+            raise(e)
         else:
-            return super(BinnedSpikeSetInfo, self[bsiKeys]).delete_quick(get_count = get_count)
+            try:
+                keysDelList = []
+                self.rmFilesByKeyList(bsiKeys, keysDelList, quickDelete=True)
+            except Exception as e:
+                print(e)
+                pthsDeleted = [ky['bss_relative_path'] for ky in keysDelList]
+                pthsNotDelete = [ky['bss_relative_path'] for ky in bsiKeys if ky not in keysDelList]
+                print('Only managed to delete:\n' + '\n'.join(pthsDeleted))
+                print('\n')
+                print('NOTE: did not delete these paths:\n' + '\n'.join(pthsNotDelete) + '\nEVEN THOUGH DATABASE ENTRIES DELETED')
+            finally:
+                # So why is this a finally statement? Because even if we crap
+                # out on deletion of files, I want to actually continue the
+                # caller's calls and return a delRet to keep the database
+                # consistent...
+                return delRet
 
 
 @schema
@@ -948,10 +973,24 @@ class FilterSpikeSetParams(dj.Manual):
         fspKeys = self.fetch("KEY")
         bsi = BinnedSpikeSetInfo()
 
+        # Get rid of any BinnedSpikeSetInfo who are the child of this
+        # one--gotta grab the info before this FilteredSpikeSetParams is
+        # deleted!
+        fsp = FilterSpikeSetParams()
+        fspProjBsiPathToParent = self.proj(parent_bss_relative_path = 'bss_relative_path')
+        parentBsiPaths = fspProjBsiPathToParent.fetch('parent_bss_relative_path', as_dict=True)
+
+
         for key in fspKeys:
             bsi[self[key]].delete()
             with dj.config(safemode = not quickDelete) as cfg: 
                 super(FilterSpikeSetParams, self[key]).delete()
+
+        # Grab and delete children of this BSI/FSP combo
+        fspWithParentlessBsi = fsp[parentBsiPaths]
+        childBsiDel = bsi[fspWithParentlessBsi].fetch('KEY', as_dict=True)
+
+        bsi[childBsiDel].delete(quickDelete=quickDelete)
 
     def delete_quick(self, get_count=False):
         print('blamslk')
@@ -962,16 +1001,21 @@ class FilterSpikeSetParams(dj.Manual):
         fspProjBsiPathToParent = self.proj(parent_bss_relative_path = 'bss_relative_path')
         parentBsiPaths = fspProjBsiPathToParent.fetch('parent_bss_relative_path', as_dict=True)
         fspWithParentlessBsi = fsp[parentBsiPaths]
-        childBsi = bsi[fspWithParentlessBsi]
+        childBsiDel = bsi[fspWithParentlessBsi].fetch('KEY', as_dict=True)
+        bsiDel = bsi[self].fetch('KEY', as_dict=True)
 
+        dbDelete = super(FilterSpikeSetParams, self[fspKeys]).delete_quick(get_count = get_count)
         # can't be a delete_quick because this has to percolate to all of *its*
         # connections... (and the QueryExpression quick_delete does not delete
         # dependencies)... but at least for the purposes of my code I can have
         # it be a quickDelete
-        childBsi.delete(quickDelete=True)
+        # Moreover NOTE: we delete these to get rid of paths *after* we delete
+        # the fsp, to avoid a recursive loop of deeeath
+        bsi[bsiDel].delete(quickDelete=True)
+        bsi[childBsiDel].delete(quickDelete=True)
 
-        return super(FilterSpikeSetParams, self[fspKeys]).delete_quick(get_count = get_count)
-        
+        return dbDelete
+
 @schema
 class GpfaAnalysisParams(dj.Lookup):
     definition = """
@@ -1189,7 +1233,8 @@ class GpfaAnalysisInfo(dj.Manual):
         fullPath = dataPath / relPath
         gpfaResultFilepaths = [str(pth) for pth in fullPath.parent.glob('**/*')]
         if len(gpfaResultFilepaths) == 0:
-            print('No GPFA result files to delete. Removing entry from db.')
+            print('In "%s"\n' % fullPath)
+            print('there were no GPFA result files to delete. Removing entry from db.')
             return True
 
         info = "About to delete\n\n" + "\n".join(gpfaResultFilepaths) + "\n\n"
@@ -1224,7 +1269,7 @@ class GpfaAnalysisInfo(dj.Manual):
         print('zxczm')
         gaiKeys = self.fetch('KEY') # always a dict
 
-        if quickDelete:
+        if not quickDelete:
             info = "About to delete %d entries" % len(gaiKeys)
             prompt = "Are you sure?"
             response = userChoice(prompt, info, choices=("yes", "no"), default="no")
