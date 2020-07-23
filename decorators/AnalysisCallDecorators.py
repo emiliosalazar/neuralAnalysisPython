@@ -9,6 +9,7 @@ import functools
 from setup.DataJointSetup import AnalysisRunInfo
 import inspect
 import sh
+from methods.GeneralMethods import loadDefaultParams
 
 def saveCallsToDatabase(func):
     @functools.wraps(func)

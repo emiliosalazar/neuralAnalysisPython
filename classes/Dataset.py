@@ -5,7 +5,7 @@ Created on Tue Jan 28 10:46:04 2020
 
 @author: emilio
 """
-from MatFileMethods import LoadDataset
+from methods.MatFileMethods import LoadDataset
 import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from copy import copy
