@@ -227,29 +227,23 @@ for dataUse in data[dataUseLogical]:
         'processor_name' : dataUse['processor'],
         'brain_area' : dataUse['area'],
         'task' : Path(dataUse['path']).parts[0],
-        'date_acquired' : re.search('.*?(\d+-\d+-\d+).*', dataUse['description']).group(1)
+        'date_acquired' : re.search('.*?(\d+-\d+-\d+).*', dataUse['description']).group(1),
     }
 
     dsi = DatasetInfo()
-    if len(dsi & datasetHereInfo) > 1:
+    if len(dsi[datasetHereInfo]) > 1:
         raise Exception('multiple copies of same dataset in the table...')
     elif len(dsi & datasetHereInfo) > 0:
         dsId = (dsi & datasetHereInfo).fetch1('dataset_id')
     else:
         dsId = len(dsi) # 0 indexed
-        datasetHereInfo['dataset_id'] = dsId
+        datasetHereInfo.update({
+            'dataset_id' : dsId,
+            'explicit_ignore_channels' : notChan,
+            'channels_keep' : chansKeepNums
+        })
         dsi.insert1(datasetHereInfo)
 
-
-        dsSpecId = len(dsi.DatasetSpecificLoadParams()) + 1
-        datasetSpecificLoadParams = {
-            'dataset_id' : dsId,
-            'ds_spec_params_id' :  dsSpecId,
-            'dataset_relative_path' : dsi[dict(dataset_id = dsId)]['dataset_relative_path'][0],
-            'ds_gen_params_id' : genParamId,
-            'ignore_channels' : notChan
-        }
-        dsi.DatasetSpecificLoadParams.insert1(datasetSpecificLoadParams)
 
     datasetHere.id = dsId
     dataUse['dataset'] = datasetHere

@@ -81,17 +81,9 @@ class DatasetInfo(dj.Manual):
     brain_area : varchar(100) # brain area
     task : varchar(100) # task the monkey was doing in this dataset
     date_acquired : date # date data was acquired
+    explicit_ignore_channels : blob # channels explicitly removed (for spike sorting goodness)
+    channels_keep : blob # channels kept from overall dataset (*after* explicit_ignore_channels are removed--useful for finding channels not removed from coincidence detection)
     """
-
-
-    class DatasetSpecificLoadParams(dj.Part):
-        definition = """
-        # dataset info extraction params
-        -> DatasetInfo
-        ds_spec_params_id : int # params id
-        ---
-        ignore_channels : blob # channels removed during dataset extraction; stored as array
-        """
     
     # I don't want to use the external storage paradigm they have, as I'm not
     # sure how well it would work for sql.
