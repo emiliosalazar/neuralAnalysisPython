@@ -90,6 +90,37 @@ def LoadHdf5Mat(matfilePath):
 #                           out[row,col] = UnpackHdf5(hdf5Matfile, out[row,col])
 #                       else:
 #                           out[row,col] = out[row,col]
+            else:
+                # apparently type dataset can also store arrays like type
+                # reference and I just give up
+                #
+                # but I'm also renaming this variable to parallel what was done
+                # for the reference and perhaps someday I'll make it its own
+                # function
+                deref = hdf5Group
+                if 'MATLAB_empty' in deref.attrs.keys(): # deal with empty arrays
+                    print('empty array')
+                    print(deref[()])
+                    if 'MATLAB_class' in deref.attrs.keys():
+                        print(deref.attrs['MATLAB_class'])
+                    out = np.ndarray(0)
+                    return out.T
+                
+                if 'MATLAB_int_decode' in deref.attrs.keys():
+                    if 'MATLAB_class' in deref.attrs.keys():
+                        if deref.attrs['MATLAB_class'] == b'char':
+                            out = "".join([chr(ch) for ch in deref[()]])
+                            return out
+                        elif deref.attrs['MATLAB_class'] == b'logical':
+                            pass # uint8, the default, is a fine type for logicals
+                        else:
+                            print(deref.attrs['MATLAB_class'])
+                            print('int decode but class not char...')
+                    else:
+                        print('int decode but no class?')
+                
+                out = deref[()]
+                out = out.T # for some reason Matlab transposes when saving...
         elif type(hdf5Group) is h5py.h5r.Reference:
             deref = hdf5Matfile[hdf5Group]
             
@@ -190,7 +221,7 @@ def LoadHdf5Mat(matfilePath):
  
     
 
-def LoadMatFile(matfilePath, pickleOnLoad):
+def LoadMatFile(matfilePath):
     
     try:
         annots = tradLoadmat(matfilePath)
@@ -208,39 +239,7 @@ def LoadMatFile(matfilePath, pickleOnLoad):
                 
 # forceLoad is meant to be used if you want to use the specific file pointed to
 # not matter what, as opposed to finding the pickled version
-def LoadDataset(filepathObj, forceLoad=False, pickleOnLoad = True):
-    
-    # if not forceLoad:
-    #     fileSuffix = filepathObj.suffix
-    #     if not fileSuffix:
-    #         fileDir = filepathObj
-    #     else:
-    #         fileDir = filepathObj.parent
-            
-    #     filename = filepathObj.stem
-    #     pickFls = fileDir.glob('*.pickle')
-        
-        
-    #     fileFound = False
-    #     for pickFl in pickFls:
-    #         fileUse = Path(pickFl)
-    #         if fileUse.stem == filename:
-    #             fileFound = True
-    #             break
-    #         else:
-    #             fileFound = False
-        
-    #     if not fileFound:
-    #         out = LoadMatFile(filepathObj, pickleOnLoad)
-    #     else:
-    #         outUnpick = pickle.Unpickler(fileUse.open('rb'))
-    #         out = outUnpick.load()
-            
-    # else:
-        # if filepathObj.suffix == '*.mat':
-    out = LoadMatFile(filepathObj, pickleOnLoad)
-        # elif filepathObj.suffix == '*.pickle':
-        #     outUnpick = pickle.Unpickler(filepathObj.open('rb'))
-        #     out = outUnpick.load()
+def LoadDataset(filepathObj, forceLoad=False):
+    out = LoadMatFile(filepathObj)
             
     return out
