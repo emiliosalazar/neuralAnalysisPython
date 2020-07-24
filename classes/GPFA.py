@@ -334,8 +334,8 @@ class GPFA:
 #            del os.environ['OMP_NUM_THREADS']
 
             reducedGpfaScore = np.stack([np.nan])
-            normalGpfaScore = np.stack([llH for _, llH in ll.items()])
-            normalGpfaScoreErr = np.stack([np.nan])
+            gpfaScore = np.stack([llH for _, llH in ll.items()])
+            gpfaScoreErr = np.stack([np.nan])
 #            normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
 #            normalGpfaScore = np.mean(normalizedGpfaScore, axis=1)
 #            normalGpfaScoreErr = np.std(normalizedGpfaScore,axis=1)
@@ -369,10 +369,10 @@ class GPFA:
             
             # Normal GPFA error is computed by looking at the error of all of the dimensions
             # for GPFAs run using different numbers of dimensions
-            normalGpfaScore = np.stack([np.mean(gpfaDim[maxDim-1]) for maxDim, gpfaDim in errs.items()])
-            normalGpfaScore = np.stack([np.std(gpfaDim[maxDim-1]) for maxDim, gpfaDim in errs.items()])
+            gpfaScore = np.stack([np.mean(gpfaDim[maxDim-1]) for maxDim, gpfaDim in errs.items()])
+            gpfaScore = np.stack([np.std(gpfaDim[maxDim-1]) for maxDim, gpfaDim in errs.items()])
             
-        return normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore
+        return gpfaScore, gpfaScoreErr, reducedGpfaScore
     
     def shuffleGpfaControl(self, estParams, cvalTest=0, numShuffle = 500,  eng=None): 
 
