@@ -1081,6 +1081,8 @@ class GpfaAnalysisInfo(dj.Manual):
     condition_nums : blob # will typically be a single condition, but it's a blob in case conditions are combined and it needs to be an array
     condition_grp_fr_thresh : float # the firing rate threshold for each GPFA run (i.e. only trials for this/these condition(s))
     label_use = "stimulusMainLabel" : varchar(50) # label to use for conditions
+    cval_train_converged : blob # array with 1 or 0 for each crossvalidation indicating if GPFA converged
+    cval_train_full_rank : blob # array with 1 or 0 for each cval indicating whether train set was full rank or not
     """
     
     def grabGpfaResults(self, order=True, returnInfo = False, useFa = False):
@@ -1300,10 +1302,17 @@ class GpfaAnalysisInfo(dj.Manual):
                 retVals = bss.gpfa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams, forceNewGpfaRun = forceNewGpfaRun)
                 retValsAll.append(retVals)
 
+            condPaths = retVals[-1]
+            rankConvDat = retVals[-2]
+            condInfo = list(zip(condsUse, condPaths))
+            gpfaPrepComp = retVals[0]
 
-            for cI, gPC in zip(condInfo, gpfaPrepComp):
+
+            for cI, gPC, rcD in zip(condInfo, gpfaPrepComp, rankConvDat):
                 conditionNumsUsed = np.array([cI[0]]) # so it can be saved in DataJoint
                 conditionSavePaths = str(cI[1]) # so it can be saved in DataJoint
+                crossvalFullRankStat = np.array(rcD[0])
+                crossvalConvergeStat = np.array(rcD[1])
 
                 gpfaHash = hashlib.md5(str(gPC).encode('ascii')).hexdigest()
                 try:
@@ -1314,7 +1323,9 @@ class GpfaAnalysisInfo(dj.Manual):
                         gpfa_hash = gpfaHash, 
                         condition_nums = conditionNumsUsed, 
                         condition_grp_fr_thresh = perCondGroupFiringRateThresh,
-                        label_use = labelUse
+                        label_use = labelUse,
+                        cval_train_converged = crossvalConvergeStat,
+                        cval_train_full_rank = crossvalFullRankStat
                     ))
                 except IntegrityError as e:
                     if str(e).find("UNIQUE constraint failed") != -1 and forceNewGpfaRun:
@@ -1322,6 +1333,7 @@ class GpfaAnalysisInfo(dj.Manual):
                     else:
                         pass
 #                        raise e
+        return retValsAll
 
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):

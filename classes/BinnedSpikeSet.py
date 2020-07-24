@@ -1374,6 +1374,9 @@ class BinnedSpikeSet(np.ndarray):
 #                        xDimScoreBestAll.append(gpfaSaved['xDimScoreBest'])
 #                gpfaScoreAll.append(gpfaScoreCond)
                 loadedSaved = loadedDimCond
+                converged = [estParam['converge'] for estParam in gpfaPrep.dimOutput[xDim]['allEstParams']]
+                trainIsFullRank = gpfaPrep.dimOutput[xDim]['fullRank']
+                rankConvInfo.append([trainIsFullRank,converged])
 #                        gpfaPrep.dimOutput = gpfaSaved['dimOutput'][()]
 #                        gpfaPrep.testInds = gpfaSaved['testInds']
 #                        gpfaPrep.trainInds = gpfaSaved['trainInds']
@@ -1446,7 +1449,8 @@ class BinnedSpikeSet(np.ndarray):
         gpfaTestIndsAll = [getattr(gpfa, 'testInds', None) for gpfa in gpfaPrepAll]
         gpfaTrainIndsAll = [getattr(gpfa, 'trainInds', None) for gpfa in gpfaPrepAll]
 
-        return xDimBestAll, xDimScoreBestAll, gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll, list(zip(condsUse, condSavePaths))
+#        return xDimBestAll, xDimScoreBestAll, gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll, condSavePaths
+        return gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll, rankConvInfo, condSavePaths
 
 #%% implementation of some np functions
 

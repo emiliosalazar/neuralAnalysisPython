@@ -191,6 +191,12 @@ function [estParams, seq, LL, iterTime] = em(currentParams, seq, varargin)
   end
   fprintf('\n');
 
+  if ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
+    currentParams.converge=true;
+  else
+	currentParams.converge=false;
+  end
+
   if length(LL) < emMaxIters
     fprintf('Fitting has converged after %d EM iterations.\n', length(LL)); 
   end

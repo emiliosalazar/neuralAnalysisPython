@@ -73,6 +73,12 @@ class GPFA:
                             'y': mc.convertNumpyArrayToMatlab(trl)})
         
         return gpfaSeqDict
+
+    def gpfaInputDictToBinSpikeList(self, seq=None):
+        if seq is None:
+            seq = self.gpfaSeqDict
+        return [mc.convertMatlabArrayToNumpy(sq['y']) for sq in seq]
+
     
     # train and test inds are computed as randomly dispersed to avoid
     # session-long signals from messing with the overall training (i.e. a
@@ -169,8 +175,12 @@ class GPFA:
 #        os.environ['OMP_NUM_THREADS'] = '1'
         with Pool() as poolHere:
             res = []
+            fullRank = []
             for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
-                
+                datTest = self.gpfaInputDictToBinSpikeList(seq = sqTrn)
+                datTest = np.concatenate(datTest, axis=1)
+                fullRank.append(np.linalg.matrix_rank(datTest) >= datTest.shape[0])
+
                 res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr)))
             
             # from time import sleep
@@ -179,9 +189,9 @@ class GPFA:
             # print('bleh')
             resultsByCrossVal = [[]] * len(res) # empty set of lists
             badCrossVals = []
-            for cvNum, rs in enumerate(res):
+            for cvNum, (rs, fR) in enumerate(zip(res, fullRank)):
                 try:
-                    resultsByCrossVal[cvNum] = rs.get()
+                    resultsByCrossVal[cvNum] = rs.get() + (fR,)
                 except MatlabExecutionError as e:
                     # something failed with one of the crossvalidations... so act as if it didn't happen!
                     badCrossVals.append(cvNum)
@@ -197,12 +207,17 @@ class GPFA:
                         self.testInds[bCVNum] = testInds.pop()
                         seqsTrain, seqsTest = self.trainAndTestSeq()
 
+                        datTest = self.gpfaInputDictToBinSpikeList(seq = seqsTrain)
+                        datTest = np.stack(datTest, axis=1)
+                        fRNew = np.linalg.matrix_rank(datTests) >= datTest.shape[0]
+                        breakpoint()
+
                         # now we're doing it as a pool because if we do it on
                         # the main process Matlab won't run again until we
                         # restart Python >.>
                         resNew = poolHere.apply_async(parallelGpfa, (fname, bCVNum, xDim, seqsTrain[bCVNum], seqsTest[bCVNum], forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr))
                         try:
-                            resultsByCrossVal[bCVNum] = resNew.get()
+                            resultsByCrossVal[bCVNum] = resNew.get() + fRNew
                         except MatlabExecutionError as e:
                             pass
                         else:
@@ -221,6 +236,7 @@ class GPFA:
             allEstParams = resultsByVar[0]
             seqsTrainNew = resultsByVar[1]
             seqsTestNew = resultsByVar[2]
+            fullRank = resultsByVar[3]
             
         # To prevent these variables from causing other methods/classes to load
         # numpy in a non-'optimized' (parallel) state, we delete (effectively
@@ -235,8 +251,9 @@ class GPFA:
         self.dimOutput[xDim]['allEstParams'] = allEstParams
         self.dimOutput[xDim]['seqsTrainNew'] = seqsTrainNew
         self.dimOutput[xDim]['seqsTestNew'] = seqsTestNew
+        self.dimOutput[xDim]['fullRank'] = fullRank
             
-        return allEstParams, seqsTrainNew, seqsTestNew
+        return allEstParams, seqsTrainNew, seqsTestNew, fullRank
     
     @multiprocessNumpy
     def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None, dimsCrossvalidate = None):
