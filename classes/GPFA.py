@@ -6,35 +6,49 @@ Created on Tue Feb 11 15:26:50 2020
 @author: emilio
 """
 from classes.MatlabConversion import MatlabConversion as mc
+# there are weird and common chance when multiprocessing with numpy fails
+# because of OpenBLAS's automatic underlying parallelization, but these
+# environment variables (set BEFORE numpy is imported), take care of the
+# problem
+import os
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['GOTO_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
 import numpy as np
 import scipy as sp
+# I don't want *all* future imports of numpy to be affected like this... so
+# clearing the environment variables here...
+del os.environ['OPENBLAS_NUM_THREADS']
+del os.environ['GOTO_NUM_THREADS']
+del os.environ['OMP_NUM_THREADS']
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from methods.GeneralMethods import prepareMatlab
 from matlab.engine import MatlabExecutionError
+from decorators.ParallelProcessingDecorators import multiprocessNumpy
 
 class GPFA:
-    def __init__(self, binnedSpikes, firingRateThresh=5):
-        if type(binnedSpikes) is list or binnedSpikes.dtype=='object':
-            # I'm honestly not really sure why this works, given that with the
-            # axis=1 in the else statement, axis 1 stays the same size, but in
-            # this statement with axis=2, axis 2 *changes size*...
-            allTrlTogether = np.concatenate(binnedSpikes, axis=2)
-        else:
-            allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None,:,:]
-        
-        allTrlTogether.timeAverage().trialAverage()
-        allTrlTogether.units = binnedSpikes.units
-        _, chansKeep = allTrlTogether.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
+    def __init__(self, binnedSpikes):
+#        if type(binnedSpikes) is list or binnedSpikes.dtype=='object':
+#            # I'm honestly not really sure why this works, given that with the
+#            # axis=1 in the else statement, axis 1 stays the same size, but in
+#            # this statement with axis=2, axis 2 *changes size*...
+#            allTrlTogether = np.concatenate(binnedSpikes, axis=2)
+#        else:
+#            allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None,:,:]
+#        
+#        allTrlTogether.timeAverage().trialAverage()
+#        allTrlTogether.units = binnedSpikes.units
+#        _, chansKeep = allTrlTogether.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
         # chansKeepCoinc = allTrlTogether.removeCoincidentSpikes()
         # chansKeep = np.logical_and(chansKeepThresh, chansKeepCoinc)
         if type(binnedSpikes) is list:
             # the 0 index squeezes out that dimension--and it should be what happens,
             # as in this structuring you should have only one trial in here...
-            self.binnedSpikes = [bnSp[0, chansKeep, :] for bnSp in binnedSpikes]
+            self.binnedSpikes = [bnSp[0] for bnSp in binnedSpikes]
         elif binnedSpikes.dtype=='object':
-            self.binnedSpikes = [np.stack(bnSp) for bnSp in binnedSpikes[:,chansKeep]]
+            self.binnedSpikes = [np.stack(bnSp) for bnSp in binnedSpikes]
         else:
-            self.binnedSpikes = [bnSp[chansKeep, :] for bnSp in binnedSpikes]
+            self.binnedSpikes = [bnSp for bnSp in binnedSpikes]
 #        breakpoint()
         self.gpfaSeqDict = self.binSpikesToGpfaInputDict()
         self.trainInds = None
@@ -563,7 +577,6 @@ def cvalWrap(seqsTest, paramsEst, eng):
     return llT
 
 def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=None):
-    from scipy.linalg import block_diag
     
     if eng is None:
         print('what')
@@ -574,7 +587,7 @@ def cvalRun(paramsEst, seqsTest, uniqueT, Rinv, CRinv, CRinvC, logdetR, xDim, yD
     KAll, KAllInv, logdetKAll = makeKBig(paramsEst, uniqueT, eng=eng)
     
     listCRinvC = [CRinvC for numTms in range(uniqueT)]
-    blockDiagCRinvC = block_diag(*listCRinvC)
+    blockDiagCRinvC = sp.linalg.block_diag(*listCRinvC)
 
     
     invM, logdetM = invPersymm(KAllInv + blockDiagCRinvC, xDim)
