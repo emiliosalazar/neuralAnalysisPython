@@ -23,7 +23,7 @@ import dill as pickle
 from methods.GpfaMethods import crunchGpfaResults
 from methods.plotUtils.GpfaPlotMethods import visualizeGpfaResults
 
-def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToDelayEnd = False, setEndToDelayStart = False, returnResiduals = False,  firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
+def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToStateEnd = False, setEndToStateStart = False, returnResiduals = False,  firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
 
 #    if type(data) == DatasetInfo:
 #    data = data.grabDatasets()
@@ -32,12 +32,12 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
     dataPath = defaultParams['dataPath']
 
 
-    if setStartToDelayEnd:
+    if setStartToStateEnd:
         startOffsetLocation = 'stateEnd'
     else:
         startOffsetLocation = 'stateStart'
     
-    if setEndToDelayStart:
+    if setEndToStateStart:
         endOffsetLocation = 'stateStart'
     else:
         endOffsetLocation = 'stateEnd'
@@ -56,7 +56,7 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
     )
     bsspp = BinnedSpikeSetProcessParams()
 
-    trialFilterLambda = {'remove trials with catch state' : 'lambda ds : ds.filterOutCatch()'}
+    trialFilterLambda = {'remove trials with catch state' : "lambda ds : ds.filterOutState('Catch')"}
     binnedSpikes, bssiKeys = data.computeBinnedSpikesAroundState(bSSProcParams, keyStateName, trialFilterLambda, units = unitsOut)
 
     
