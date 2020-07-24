@@ -23,6 +23,7 @@ import dill as pickle # because this is what people seem to do?
 import hashlib
 import json
 
+
 defaultParams = loadDefaultParams(defParamBase = ".")
 dataPath = defaultParams['dataPath']
 
@@ -175,7 +176,7 @@ binSizeMs = 20
 baselineSubtract = False
 dsExtract = dsi['brain_area="V4"']#.grabDatasets()
 keyStateName = 'stimulus'#[ds.keyStates['stimulus'] for ds in dsExtract]
-binnedSpikesAroundTarget, _ = genBSLAroundState(dsExtract,
+_, bsiFiltKeys = genBSLAroundState(dsExtract,
                                     keyStateName,
                                     trialType = trialType,
                                     lenSmallestTrl=0, 
@@ -198,7 +199,7 @@ binnedSpikesAroundTarget, _ = genBSLAroundState(dsExtract,
 #bsH = binnedSpikesAroundTarget[0][noChStLog]
 
 
-bsiFilt = bsi[dsi['brain_area="V4"']['start_alignment_state="Target"']]
+bsiFilt = bsi[bsiFiltKeys]#[dsi['brain_area="V4"']['start_alignment_state="Target"']]
 #bsToFilt = bsiFilt.grabBinnedSpikes()
 filteredBSS = []
 numNeuronsTest = 50
@@ -232,7 +233,7 @@ filtBssExp = bsiFilt[fsp['filter_description="only non-choice trials, 50 random 
 
 from methods.BinnedSpikeSetListMethods import gpfaComputation
 
-breakpoint()
+#breakpoint()
 plotOutput = True
 # max at 50--can't have more dimensions than neurons!
 xDimTest = [5,10,20,40,49] # 50 will fail on one of them... buuut! I still need to replace everything I computed >.>

@@ -176,7 +176,7 @@ numSubsamples = 1
 
 minNumNeurons = 60
 bssExp = bsi[bssiKeys][fsp['ch_num>%d' % minNumNeurons]]
-breakpoint()
+
 # technically already loaded above, but in future we'll want to be able to grab
 # the directly from the db call
 binnedSpikesList = bssExp.grabBinnedSpikes() 
@@ -191,7 +191,6 @@ extraOpts = {
         }
     }
 binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssExp, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
-
 
 print("Computing GPFA")
 from methods.BinnedSpikeSetListMethods import gpfaComputation
