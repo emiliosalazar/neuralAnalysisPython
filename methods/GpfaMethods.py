@@ -6,6 +6,78 @@ what the class can do
 from pathlib import Path
 import numpy as np
 
+def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensionality, dimensionalityExtractionParams):
+
+    # prep the outputs we're getting
+    shCovPropPopByExParams = []
+    shCovPropNeurAvgByExParams = []
+    shVarGeoMnVsMnByExParams = []
+    participationRatioByExParams = []
+    for gpfaResult, dimsGpfaUse in zip(gpfaResultsByExtractionParams, logLikelihoodDimensionality):
+        # lists of subsamples; often of area subsamples, but sometimes could be
+        # subsamples with certain parameters (say, neuron number or trial
+        # number per condition)
+        if type(gpfaResult) is not list:
+            gpfaResult = [gpfaResult]
+
+        shCovPropPopBySubset = []
+        shCovPropNeurAvgBySubset = []
+        shVarGeoMnVsMnBySubset = []
+        participationRatioBySubset = []
+        for (gpSubset, dGU) in zip(gpfaResult, dimsGpfaUse):
+            # extract C and R parameters
+            CR = []
+            for gpfaCond, llDim in zip(gpSubset, dGU):
+                C = gpfaCond[int(llDim)]['allEstParams'][0]['C']
+                if C.shape[1] != llDim:
+                    # I at some point was indexing this, but I no longer
+                    # think that's necessary because I'm now using the log
+                    # likelihood dimensionality, not the Williamson
+                    # dimensionality
+                    breakpoint()
+                    raise Exception("AAAH")
+                R = gpfaCond[int(llDim)]['allEstParams'][0]['R']
+                CR.append((C,R))
+
+            shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
+            shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
+            # note all we know is the determinant is the product of the e-vals
+            # and the trace is their sum--this is a way to get at the geomean
+            # and the mean without actually computing the eigenvalues
+            # themselves XD
+            shVarGeoMnVsMn = [np.exp(1/C.shape[1]*np.linalg.slogdet(C.T @ C)[1]) / (np.trace(C @ C.T)/C.shape[1])  for C, R in CR]
+            participationRatio = [np.trace(C @ C.T)**2 / (np.trace(C @ C.T @ C @ C.T)) for C, R in CR] 
+
+            
+            shCovPropPopBySubset.append(np.array(shCovPropPop))
+            shCovPropNeurAvgBySubset.append(np.array(shCovPropNeurAvg))
+            shVarGeoMnVsMnBySubset.append(np.array(shVarGeoMnVsMn))
+            participationRatioBySubset.append(np.array(participationRatio))
+        
+        shCovPropPopByExParams.append(shCovPropPopBySubset)
+        shCovPropNeurAvgByExParams.append(shCovPropNeurAvgBySubset)
+        shVarGeoMnVsMnByExParams.append(shVarGeoMnVsMnBySubset)
+        participationRatioByExParams.append(participationRatioBySubset)
+#        else:
+#            CR = [(gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['C'][:,:gpfaDimParamsUse],gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['R']) for gpfaCond, gpfaDimParamsUse in zip(gpfaResult, dimsGpfaUse)]
+#            shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
+#            shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
+#            shLogDetGenCovPropPop = [np.linalg.slogdet(C.T @ C)[1] / (np.linalg.slogdet(C.T @ C)[1] + np.linalg.slogdet(R)[1]) for C, R in CR]
+#            
+#            shCovPropPopByExParams.append(np.array(shCovPropPop))
+#            shCovPropNeurAvgByExParams.append(np.array(shCovPropNeurAvg))
+#            shLogDetGenCovPropPopByExParams.append(np.array(shLogDetGenCovPropPop))
+
+    resultsDict = {
+        '% sh var' : [np.hstack(shPropN) for shPropN in shCovPropNeurAvgByExParams],
+        'dimensionality' : [np.hstack(dm) for dm in dimensionalityExtractionParams],
+        'sh pop cov' : [np.hstack(shProp) for shProp in shCovPropPopByExParams],
+        'geomean/mean sh var' : [np.hstack(gMvMShV) for gMvMShV in shVarGeoMnVsMnByExParams],
+        'participation ratio' : [np.hstack(pR) for pR in participationRatioByExParams],
+    }
+
+    return resultsDict
+
 # note that gpfaResultsDictOfDicts is lists of spike sets of a specific set of
 # GPFA results grouped by some key which has results from various
 # dimensionality tests within (those results are in a dict keyed by
