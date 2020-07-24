@@ -1065,28 +1065,11 @@ class BinnedSpikeSet(np.ndarray):
         # with labels, but this allows the nice call of .noiseCorrelations(labels=<labels>)
         return residualSpikesGoodChans, corrSpksCondMn, corrSpksPerCond, geoMeanCnt
     
-    # note that timeBeforeAndAfterStart asks about what the first and last points of
-    # the binned spikes represent as it relates to the first and last alignment point
-    # i.e. the default (0,250) tells us that the first bin is aligned with whatever
-    # alignment was used to generate this spike set (say, the delay start), and should
-    # be plotted out to 250ms from that point. The default timeBeforeAndAfterEnd
-    # of (-250,0) tells us that the *last* bin is aligned at the alignment point
-    # for the end (whatever that may be--say, the delay end), and should be plotted
-    # starting -250 ms before
-    def gpfa(self,  outputPathToConditions, description = "",  xDimTest = [2,5,8], sqrtSpikes = False,
+    def prepareGpfaOrFa(self, sqrtSpikes = False,
              labelUse = 'stimulusMainLabel', condNums=1, combineConds = False, overallFiringRateThresh = 1, perConditionGroupFiringRateThresh = 1, balanceConds = True, 
-             computeResiduals = True,
-             forceNewGpfaRun = False,
-             crossvalidateNum = 4, timeBeforeAndAfterStart=(0,250), timeBeforeAndAfterEnd=(-250, 0), plotInfo=None):
-        from classes.GPFA import GPFA
-        from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
-        from methods.GeneralMethods import prepareMatlab
+             computeResiduals = True):
+              
 
-        assert (type(xDimTest) != list) or (type(xDimTest) == list and len(xDimTest) == 1), "gpfa on BinnedSpikes can't do multiple dimensions anymore--you'll have to loop above this!"
-        if type(xDimTest) != list:
-            xDimTest = [xDimTest]
-                
-        
         if type(self) is list:
             bnSpksCheck = np.concatenate(self, axis=2).view(BinnedSpikeSet)
             bnSpksCheck.labels = {}
@@ -1094,41 +1077,27 @@ class BinnedSpikeSet(np.ndarray):
             binSize = self[0].binSize
             colorset = self[0].colorset
         elif self.dtype == 'object':
-            bnSpksCheck = np.concatenate(self, axis=2).view(BinnedSpikeSet)
+            bnSpksCheck = np.concatenate(self, axis=2)
             bnSpksCheck.labels = {}
-            # bastardization of how BinnedSpikeSet should be used, give that labels
-            # should refer to trials, and bnSpksCheck is flattened to one 'trial'
-#            bnSpksCheck.labels[labelUse] = np.stack([bnSp.labels[labelUse] for bnSp in self])
-            binSize = self[0].binSize
-            colorset = self[0].colorset
-            bnSpksCheck.units = self.units
+            binSize = self.binSize
+            colorset = self.colorset
         else:
             bnSpksCheck = self
             binSize = self.binSize
             colorset = self.colorset
         
-        if timeBeforeAndAfterStart is not None:
-            tmValsStartBest = np.arange(timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
-        else:
-            tmValsStartBest = np.ndarray((0,0))
-            
-        if timeBeforeAndAfterEnd is not None:
-            tmValsEndBest = np.arange(timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
-        else:
-            tmValsEndBest = np.ndarray((0,0))
-        
         # note that overallFiringRateThresh should be a negative number if we're inputing residuals...
         _, chIndsUseFR = bnSpksCheck.channelsAboveThresholdFiringRate(firingRateThresh=overallFiringRateThresh)
-        # binnedSpikeHighFR = self[:,chIndsUseFR,:]
         
         if balanceConds:
+            # This seed-setting is important for knowing we're getting the same
+            # inds even when reloading/re-crossvaling data
+            initSt = np.random.get_state()
+            np.random.seed(seed=0)
             trlIndsUseLabel = self.balancedTrialInds(labels=self.labels[labelUse])
-            # binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]#.view(np.ndarray)
+            np.random.set_state(initSt)
         else:
             trlIndsUseLabel = range(len(self))
-            # binnedSpikesUse = binnedSpikeHighFR
-        # binnedSpikesBalanced = binnedSpikesBalanced.view(BinnedSpikeSet)
-        # binnedSpikesBalanced = [self[trl] for trl in trlIndsUse] # FOR LATER
         
         if type(self) is list:
             binnedSpikeHighFR = [bnSp[:,chIndsUseFR, :] for bnSp in self]
@@ -1138,55 +1107,18 @@ class BinnedSpikeSet(np.ndarray):
             binnedSpikesUse = BinnedSpikeSet(binnedSpikesUse, binSize = binSize)
             newLabels = np.stack([bnSp.labels[labelUse] for bnSp in binnedSpikesUse])
             binnedSpikesUse.labels[labelUse] = newLabels
-#            if computeResiduals:
-#                raise(Exception("Can't baseline subtract trials of unequal size!"))
         elif self.dtype == 'object':
             binnedSpikeHighFR = self[:,chIndsUseFR]
             binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
             newLabels = binnedSpikesUse.labels[labelUse]
             if sqrtSpikes:
                 binnedSpikesUse = np.sqrt(binnedSpikesUse)
-#            if computeResiduals:
-#                if sqrtSpikes:
-#                    # we want to square root before negative numbers appear because of baseline subtracting
-#                    aB = binnedSpikesUse.alignmentBins
-#                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
-#                    sqrtSpikes = False
-#                    binnedSpikesUse.labels[labelUse] = newLabels
-#                    binnedSpikesUse.alignmentBins = aB
-#
-#                # ROMP this might break stuff because I haven't accounted for
-#                # non equal trial sizes when aligning objects for
-#                # non-sparse-responses
-#                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
-#                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
-#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-#                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
-#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-#                firingRateThresh = -1
         else:
             binnedSpikeHighFR = self[:,chIndsUseFR,:]
             binnedSpikesUse = binnedSpikeHighFR[trlIndsUseLabel]
             newLabels = binnedSpikesUse.labels[labelUse]
             if sqrtSpikes:
                 binnedSpikesUse = np.sqrt(binnedSpikesUse)
-#            if computeResiduals:
-#                if sqrtSpikes:
-#                    # we want to square root before negative numbers appear because of baseline subtracting
-#                    aB = binnedSpikesUse.alignmentBins
-#                    binnedSpikesUse = np.sqrt(binnedSpikesUse)
-#                    sqrtSpikes = False
-#                    binnedSpikesUse.labels[labelUse] = newLabels
-#                    binnedSpikesUse.alignmentBins = aB
-#                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
-#
-#                _, unqInv = np.unique(newLabels, return_inverse=True, axis=0)
-#                binnedSpikesUse, chansGood = binnedSpikesUse.channelsNotRespondingSparsely(zeroRate = np.array(labelMeans)[unqInv])
-#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-#                binnedSpikesUse, chansGood = binnedSpikesUse.removeInconsistentChannelsOverTrials(zeroRate = np.array(labelMeans)[unqInv])
-#                labelMeans = [lM[chansGood,:] for lM in labelMeans]
-#                firingRateThresh = -1
-        
         
         uniqueTargAngle, trialsPresented = np.unique(newLabels, return_inverse=True, axis=0)
         
@@ -1195,19 +1127,7 @@ class BinnedSpikeSet(np.ndarray):
         else:
             # we allow the top level to choose random condNums if it wants them
             condsUse = np.stack(condNums)
-#            initRandSt = np.random.get_state()
-#            np.random.seed(0)
-#            condsUse = np.random.randint(0,high=uniqueTargAngle.shape[0],size=len(condNums))
-#            condsUse.sort() # in place sort
-#            np.random.set_state(initRandSt)
 
-        # binSpkAllArr = np.empty(len(binnedSpikesUse), dtype=object)
-        # for idx, _ in enumerate(binSpkAllArr):
-        #     binSpkAllArr[idx] = binnedSpikesUse[idx]
-            
-        # groupedBalancedSpikes = Dataset.groupSpikes(_, trialsPresented, uniqueTargAngle, binnedSpikes = binSpkAllArr); 
-        # trialsPresented = np.sort(trialsPresented) #[binSpkAllArr] #
-        # groupedBalancedSpikes = [grp.tolist() for grp in groupedBalancedSpikes]
         
         uniqueTargAngleDeg = uniqueTargAngle*180/np.pi
         
@@ -1233,18 +1153,12 @@ class BinnedSpikeSet(np.ndarray):
                 grpSpksNpArr[idx] = grpSpks
 
             perConditionGroupFiringRateThresh = -1
-#            residGrpSpks, grpMn = grpSpksHighFR.baselineSubtract()
-#        else:
-#            residGrpSpks, grpMn = grpSpks.baselineSubtract()
 
         if computeResiduals:
-            # Honestly maybe the below loop should always happen here instead of in the GPFA constructor
             for idx, grpSpks in enumerate(grpSpksNpArr):
                 residGrpSpks, grpMn = grpSpks.baselineSubtract()
 
                 grpSpksNpArr[idx] = residGrpSpks
-#            else:
-#                binnedSpikesUse, labelMeans = binnedSpikesUse.baselineSubtract(labels = newLabels)
                 
 
 
@@ -1261,26 +1175,133 @@ class BinnedSpikeSet(np.ndarray):
             
 
         ## Start here
+        # This is no longer a for loop for below because there's only one
+        # xDimTest, but I'm keeping these variables to avoid changing much
+        # of the downstream code for now heh...
+#        idxXdim = 0
+#        xDim = xDimTest[idxXdim]
+
+        return groupedBalancedSpikes, condDescriptors, condsUse
+
+    def fa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4):
+        assert isinstance(xDim, int), "Must only provide one integer xDim at a time"
+        from classes.FA import FA
+        from time import time
+        tSt = time()
+
         condSavePaths = []
         xDimBestAll = []
         xDimScoreBestAll = []
         gpfaPrepAll = []
-        normalGpfaScoreAll = []
         loadedSaved = []
+        faScoreAll = []
+        faPrepAll = []
+
+        cvApproach = "logLikelihood"
+        # use Williamson 2016 method with svCovThresh (should be 0.95 or
+        # 95%...) threshold to find dimensionality
+        shCovThresh = 0.95
+        for idx, grpSpks  in enumerate(groupedBalancedSpikes):
+            # note that this is a conservative check, as trl < xDim might be
+            # True, but trl*tmPt > xDim (where tmPt is the third dimension for
+            # grpSpks. I'll get to this problem when it arrives, as it could
+            # require dealing with object arrays...
+            if np.any(np.array(grpSpks.shape[:2]) < xDim): 
+                breakpoint()
+                grpSpkShape = np.array(grpSpks.shape)
+                print("Either not enough trials (%d) or not enough channels (%d) to train a %d-dimensional FA. Maximum possible dimensionality: %d" % (grpSpkShape[0], grpSpkShape[1], xDim, np.min(np.array(grpSpkShape))))
+                continue
+            else:
+                print("** Training and crossvalidating FA for condition %d/%d **" % (idx+1, len(groupedBalancedSpikes)))
+                faPrep = FA(grpSpks, crossvalidateNum=crossvalidateNum)
+                faPrepAll.append(faPrep)
+
+                faScoreCond = np.empty((1,crossvalidateNum))
+
+
+                fullOutputPath = outputPathToConditions /  ("cond" + str(condDescriptors[idx]))
+#                try:
+                faScoreCond[0, :] = faPrep.runFa( numDim=xDim, gpfaResultsPath = fullOutputPath )[0]
+#                except Exception as e:
+#                    if e.args[0] == "FA:NumObs":
+#                        print(e.args[1])
+#                        faScoreCond[0, :] = np.repeat(np.nan, crossvalidateNum)
+#                    else:
+#                        raise(e)
+
+                faScoreAll.append(faScoreCond)
+
+                print("FA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
+                        
+                preSavedDataPath = fullOutputPath / ("faResultsDim%d.npz" % xDim)
+                np.savez(preSavedDataPath, dimOutput=faPrep.dimOutput[xDim], testInds = faPrep.testInds, trainInds=faPrep.trainInds, score=faScoreCond[0,:], alignmentBins = grpSpks.alignmentBins, condLabel = grpSpks[0].labels[labelUse], binSize = grpSpks.binSize  )
+
+#            normalFaScore = faPrep.crossvalidatedFaError(approach = cvApproach, dimsCrossvalidate = xDim)
+#            normalFaScoreCurr = normalFaScoreAll[idx]
+#            normalFaScoreCurr[indsCVal, :] = normalFaScore
+#            normalFaScoreAll[idx] = normalFaScoreCurr
+
+            # find the best xdim based on the crossvalidation approach
+#            faScoreMn = faScoreCond.mean(axis=1)
+#            if cvApproach is "logLikelihood":
+#                xDimScoreBest = xDimTest[np.argmax(faScoreMn)]
+#            elif cvApproach is "squaredError":
+#                xDimScoreBest = xDimTest[np.argmin(faScoreMn)]
+#
+#            
+#            Cparams = [prm['C'] for prm in faPrep.dimOutput[xDimScoreBest]['allEstParams']]
+#            shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
+#            percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
+#            
+#            meanPercAcc = np.mean(percAcc, axis=0)
+#            stdPercAcc = np.std(percAcc, axis = 0)
+#            xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
+#            xDimBestAll.append(xDimBest)
+#            xDimScoreBestAll.append(xDimScoreBest)
+
+        print("All FA training done in %d seconds" % (time()-tSt))
+        # using getattr here allows me to preset gpfaPrepAll to an empty array
+        # and have the outputs be empty arrays if nothing happens (i.e. an
+        # error with gpfa--or a handled mistake where there are too few neurons
+        # for the desired dimension, for example
+        faPrepDimOutputAll = [getattr(fa, 'dimOutput', None) for fa in faPrepAll]
+        faTestIndsAll = [getattr(fa, 'testInds', None) for fa in faPrepAll]
+        faTrainIndsAll = [getattr(fa, 'trainInds', None) for fa in faPrepAll]
+#        faScoreAll = np.stack(faScoreAll)
+
+        return faPrepDimOutputAll, faTestIndsAll, faTrainIndsAll, faScoreAll
+
+    def gpfa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, forceNewGpfaRun = False):
+        from classes.GPFA import GPFA
         from time import time
+
+        condSavePaths = []
+        rankConvInfo = []
+        xDimBestAll = []
+        xDimScoreBestAll = []
+        gpfaPrepAll = []
+        loadedSaved = []
+        gpfaScoreAll = []
         tSt = time()
-        # This is no longer a for loop for below because there's only one
-        # xDimTest, but I'm keeping these variables to avoid changing much
-        # of the downstream code for now heh...
-        idxXdim = 0
-        xDim = xDimTest[idxXdim]
-        if np.any(np.array(grpSpks.shape) < xDim):
-            grpSpkShape = np.array(grpSpks.shape)
-            print("Either not enough trials (%d) or not enough channels (%d) to train a %d-dimensional GPFA. Maximum possible dimensionality: %d" % (grpSpkShape[0], grpSpkShape[1], xDim, np.min(np.array(grpSpkShape))))
-        else:
-            for idx, (grpSpks, condDesc) in enumerate(zip(groupedBalancedSpikes,condDescriptors)):
+
+        cvApproach = "logLikelihood"
+        # use Williamson 2016 method with svCovThresh (should be 0.95 or
+        # 95%...) threshold to find dimensionality
+        shCovThresh = 0.95
+
+        for idx, (grpSpks, condDesc) in enumerate(zip(groupedBalancedSpikes,condDescriptors)):
+            # note that this is a conservative check, as trl < xDim might be
+            # True, but trl*tmPt > xDim (where tmPt is the third dimension for
+            # grpSpks. I'll get to this problem when it arrives, as it could
+            # require dealing with object arrays...
+            if np.any(np.array(grpSpks.shape[:2]) < xDim): 
+                grpSpkShape = np.array(grpSpks.shape)
+                print("Either not enough trials (%d) or not enough channels (%d) to train a %d-dimensional GPFA. Maximum possible dimensionality: %d" % (grpSpkShape[0], grpSpkShape[1], xDim, np.min(np.array(grpSpkShape))))
+                gpfaPrepAll.append([]) # to stay on track with the condition number
+                continue
+            else:
                 print("** Training GPFA for condition %d/%d **" % (idx+1, len(groupedBalancedSpikes)))
-                gpfaPrep = GPFA(grpSpks, firingRateThresh=perConditionGroupFiringRateThresh)
+                gpfaPrep = GPFA(grpSpks)
                 gpfaPrepAll.append(gpfaPrep)
 
                 # we first want to check if the variables of interest have been presaved...
@@ -1289,17 +1310,16 @@ class BinnedSpikeSet(np.ndarray):
 #                preSavedDataPath = fullOutputPath / "procRes.npz"
 #                if False:#preSavedDataPath.exists():
                 # loading for each dimension and concatenating
-                normalGpfaScoreCond = np.empty((len(xDimTest),crossvalidateNum))
-                loadedDim = {}
+                gpfaScoreCond = np.empty((1,crossvalidateNum))
 
-                print("Testing/loading dimensionality %d. Left to test: " % xDim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
+#                print("Testing/loading dimensionality %d. Left to test: " % xDim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
                 preSavedDataPath = fullOutputPath / ("gpfaResultsDim%d.npz" % xDim)
                 condSavePaths.append(preSavedDataPath)
                 if preSavedDataPath.exists() and not forceNewGpfaRun:
                     try:
                         gpfaDimSaved = np.load(preSavedDataPath, allow_pickle=True)
 
-                        normalGpfaScoreCond[idxXdim,:] = gpfaDimSaved['normalGpfaScore']
+                        gpfaScoreCond[0,:] = gpfaDimSaved['score' if 'score' in gpfaDimSaved else 'normalGpfaScore']
 #                            normalGpfaScoreCond[idxXdim, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
 #                            normalGpfaScoreAndErrAll = [nGSE.append(savNGSE) for nGSE, savNGSE in zip(normalGpfaScoreAndErrAll, gpfaSaved['normalGpfaScoreAndErr'])]
                         gpfaPrep.dimOutput[xDim] = gpfaDimSaved['dimOutput'][()]
@@ -1311,7 +1331,7 @@ class BinnedSpikeSet(np.ndarray):
                         gpfaPrep.trainInds = gpfaDimSaved['trainInds']
 
                     except (KeyError, Exception) as e:
-                        loadedDim[xDim] = False
+                        loadedDimCond = False
                         if type(e) is Exception:
                             if e.args[0] == "ChanSavedProcDiff":
                                 print("Diff chans expected vs saved: (dimTest, expChNum, savedChNum) - (%d, %d, %d)" % (xDim, self.shape[1], gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0]))
@@ -1320,19 +1340,18 @@ class BinnedSpikeSet(np.ndarray):
 
                         print("Error loading GPFA: %s", e.args[0])
                         # take care to clear out any information that was added
-                        normalGpfaScoreCond[idxXdim, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
+                        gpfaScoreCond[0, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
                         gpfaPrep.dimOutput.pop(xDim, None);
                         gpfaPrep.testInds = None
                         gpfaPrep.trainInds = None
 
                     else:
-                        loadedDim[xDim] = True
+                        loadedDimCond = True
                 else:
-                    normalGpfaScoreCond[idxXdim, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
-                    loadedDim[xDim] = False
+                    gpfaScoreCond[0, :] = np.repeat(np.nan, crossvalidateNum) # placeholder
+                    loadedDimCond = False
 
-                if not loadedDim[xDim] or forceNewGpfaRun:
-                    from matlab import engine
+                if not loadedDimCond or forceNewGpfaRun:
                     try:
                         gpfaPrep.runGpfaInMatlab(fname=fullOutputPath,  crossvalidateNum=crossvalidateNum, xDim=xDim, forceNewGpfaRun = forceNewGpfaRun);
 #                            if gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0] != grpSpks.shape[1]:
@@ -1343,6 +1362,7 @@ class BinnedSpikeSet(np.ndarray):
 #                                    # MAKE SURE you're not asking GPFA to do any channel filtering
 #                                    breakpoint()
                     except Exception as e:
+                        from matlab import engine
                         if type(e) is engine.MatlabExecutionError:
                             print(e)
 #                                breakpoint()
@@ -1352,8 +1372,8 @@ class BinnedSpikeSet(np.ndarray):
 #                        gpfaSaved = np.load(preSavedDataPath, allow_pickle=True)
 #                        xDimBestAll.append(gpfaSaved['xDimBest'])
 #                        xDimScoreBestAll.append(gpfaSaved['xDimScoreBest'])
-                normalGpfaScoreAll.append(normalGpfaScoreCond)
-                loadedSaved.append(loadedDim)
+#                gpfaScoreAll.append(gpfaScoreCond)
+                loadedSaved = loadedDimCond
 #                        gpfaPrep.dimOutput = gpfaSaved['dimOutput'][()]
 #                        gpfaPrep.testInds = gpfaSaved['testInds']
 #                        gpfaPrep.trainInds = gpfaSaved['trainInds']
@@ -1363,88 +1383,61 @@ class BinnedSpikeSet(np.ndarray):
 #                    xDimScoreBestAll.append([])
 #                    loadedSaved.append(False)
 
-                print("GPFA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
-            print("All GPFA training done in %d seconds" % (time()-tSt))
+            print("GPFA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
                         
-        lblLLErr = 'LL err over folds'
-        lblLL= 'LL mean over folds'
-        cvApproach = "logLikelihood"
-        # use Williamson 2016 method with svCovThresh (should be 0.95 or
-        # 95%...) threshold to find dimensionality
-        shCovThresh = 0.95
-        for idx, gpfaPrep in enumerate(gpfaPrepAll):
-            print("** Crossvalidating GPFA for condition %d/%d **" % (idx+1, len(gpfaPrepAll)))
+#        for idx, gpfaPrep in enumerate(gpfaPrepAll):
+            print("** Crossvalidating GPFA for condition %d/%d **" % (idx+1, len(groupedBalancedSpikes)))
             # find any dimensions that still need crossvalidating
             dimsCVal = []
-            indsCVal = []
-            for idxXdim, xDim in enumerate(xDimTest):
-                if not loadedSaved[idx][xDim]:
-                    dimsCVal.append(xDim)
-                    indsCVal.append(idxXdim)
+#            indsCVal = []
+            if not loadedSaved:
+                dimsCVal.append(xDim)
 
-            # crossvalidate dimensions as needed
-            if len(dimsCVal) > 0:
-                normalGpfaScore, normalGpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(approach = cvApproach, dimsCrossvalidate = dimsCVal)
-                normalGpfaScoreCurr = normalGpfaScoreAll[idx]
-                normalGpfaScoreCurr[indsCVal, :] = normalGpfaScore
-                normalGpfaScoreAll[idx] = normalGpfaScoreCurr
+#            # crossvalidate dimensions as needed
+#            if len(dimsCVal) > 0:
+                gpfaScore, gpfaScoreErr, reducedGpfaScore = gpfaPrep.crossvalidatedGpfaError(approach = cvApproach, dimsCrossvalidate = dimsCVal)
+                gpfaScoreCurr = gpfaScoreCond
+                gpfaScoreCurr[0, :] = gpfaScore
+#                gpfaScoreCurr[indsCVal, :] = gpfaScore
+                gpfaScoreCond = gpfaScoreCurr
 
             # find the best xdim based on the crossvalidation approach
-            normalGpfaScore = normalGpfaScoreAll[idx]
-            normalGpfaScoreMn = normalGpfaScore.mean(axis=1)
-            if cvApproach is "logLikelihood":
-                xDimScoreBest = xDimTest[np.argmax(normalGpfaScoreMn)]
-            elif cvApproach is "squaredError":
-                xDimScoreBest = xDimTest[np.argmin(normalGpfaScoreMn)]
-
-            
-            Cparams = [prm['C'] for prm in gpfaPrep.dimOutput[xDimScoreBest]['allEstParams']]
-            shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
-            percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
-            
-            meanPercAcc = np.mean(percAcc, axis=0)
-            stdPercAcc = np.std(percAcc, axis = 0)
-            xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
-            xDimBestAll.append(xDimBest)
-            xDimScoreBestAll.append(xDimScoreBest)
+            gpfaScore = gpfaScoreCond
+#            gpfaScoreMn = gpfaScore.mean(axis=1)
+#            if cvApproach is "logLikelihood":
+#                xDimScoreBest = xDimTest[np.argmax(gpfaScoreMn)]
+#            elif cvApproach is "squaredError":
+#                xDimScoreBest = xDimTest[np.argmin(gpfaScoreMn)]
+#
+#            
+#            Cparams = [prm['C'] for prm in gpfaPrep.dimOutput[xDimScoreBest]['allEstParams']]
+#            shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
+#            percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
+#            
+#            meanPercAcc = np.mean(percAcc, axis=0)
+#            stdPercAcc = np.std(percAcc, axis = 0)
+#            xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
+#            xDimBestAll.append(xDimBest)
+#            xDimScoreBestAll.append(xDimScoreBest)
 
             # save the computation!
             # But save it per dimension! This allows later loading for specific
             # dimension tests, and avoids rewriting previous loads of many
             # dimensions
-            if not np.all([*loadedSaved[idx].values()]):
+#            if not np.all([*loadedSaved[idx].values()]):
+            if not loadedSaved:
                 print("Saving output...")
                 t = time()
-                for idxXdim, xDim in enumerate(xDimTest):
-                    if not loadedSaved[idx][xDim]:
-                        fullOutputPath = outputPathToConditions /  ("cond" + str(condDescriptors[idx]))
-                        preSavedDataPath = fullOutputPath / ("gpfaResultsDim%d.npz" % xDim)
-                        np.savez(preSavedDataPath, dimOutput=gpfaPrep.dimOutput[xDim], testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, normalGpfaScore=normalGpfaScore[idxXdim,:], alignmentBins = groupedBalancedSpikes[idx].alignmentBins, condLabel = groupedBalancedSpikes[idx][0].labels[labelUse], binSize = groupedBalancedSpikes[idx].binSize  )
+
+                fullOutputPath = outputPathToConditions /  ("cond" + str(condDesc))
+                preSavedDataPath = fullOutputPath / ("gpfaResultsDim%d.npz" % xDim)
+                np.savez(preSavedDataPath, dimOutput=gpfaPrep.dimOutput[xDim], testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, score=gpfaScore[0,:], alignmentBins = grpSpks.alignmentBins, condLabel = grpSpks.labels[labelUse], binSize = grpSpks.binSize  )
 
                 tElapse = time()-t
                 print("Output saved in %d seconds" % tElapse)
 
-#            fullOutputPath = outputPath / "gpfa" / (str(signalDescriptor)) / ("cond" + str(condDescriptors[idx]))
-#            preSavedDataPath = fullOutputPath / "procRes.npz"
-#            print("Saving output...")
-#            t = time()
-#            np.savez(preSavedDataPath, xDimScoreBest=xDimScoreBest, xDimBest = xDimBest, dimOutput=gpfaPrep.dimOutput, testInds = gpfaPrep.testInds, trainInds=gpfaPrep.trainInds, normalGpfaScoreAndErr=normalGpfaScoreAndErr)
-#
-#            tElapse = time()-t
-#            print("Output saved in %d seconds" % tElapse)
+        print("All GPFA training/crossvalidating done in %d seconds" % (time()-tSt))
             
-        crossValsUse = [0]
-        if plotInfo is not None:
-            plotInfo['lblLL'] = lblLL
-            plotInfo['lblLLErr'] = lblLLErr
-            plotInfo['description'] = description
-            tmVals = [tmValsStartBest, tmValsEndBest]
-            visualizeGpfaResults(plotInfo, gpfaPrepAll, groupedBalancedSpikes, tmVals, cvApproach, normalGpfaScoreAll, xDimTest, shCovThresh, crossValsUse )
-
-            
-        
-            
-
         # using getattr here allows me to preset gpfaPrepAll to an empty array
         # and have the outputs be empty arrays if nothing happens (i.e. an
         # error with gpfa--or a handled mistake where there are too few neurons
