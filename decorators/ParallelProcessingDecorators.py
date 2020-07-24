@@ -6,6 +6,7 @@ Created on Wed Apr 15 11:12:18 2020
 @author: emilio
 """
 import functools
+import os
 
 def multiprocessNumpy(func):
     @functools.wraps(func)

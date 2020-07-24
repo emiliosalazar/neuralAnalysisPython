@@ -129,6 +129,7 @@ class GPFA:
         
         
     
+    @multiprocessNumpy
     def runGpfaInMatlab(self, fname,   crossvalidateNum = 0, xDim = 8, eng=None, segLength = None, forceNewGpfaRun = False):
         
         # if eng is None:
@@ -159,6 +160,13 @@ class GPFA:
         
         
         
+        # In order to ensure numpy processes work well in a multiprocess
+        # environment, we set these environment variables (they need to exist
+        # both when numpy gets loaded for the first time *AND* whenever the
+        # processes are running
+#        os.environ['OPENBLAS_NUM_THREADS'] = '1'
+#        os.environ['GOTO_NUM_THREADS'] = '1'
+#        os.environ['OMP_NUM_THREADS'] = '1'
         with Pool() as poolHere:
             res = []
             for cvNum, (sqTrn, sqTst) in enumerate(zip(seqsTrain, seqsTest)):
@@ -214,6 +222,12 @@ class GPFA:
             seqsTrainNew = resultsByVar[1]
             seqsTestNew = resultsByVar[2]
             
+        # To prevent these variables from causing other methods/classes to load
+        # numpy in a non-'optimized' (parallel) state, we delete (effectively
+        # unset) the variables after our multiprocessing has finished
+#        del os.environ['OPENBLAS_NUM_THREADS']
+#        del os.environ['GOTO_NUM_THREADS']
+#        del os.environ['OMP_NUM_THREADS']
         
         # print('whowhat?')
         self.dimOutput[xDim] = {}
@@ -224,6 +238,7 @@ class GPFA:
             
         return allEstParams, seqsTrainNew, seqsTestNew
     
+    @multiprocessNumpy
     def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None, dimsCrossvalidate = None):
         from multiprocessing import Pool, TimeoutError
         
@@ -242,6 +257,13 @@ class GPFA:
             
             
             
+            # In order to ensure numpy processes work well in a multiprocess
+            # environment, we set these environment variables (they need to exist
+            # both when numpy gets loaded for the first time *AND* whenever the
+            # processes are running
+#            os.environ['OPENBLAS_NUM_THREADS'] = '1'
+#            os.environ['GOTO_NUM_THREADS'] = '1'
+#            os.environ['OMP_NUM_THREADS'] = '1'
             with Pool() as plWrap:
                 res = []
                 dimUsed = []
@@ -256,15 +278,16 @@ class GPFA:
                         dimUsed.append(dim)
                     
                 resultsByDim = []
-                timeoutSecs = 60
+                timeoutSecs = 60 # this time just keeps getting longer...
                 for ind, rs in enumerate(res):
                     try:
-                        thisResult = rs.get(timeout=timeoutSecs)
+                        #NOTE CHANGE
+                        thisResult = rs.get()#timeout=timeoutSecs)
                     except TimeoutError as e:
+                        print("Careful we're establishing a Matlab at the top level...")
                         dimRedo = dimUsed[ind]
                         paramsGpfa = self.dimOutput[dimRedo]
                         thisResult = cvalSuperWrap(paramsGpfa, allSeqsTest)
-                        print("Careful we're establishing a Matlab at the top level...")
                         # lower the timeout if it already failed once...
                         timeoutSecs = 3
 
@@ -285,6 +308,14 @@ class GPFA:
                     # ll[dimMax] = np.stack(llTemp)#np.mean(np.stack(llTemp))
                 # llErr[dimMax] = np.std(np.stack(llTemp))
                     
+                
+            # To prevent these variables from causing other methods/classes to load
+            # numpy in a non-'optimized' (parallel) state, we delete (effectively
+            # unset) the variables after our multiprocessing has finished
+#            del os.environ['OPENBLAS_NUM_THREADS']
+#            del os.environ['GOTO_NUM_THREADS']
+#            del os.environ['OMP_NUM_THREADS']
+
             reducedGpfaScore = np.stack([np.nan])
             normalGpfaScore = np.stack([llH for _, llH in ll.items()])
             normalGpfaScoreErr = np.stack([np.nan])
