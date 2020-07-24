@@ -722,3 +722,16 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
 #                        ax.axvline(x=0,ymin=xl[0],ymax=xl[1], linestyle = ':', color='black')
                 ax.spines['right'].set_visible(False)
                 ax.spines['top'].set_visible(False)
+
+def projectTrajectory(estParams, trajectory):
+
+    seqTrajDict = GPFA.binSpikesToGpfaInputDict([], binnedSpikes = trajectory)
+    from multiprocessing import Pool
+    with Pool() as poolHere:
+        res = []
+
+        res.append(poolHere.apply_async(projectTrajectory, (seqTrajDict,estParams)))
+
+        resultsTraj = [rs.get() for rs in res]
+
+    return resultsTraj[0]
