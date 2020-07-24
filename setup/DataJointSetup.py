@@ -186,7 +186,7 @@ class DatasetInfo(dj.Manual):
         binnedSpikes = []
         bssiKeys = []
 
-        for datasetInfo in self:
+        for datasetInfo in self.fetch("KEY"):
             # First we want to check if we're going to compute new data or if it already exists...
 
             binnedSpikeSetDill = 'binnedSpikeSet.dill'
@@ -214,19 +214,24 @@ class DatasetInfo(dj.Manual):
                 dsId = dataset.id
                 stateNameStateStart = dataset.keyStates[keyStateName]
 
+                trialsKeep = np.full(dataset.trialStatuses.shape, True)
 
                 # Filter by trial type
                 if trialType == 'successful':
-                    dataset = dataset.successfulTrials()
+                    _, trialFiltType = dataset.successfulTrials()
                 elif trialType == 'failure':
-                    dataset = dataset.failTrials()
+                    _, trialFiltType = dataset.failTrials()
+                else:
+                    trialFiltType = trialsKeep
 
+                trialsKeep &= trialFiltType
 
                 # These extra filters are in a { description : lambda } style dictionary
                 if trialFilterLambdaDict is not None:
                     for tFLDesc, tFL in trialFilterLambdaDict.items():
                         lambdaFilt = eval(tFL)
-                        dataset = lambdaFilt(dataset)
+                        _, trialFiltLambda = lambdaFilt(dataset)
+                        trialsKeep &= trialFiltLambda
 
                 alignmentStates = dataset.metastates
                     
@@ -237,7 +242,10 @@ class DatasetInfo(dj.Manual):
                 endStateArr = np.asarray(endState)
                 timeInStateArr = endStateArr - startStateArr
 
-                dataset = dataset.filterTrials(timeInStateArr>lenSmallestTrial)
+                _, trialFiltLen = dataset.filterTrials(timeInStateArr>lenSmallestTrial)
+                trialsKeep &= trialFiltLen
+
+                dataset = dataset.filterTrials(trialsKeep)[0]
 
                 # Find appropriate start/end times for remaining trials
                 startState, endState, stateNameAfter = dataset.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
@@ -259,8 +267,10 @@ class DatasetInfo(dj.Manual):
                 # Add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
                 binnedSpikesHere = dataset.binSpikeData(startMs = list(startTimeArr+startTimeOffset), endMs = list(endTimeArr+endTimeOffset+binSizeMs/20), binSizeMs=binSizeMs, alignmentPoints = list(zip(startTimeArr, endTimeArr)))
 
+                chansKeep = np.full((binnedSpikesHere.shape[1]), True)
                 # Filter to only include high firing rate channels
-                binnedSpikesHere = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0]
+                _, chansHighFR = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh, asLogical = True)
+                chansKeep &= chansHighFR
 
                 # Filter for fano factor threshold, but use counts *over the trial*
                 if binnedSpikesHere.dtype == 'object':
@@ -282,8 +292,10 @@ class DatasetInfo(dj.Manual):
                 # taken *afterwards*
                 if trialLengthMs.size > 1:
                     binnedCountsPerTrial = binnedCountsPerTrial * trialLengthMs.max()/trialLengthMs[:,None,None]
-                _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh)
-                binnedSpikesHere = binnedSpikesHere[:,chansGood]
+                _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh, asLogical=True)
+                chansKeep &= chansGood
+
+                binnedSpikesHere = binnedSpikesHere[:,chansKeep]
 
                 # Previous iteration of this code accounted for binSpikeData()
                 # returning a list... but *that* code has been updated to
@@ -325,7 +337,7 @@ class DatasetInfo(dj.Manual):
                     )
                     binnedSpikeSetHereInfo.update(addlBssInfo)
                         
-                    dsiPks = self[datasetInfo].fetch1("KEY")
+                    dsiPks = datasetInfo #self[datasetInfo].fetch1("KEY")
                     binnedSpikeSetHereInfo.update(dsiPks)
 
 
@@ -335,7 +347,7 @@ class DatasetInfo(dj.Manual):
                     # add this binned spike set as a filtered spike set part as
                     # well... (obviously with no filtering, hence the 'original'
                     # reason
-                    _ = bssAdded.filterBSS(filterReason = 'original', filterDescription = 'unfiltered original', condLabel = 'stimulusMainLabel')
+                    _ = bssAdded.filterBSS(filterReason = 'original', filterDescription = 'unfiltered original', condLabel = 'stimulusMainLabel', trialFilter = trialsKeep, channelFilter = chansKeep )
 
                     bssiKey = bssAdded.fetch("KEY", as_dict=True)
 
@@ -498,11 +510,19 @@ class BinnedSpikeSetInfo(dj.Manual):
             bssFilterParams = dict(filter_reason = filterReason, filter_description = filterDescription)
 
             if trialFilter is not None:
-                bssFiltered = bssFiltered[trialFilter]
+                # for the original filter, trialFilter actually refers to how
+                # the raw dataset was filtered before being saved as a
+                # BinnedSpikeSet
+                if filterReason != 'original':
+                    bssFiltered = bssFiltered[trialFilter]
                 bssFilterParams.update(dict(trial_filter = trialFilter))
 
             if channelFilter is not None:
-                bssFiltered = bssFiltered[:, channelFilter]
+                # for the original filter, channelFilter actually refers to how
+                # the raw dataset was filtered before being saved as a
+                # BinnedSpikeSet
+                if filterReason != 'original':
+                    bssFiltered = bssFiltered[:, channelFilter]
                 bssFilterParams.update(dict(ch_filter = channelFilter))
 
             # we run this *after* the filtering has happened...
@@ -575,10 +595,17 @@ class BinnedSpikeSetInfo(dj.Manual):
 #            bssFilterParamsCheck = bssFilterParams.copy()
 #            bssFilterParamsCheck.update(key)
             existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key}] 
+            existingSS = existingSS[self.fetch('bss_params_id', as_dict=True)[0]]
+            # this is important for not grabbing repeats when looking for the
+            # originally filtered binned spike set
+            if 'parent_bss_relative_path' not in bssFilterParams:
+                existingSS = existingSS['parent_bss_relative_path is NULL']
+
             if len(existingSS) > 1:
                 raise Exception('Multiple filtered spike sessions have been saved with these parameters')
             elif len(existingSS) > 0:
-                print("LA")
+#                breakpoint()
+#                print("LA")
                 prmPk = bsi[('bss_relative_path = "%s"' % str(pathRelativeToBase))].fetch("KEY",as_dict=True)[0]
                 if not fullPath.exists():
                     print('Db record existed for FilterSpikeSetParams but not file... saving file now')

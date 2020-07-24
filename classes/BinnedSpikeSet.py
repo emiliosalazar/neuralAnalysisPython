@@ -311,7 +311,7 @@ class BinnedSpikeSet(np.ndarray):
     
     def baselineSubtract(self, labels=None):
         if labels is None:
-            print("baseline subtracting time trace with no groups")
+#            print("baseline subtracting time trace with no groups")
             overallBaseline = self.trialAverage()
             spikesUse = self.copy()
             if self.dtype == 'object':
@@ -485,15 +485,17 @@ class BinnedSpikeSet(np.ndarray):
             return outNewUnits
 
 #%% filtering mechanics
-    def channelsAboveThresholdFiringRate(self, firingRateThresh=1): #low firing thresh in Hz
+    def channelsAboveThresholdFiringRate(self, firingRateThresh, asLogical = False): #low firing thresh in Hz
         avgFiringChan = self.avgFiringRateByChannel()
         
         highFiringChannels = avgFiringChan>firingRateThresh
+        if not asLogical:
+            highFiringChannels = np.where(highFiringChannels)[0]
         
-        return self[:,highFiringChannels], np.where(highFiringChannels)[0]
+        return self[:,highFiringChannels], highFiringChannels
 
     # note that this will always calculate the *spike count* fano factor
-    def channelsBelowThresholdFanoFactor(self, fanoFactorThresh = 4):
+    def channelsBelowThresholdFanoFactor(self, fanoFactorThresh, asLogical = False):
         if self.units != 'count':
             cntBinned = self.convertUnitsTo(units='count')
         else:
@@ -502,8 +504,10 @@ class BinnedSpikeSet(np.ndarray):
         fanoFactorChans = cntBinned.fanoFactorByChannel()
 
         lowFanoFactorChans = fanoFactorChans < fanoFactorThresh
+        if not asLogical:
+            lowFanoFactorChans = np.where(lowFanoFactorChans)[0]
 
-        return self[:,lowFanoFactorChans], np.where(lowFanoFactorChans)[0]
+        return self[:,lowFanoFactorChans], lowFanoFactorChans
 
     def channelsNotRespondingSparsely(self, zeroRate=0): 
         # note that 'sparsely' here has a very specific definition (of mine)
