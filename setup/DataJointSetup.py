@@ -1422,17 +1422,17 @@ class GpfaAnalysisInfo(dj.Manual):
         super().drop()
 
 
-class AnalysisRun: #(dj.Manual): NOTE uncomment inheritence!
+class AnalysisRunInfo: #(dj.Manual): NOTE uncomment inheritence!
     definition = """
     # analysis file/run info
-    analysis_file : varchar(100) # name of analysis file run
-    git_commit : char(32) # don't remember how long a has a git commit has
-    patch : varchar(50000) # this is  super long... but it's to keep the patch information so the analysis can be recreated
-    -> BinnedSpikeSetInfo
+    analysis_method : varchar(100) # name of analysis file run
+    method_call_signature : varchar(500) # calling signature for the method
+    git_commit : char(32) # don't remember how long a hash a git commit has
     ---
-    # in case some filtered version of the above binned spike set was used...
-    -> [nullable] BinnedSpikeSetInfo
-    date : datenum # date analysis was run
+    patch : varchar(500000) # this is  super long... but it's to keep the patch information so the analysis can be recreated
+    method_inputs : blob # the inputs to this call--since all calls are different, this is a blob!
+    date_start : datenum # date analysis started running
+    date_end : datenum # date analysis finished running
     output_files : blob # this is gonna contain output files (especially figures!) for this analysis
     metadata : blob # this has metadata that would likely be stored by the patch as well, but in case its easier to grab from here...
     """
