@@ -587,78 +587,177 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 visualizeGpfaResults(plotInfo, dimResult,  tmVals, cvApproach, normalGpfaScoreAll, dimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins)
 
     return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
+
+# NOTE: this function does not act on any of the binned spikes (computing
+# residuals, etc) before computing the relevant r_sc vals
+def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels = True, normalize = False, plotResid = False):
+
+    residCorrMeanOverCondAll = []
+    residCorrPerCondAll = []
+    geoMeanOverall = []
+
+    residCorrPerCondOBPTAll = []
+    residCorrMeanOverCondOBPTAll = []
+    for idxSpks, (bnSp, description) in enumerate(zip(listBSS,descriptions)):
+
+        if plotResid:
+            scatterFig = plt.figure()
+            if type(bnSp) is list:
+                scatterFig.suptitle(description + " geo mean FR vs corr var multiple subsets")
+            else:
+                scatterFig.suptitle(description + " geo mean FR vs corr var")
+        if type(bnSp) is not list:
+            titleFig = description
+            bnSp = [bnSp] # make it into a list--it's a subset of one!
+            titleCorrTemplate = description 
+            titleCorrOBPTTemplate= description + " 1 bin/trl"
+        else:
+            titleCorrTemplate = description + " subset %d"
+            titleCorrOBPTTemplate= description + " 1 bin/trl subset %d"
+
+        residCorrMeanOverCondAllHere = []
+        residCorrPerCondAllHere = []
+        geoMeanOverallHere = []
+            
+        residCorrPerCondOBPTAllHere = []
+        residCorrMeanOverCondOBPTAllHere = []
+        for idxSubset, bS in enumerate(bnSp):
+            # All these metrics are taken on spike counts!
+            bS = bS.convertUnitsTo('count')
+            # for r_sc using one bin per trial, we rebin everything to... one
+            # bin per trial
+            if bS.dtype == 'object':
+                trialLengthMs = bS.binSize*np.array([bnSpTrl[0].shape[0] for bnSpTrl in bS])
+            else:
+                trialLengthMs = np.array([bS.shape[2]*bS.binSize])
+
+            try:
+                titleCorr = titleCorrTemplate % idxSubset
+                titleCorrOBPT = titleCorrOBPTTemplate % idxSubset
+            except TypeError as e:
+                titleCorr = titleCorrTemplate 
+                titleCorrOBPT = titleCorrOBPTTemplate 
+
+            labels = bS.labels[labelUse]
+
+            bSOneBinPrTrl = bS.convertUnitsTo('count').increaseBinSize(trialLengthMs)
+
+            residualSpikes, residCorrMeanOverCond, residCorrPerCond, geoMeanCntAll = bS.convertUnitsTo('count').residualCorrelations(labels, plot=plotResid, separateNoiseCorrForLabels = separateNoiseCorrForLabels, figTitle = titleCorr, normalize = normalize)
+            residualSpikesOBPT, residCorrMeanOverCondOBPT, residCorrPerCondOBPT, geoMeanCntAllOBPT = bSOneBinPrTrl.residualCorrelations(labels, plot=plotResid, separateNoiseCorrForLabels = separateNoiseCorrForLabels, figTitle = titleCorrOBPT, normalize = normalize)
+            
+            
+            residCorrMeanOverCondAllHere.append(residCorrMeanOverCond)
+            geoMeanOverallHere.append(geoMeanCntAll)
+            residCorrPerCondAllHere.append(residCorrPerCond)
+            
+            residCorrMeanOverCondOBPTAllHere.append(residCorrMeanOverCondOBPT)
+            residCorrPerCondOBPTAllHere.append(residCorrPerCondOBPT)
+            
+            
+            
+            # Only care about single repeats of the non-self pairs...
+            upperTriInds = np.triu_indices(residCorrMeanOverCond.shape[0], 1)
+            residCorrMeanOverCond = residCorrMeanOverCond[upperTriInds]
+            geoMeanCnt = geoMeanCntAll[upperTriInds]
+            residCorrPerCond = residCorrPerCond[upperTriInds]
+            
+            residCorrPerCondOBPT = residCorrPerCondOBPT[upperTriInds]
+            
+            
+            if plotResid:
+                axs = scatterFig.subplots(2,1)
+                axs[0].scatter(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten())
+                axs[0].set_ylabel("Correlated Variability")
+                
+                binWidth = 5
+                binAvg, binEdges, bN = binned_statistic(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten(), statistic='mean', bins = np.arange(np.max(geoMeanCnt), step=binWidth))
+                binStd, _, _ = binned_statistic(geoMeanCnt.flatten(), residCorrMeanOverCond.flatten(), statistic='std', bins = np.arange(np.max(geoMeanCnt), step=binWidth))
+                binEdges = np.diff(binEdges)[0]/2+binEdges[:-1]
+                axs[1].plot(binEdges, binAvg)
+                axs[1].fill_between(binEdges, binAvg-binStd, binAvg+binStd, alpha=0.2)
+                axs[1].set_xlabel("Geometric Mean Firing Rate")
+                axs[1].set_ylabel("Correlated Variability")
+                
+        residCorrMeanOverCondAll.append(residCorrMeanOverCondAllHere)
+        geoMeanOverall.append(geoMeanOverallHere)
+        residCorrPerCondAll.append(residCorrPerCondAllHere)
         
+        residCorrPerCondOBPTAll.append(residCorrPerCondOBPTAllHere)
+        residCorrMeanOverCondOBPTAll.append(residCorrMeanOverCondOBPTAllHere)
+
+
+        
+
+
+
+    mnCorrPerCond = []
+    stdCorrPerCond = []
+    for rsCorr in residCorrPerCondAll:
+        mnCorrPerCond.append([residCorr.mean(axis=(0,1)) for residCorr in rsCorr])
+        stdCorrPerCond.append([residCorr.std(axis=(0,1)) for residCorr in rsCorr])
     
-   
-        
-#    if plotOutput:
-#        plotInfo = {}
-#        figErr = plt.figure()
-#        figErr.suptitle('dimensionality vs. GPFA log likelihood')
-#        axs = figErr.subplots(nrows=2, ncols=len(listBSS), squeeze=False)
-#        
-#    dimExp = []
-#    dimMoreLL = []
-#    gpfaOutDimAll = []
-#    gpfaTestIndsOutAll = []
-#    gpfaTrainIndsOutAll = []
-#    # with pool.Pool() as pool:
-#    #     results = []
-#    for idx, (bnSp, description, outputPath) in enumerate(zip(listBSS, descriptions, outputPaths)):
-#        
-#        print("*** Running GPFA for " + description.replace('\n', ' ') + " ***")
-#
-#        if plotOutput:
-#            axScore = axs[0, :].flat[idx]
-#            axDim = axs[1,:].flat[idx]
-#            plotInfo['axScore'] = axScore
-#            plotInfo['axDim'] = axDim
-#        else:
-#            plotInfo = None # don't plot for now...
-#   
-#        if type(bnSp) is list:
-#            numDims = []
-#            numDimsLL = []
-#            gpfaOutDim = []
-#            gpfaTestIndsOut = []
-#            gpfaTrainIndsOut = []
-#            for subsetNum, bS in enumerate(bnSp):
-#                numDimsSubst, numDimsLLSubst, gpfaOutDimSubst, gpfaTestIndsOutSubst, gpfaTrainIndsOutSubst = BinnedSpikeSet.gpfa(bS, outputPath,description=description, signalDescriptor = Path(signalDescriptor) / ("shuff_%d" % subsetNum) , forceNewGpfaRun = forceNewGpfaRun,
-#                          xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, 
-##                          baselineSubtract = baselineSubtract,
-#                          numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
-#                          timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceConds=balanceConds, plotInfo = plotInfo)
-#
-#                numDims.append(numDimsSubst)
-#                numDimsLL.append(numDimsLLSubst)
-#                gpfaOutDim.append(gpfaOutDimSubst)
-#                gpfaTestIndsOut.append(gpfaTestIndsOutSubst)
-#                gpfaTrainIndsOut.append(gpfaTrainIndsOutSubst)
-#        else:
-#            numDims, numDimsLL, gpfaOutDim, gpfaTestIndsOut, gpfaTrainIndsOut = BinnedSpikeSet.gpfa(bnSp, outputPath,description=description, signalDescriptor = signalDescriptor, forceNewGpfaRun = forceNewGpfaRun,
-#                      xDimTest = xDimTest, crossvalidateNum = crossvalidateNumFolds, firingRateThresh = firingRateThresh, 
-##                      baselineSubtract = baselineSubtract,
-#                      numConds=numStimulusConditions,combineConds = combineConditions, sqrtSpikes=sqrtSpikes,
-#                      timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd=timeBeforeAndAfterEnd, balanceConds=balanceConds, plotInfo = plotInfo)
-#            
-#        dimExp.append(numDims)
-#        dimMoreLL.append(numDimsLL)
-#        gpfaOutDimAll.append(gpfaOutDim)
-#        gpfaTestIndsOutAll.append(gpfaTestIndsOut)
-#        gpfaTrainIndsOutAll.append(gpfaTrainIndsOut)
-#        # 
-#        # resGrouped = list(zip(*results))
-#        # dimExp = list(resGrouped[0])
-#        # gpfaPrepAll = list(resGrouped[1])
-#        
-#    if plotOutput:
-#        pass
-##        axScore.legend()
-#    
-    return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
+    mnCorrPerCondOBPT = []
+    stdCorrPerCondOBPT = []
+    for rsCorr in residCorrPerCondOBPTAll:
+        mnCorrPerCondOBPT.append([residCorr.mean(axis=(0,1)) for residCorr in rsCorr])
+        stdCorrPerCondOBPT.append([residCorr.std(axis=(0,1)) for residCorr in rsCorr])
+    
+    fRChMnByArea = []
+    fRChStdByArea = []
+    fanoFactorChMnByArea = []
+    fanoFactorChStdByArea = []
+    fanoFactorChOBTMnByArea = []
+    fanoFactorChOBTStdByArea = []
+    labelUse = 'stimulusMainLabel'
+    for bnSpCnt in listBSS:
+        fRChMnByAreaHere = []
+        fRChStdByAreaHere = []
+        fanoFactorChMnByAreaHere = []
+        fanoFactorChStdByAreaHere = []
+        fanoFactorChOBTMnByAreaHere = []
+        fanoFactorChOBTStdByAreaHere = []
+        for bSC in bnSpCnt:
+            # All these metrics are taken on spike counts!
+            bSC = bSC.convertUnitsTo('count')
+
+            grpSpkCnt, uniqueLabel = bSC.groupByLabel(bSC.labels[labelUse])
+            fRChMnByAreaHere.append([np.mean(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
+            fRChStdByAreaHere.append([np.std(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
+            fanoFactorChMnByAreaHere.append([np.mean(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
+            fanoFactorChStdByAreaHere.append([np.std(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
+
+            if bSC.dtype == 'object':
+                grpTrlLenMs = [gSC.binSize*np.array([gSC[0].shape[0] for gSC in gpSpCn]) for gpSpCn in grpSpkCnt]
+            else:
+                grpTrlLenMs = [np.array([gSC.shape[2]*gSC.binSize]) for gSC in grpSpkCnt]
+            
+            fanoFactorChOBTMnByAreaHere.append([np.mean(gSC.increaseBinSize(gTLms).fanoFactorByChannel()) for gSC, gTLms in zip(grpSpkCnt, grpTrlLenMs)])
+            fanoFactorChOBTStdByAreaHere.append([np.std(gSC.increaseBinSize(gTLms).fanoFactorByChannel()) for gSC, gTLms in zip(grpSpkCnt, grpTrlLenMs)])
+
+        fRChMnByArea.append(np.stack(fRChMnByAreaHere))
+        fRChStdByArea.append(np.stack(fRChStdByAreaHere))
+        fanoFactorChMnByArea.append(np.stack(fanoFactorChMnByAreaHere))
+        fanoFactorChStdByArea.append(np.stack(fanoFactorChStdByAreaHere))
+        fanoFactorChOBTMnByArea.append(np.stack(fanoFactorChOBTMnByAreaHere))
+        fanoFactorChOBTStdByArea.append(np.stack(fanoFactorChOBTStdByAreaHere))
+    
+    resultsDict = {
+        'mean channel firing rate (Hz)' : fRChMnByArea,
+        'std channel firing rate (Hz)' : fRChStdByArea,
+        'mean(r_{sc})' : mnCorrPerCond,
+        'std(r_{sc})' : stdCorrPerCond,
+        'mean(r_{sc} 1 bn/tr)' : mnCorrPerCondOBPT,
+        'std(r_{sc} 1 bn/tr)' : stdCorrPerCondOBPT,
+        'mean channel fano factor' : fanoFactorChMnByArea,
+        'std channel fano factor' : fanoFactorChStdByArea,
+        'mean channel fano factor (1 bn/tr)' : fanoFactorChOBTMnByArea,
+        'std channel fano factor (1 bn/tr)' : fanoFactorChOBTStdByArea
+    }
+
+    return resultsDict
+
 
 #%% Plotting and descriptive
-
 def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
     
     frFig = plt.figure()
