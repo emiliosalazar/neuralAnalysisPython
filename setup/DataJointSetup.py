@@ -1083,7 +1083,7 @@ class GpfaAnalysisInfo(dj.Manual):
     label_use = "stimulusMainLabel" : varchar(50) # label to use for conditions
     """
     
-    def grabGpfaResults(self, order=True, returnInfo = False):
+    def grabGpfaResults(self, order=True, returnInfo = False, useFa = False):
         defaultParams = loadDefaultParams()
         dataPath = Path(defaultParams['dataPath'])
 
@@ -1134,28 +1134,81 @@ class GpfaAnalysisInfo(dj.Manual):
             
             dimensionality = info['dimensionality']
             # note we're using numpy to load here
-            print('Loading %s' % fullPath)
-            try:
-                with np.load(fullPath, allow_pickle=True) as gpfaRes:
-                    gpfaResLoaded = dict(
-                        zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
-                    )
-            except FileNotFoundError:
-                unsavedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
+            if not useFa:
+                print('Loading %s' % fullPath)
+                try:
+                    with np.load(fullPath, allow_pickle=True) as gpfaRes:
+                        gpfaResLoaded = dict(
+                            zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
+                        )
+                except FileNotFoundError:
+                    print('GPFA saved file not found even though it was in the database, recomputing extraction')
+                    unsavedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
 
-                condNums = unsavedGpfa['condition_nums'][0]
-                gpfaRunArgsMap = dict(
-                    labelUse = unsavedGpfa['label_use'][0],
-                    conditionNumbersGpfa = condNums,
-                    perCondGroupFiringRateThresh = unsavedGpfa['condition_grp_fr_thresh'][0]
-                )
-                
-                unsavedGpfa.computeGpfaResults(gap[unsavedGpfa],bsi[unsavedGpfa], **gpfaRunArgsMap)
-
-                with np.load(fullPath, allow_pickle=True) as gpfaRes:
-                    gpfaResLoaded = dict(
-                        zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
+                    condNums = unsavedGpfa['condition_nums'][0]
+                    gpfaRunArgsMap = dict(
+                        labelUse = unsavedGpfa['label_use'][0],
+                        conditionNumbersGpfa = condNums,
+                        perCondGroupFiringRateThresh = unsavedGpfa['condition_grp_fr_thresh'][0]
                     )
+                    
+                    unsavedGpfa.computeGpfaResults(gap[unsavedGpfa],bsi[unsavedGpfa], **gpfaRunArgsMap)
+
+                    with np.load(fullPath, allow_pickle=True) as gpfaRes:
+                        gpfaResLoaded = dict(
+                            zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
+                        )
+            else:
+                # NOTE this means that this FA test can only be run IF GPFA HAS ALREADY BEEN COMPUTED
+                print('Loading FA for %s' % fullPath)
+                flName = fullPath.name
+                flName = flName[2:] # erm... tacky but it changes gpfa to fa >.>
+                fullPath = fullPath.parent / flName
+                try:
+#                    raise(FileNotFoundError)
+                    with np.load(fullPath, allow_pickle=True) as faRes:
+                        gpfaResLoaded = dict(
+                            zip((k for k in faRes), (faRes[k] for k in faRes))
+                        )
+                except FileNotFoundError:
+                    gpfaParams = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
+
+                    labelUse = gpfaParams['label_use'][0]
+                    condNums = gpfaParams['condition_nums'][0]
+                    gpfaRunArgsMap = dict(
+                        labelUse = labelUse,
+                        conditionNumbersGpfa = condNums,
+                        perCondGroupFiringRateThresh = gpfaParams['condition_grp_fr_thresh'][0]
+                    )
+                    
+                    # I'm putting this output in the format that saved GPFA files
+                    # will have--i.e. a dictionary of variables... of these
+                    # specific variables
+                    faResLoadedInit = gpfaParams.computeGpfaResults(gap[gpfaParams],bsi[gpfaParams], **gpfaRunArgsMap, useFa=True)
+
+                    if len(faResLoadedInit[0]['faRes'][0]) > 0:
+                        with np.load(fullPath, allow_pickle=True) as faRes:
+                            gpfaResLoaded = dict(
+                                zip((k for k in faRes), (faRes[k] for k in faRes))
+                            )
+                    else:
+                        gpfaResLoaded = []
+
+#                faResLoadedInit = faResLoadedInit[0]
+#                faRes = faResLoadedInit['faRes']
+#                grpSpk = faResLoadedInit['groupedBalancedSpikes']
+#                assert len(grpSpk)==1, "should have only grabbed one FA condition run here..."
+#                grpSpk = grpSpk[0]
+#                gpfaResLoaded = dict(
+#                        dimOutput = faRes[0],
+#                        testInds = faRes[1],
+#                        trainInds = faRes[2],
+#                        score = faRes[3][0,:],
+#                        alignmentBins = grpSpk.alignmentBins[0],
+#                        condLabel = grpSpk.labels[labelUse][0],
+#                        binSize = grpSpk.binSize
+#                    )
+#
 
             gpfaResults[relPathAndCond].update({dimensionality : gpfaResLoaded})
 
@@ -1165,7 +1218,7 @@ class GpfaAnalysisInfo(dj.Manual):
             return gpfaResults, dict(gpfaOutPaths = gpfaOutPaths, bssPaths = bssPaths, datasetNames = datasetNames)
         return gpfaResults
 
-    def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, forceNewGpfaRun = False):
+    def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, forceNewGpfaRun = False, useFa = False):
         defaultParams = loadDefaultParams()
         dataPath = Path(defaultParams['dataPath'])
 
@@ -1182,20 +1235,20 @@ class GpfaAnalysisInfo(dj.Manual):
         # the id isn't one of the params...
         units = gpfaParams.pop('units')
         gpfaParams.pop('gpfa_params_id', None)
-        gpfaParamsMap = dict(
-            dimensionality = 'xDimTest',
-            firing_rate_thresh = 'overallFiringRateThresh',
+        # params for the preparation of bins pre-gpfa
+        gpfaPrepParamsMap = dict(
+            overall_fr_thresh = 'overallFiringRateThresh',
             balance_conds = 'balanceConds',
             sqrt_spikes = 'sqrtSpikes',
             combine_conditions = 'combineConds',
-            num_folds_crossvalidate = 'crossvalidateNum',
+            on_residuals = 'computeResiduals',
         )
         # changing up the key names to fit into the gpfa function
-        gpfaParamsForCall = {gpfaParamsMap[k] : v for k,v in gpfaParams.items() if k in gpfaParamsMap}
+        gpfaPrepParamsForCall = {gpfaPrepParamsMap[k] : v for k,v in gpfaParams.items() if k in gpfaPrepParamsMap}
 
-        cc = gpfaParamsForCall['combineConds']
-        gpfaParamsForCall['combineConds'] = False if cc == 'no' else True
-        # remember that gpfaParamsForCall['numConds'] just tells us how many
+        cc = gpfaPrepParamsForCall['combineConds']
+        gpfaPrepParamsForCall['combineConds'] = False if cc == 'no' else True
+        # remember that gpfaPrepParamsForCall['numConds'] just tells us how many
         # conditions *per extraction*, not *which* conditions--so that's why
         # there's a conditionNumbersGpfa input.
         #
@@ -1207,10 +1260,24 @@ class GpfaAnalysisInfo(dj.Manual):
         # conditions, but it's unclear how many conditions each bS will have
         # (which is actually why this is not stored in the GpfaAnalysisParams
         # table
-        gpfaParamsForCall['condNums'] = conditionNumbersGpfa # if cc == 'no' else nc
-        gpfaParamsForCall['perConditionGroupFiringRateThresh'] = perCondGroupFiringRateThresh
+        numberOfConditions = gpfaParams['num_conds']
+        if cc != 'no' and ((conditionNumbersGpfa is None and numberOfConditions != 0) or (len(conditionNumbersGpfa) != numberOfConditions)):
+            breakpoint()
+            raise Exception("Incorrect number of conditions provided")
+        gpfaPrepParamsForCall['condNums'] = conditionNumbersGpfa # if cc == 'no' else nc
+        gpfaPrepParamsForCall['perConditionGroupFiringRateThresh'] = perCondGroupFiringRateThresh
+        gpfaPrepParamsForCall['labelUse'] = labelUse
+
+        # params for the actual call to the gpfa computation
+        gpfaCallParamsMap = dict(
+            num_folds_crossvalidate = 'crossvalidateNum',
+            dimensionality = 'xDim',
+        )
+        gpfaCallParams = {gpfaCallParamsMap[k] : v for k,v in gpfaParams.items() if k in gpfaCallParamsMap}
+        gpfaCallParams['labelUse'] = labelUse
 
 
+        retValsAll = []
         for key in bssKeys:
             relPath = Path(key['bss_relative_path']).parent 
 #            relPath /= Path(key['fss_rel_path_from_parent']).parent if 'fss_rel_path_from_parent' in key else ""
@@ -1222,9 +1289,16 @@ class GpfaAnalysisInfo(dj.Manual):
             bss = binnedSpikeSet[0]
             bss = bss.convertUnitsTo(units)
 
-            retVals = bss.gpfa(fullPathToConditions, forceNewGpfaRun = forceNewGpfaRun, **gpfaParamsForCall)
-            condInfo = retVals[-1]
-            gpfaPrepComp = retVals[2]
+            groupedBalancedSpikes, condDescriptors, condsUse = bss.prepareGpfaOrFa(**gpfaPrepParamsForCall)
+            if useFa:
+                retVals = {}
+                retVals['faRes'] = bss.fa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams)
+                retVals['groupedBalancedSpikes'] = groupedBalancedSpikes
+                retValsAll.append(retVals)
+                continue
+            else:
+                retVals = bss.gpfa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams, forceNewGpfaRun = forceNewGpfaRun)
+                retValsAll.append(retVals)
 
 
             for cI, gPC in zip(condInfo, gpfaPrepComp):
