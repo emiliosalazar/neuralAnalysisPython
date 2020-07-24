@@ -419,8 +419,17 @@ def pcaComputation(listBSS, plot=True):
 def ldaComputation(listBSS, plot=True):
     pass
 
+
+# note that timeBeforeAndAfterStart asks about what the first and last points of
+# the binned spikes represent as it relates to the first and last alignment point
+# i.e. the default (0,250) tells us that the first bin is aligned with whatever
+# alignment was used to generate this spike set (say, the delay start), and should
+# be plotted out to 250ms from that point. The default timeBeforeAndAfterEnd
+# of (-250,0) tells us that the *last* bin is aligned at the alignment point
+# for the end (whatever that may be--say, the delay end), and should be plotted
+# starting -250 ms before
 def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceConds = True, computeResiduals = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
-                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], overallFiringRateThresh=0.5, perConditionGroupFiringRateThresh = 0.5, signalDescriptor = "",plotOutput=True, units='count'):
+                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], overallFiringRateThresh=0.5, perConditionGroupFiringRateThresh = 0.5, signalDescriptor = "",plotOutput=True, units='count', useFa = False):
     
     # from classes.GPFA import GPFA
     from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
@@ -432,14 +441,15 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
     gap = GpfaAnalysisParams()
 
     labelUse = 'stimulusMainLabel'
-    for dim in xDimTest:
+    for idxXdim,dim in enumerate(xDimTest):
+        print("Testing/loading dimensionality %d. Left to test: " % dim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
         gpfaParams = dict(
             dimensionality = dim,
             overall_fr_thresh = overallFiringRateThresh,
             balance_conds = balanceConds,
             sqrt_spikes = sqrtSpikes,
-            num_conds = 1 if not combineConditions else (numStimulusConditions if numStimulusConditions is not None else 0),
-            combine_conditions = 'no' if not combineConditions else ('all' if numStimulusConditions is None else numStimulusConditions),
+            num_conds = 1 if not combineConditions else (0 if numStimulusConditions is None else numStimulusConditions),
+            combine_conditions = 'no' if not combineConditions else ('all' if numStimulusConditions is None else 'subset'),
             num_folds_crossvalidate = crossvalidateNumFolds,
             on_residuals = computeResiduals,
             units = units
@@ -450,28 +460,31 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
 
         if type(bssExp) is list:
             for subExp in bssExp:
-                bssExpComputed = subExp[gai[gap[gpfaParams]]]
-                bssExpToCompute = subExp - gai[gap[gpfaParams]]
+                if not useFa:
+                    bssExpComputed = subExp[gai[gap[gpfaParams]]]
+                    bssExpToCompute = subExp - gai[gap[gpfaParams]]
                 
-                # note that this *adds* values to GpfaAnalysisInfo, so we can't
-                # just filter gai by bssExpToCompute (nothing will be there!)
-                gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh)
+                    # note that this *adds* values to GpfaAnalysisInfo, so we can't
+                    # just filter gai by bssExpToCompute (nothing will be there!)
+                    gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
 
         else:
-            bssExpComputed = bssExp[gai[gap[gpfaParams]]]
-            bssExpToCompute = bssExp - gai[gap[gpfaParams]]
+            if not useFa:
+                bssExpComputed = bssExp[gai[gap[gpfaParams]]]
+                bssExpToCompute = bssExp - gai[gap[gpfaParams]]
 #            # NOTE CHANGE
 #            bssExpToCompute = bssExpComputed
 #            forceNewGpfaRun = True
             
             # note that this *adds* values to GpfaAnalysisInfo, so we can't
             # just filter gai by bssExpToCompute (nothing will be there!)
-            gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, forceNewGpfaRun = forceNewGpfaRun)
+                gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, forceNewGpfaRun = forceNewGpfaRun, useFa=useFa)
 
 
     # this is gonna filter the GpfaAnalysisParams (gap) which will be used to
     # filter the infos
     gpfaParamsAll = [{'dimensionality' : d} for d in xDimTest]
+    ind=0
     if type(bssExp) is list:
         # Um.... DataJoint can apparently handle bssExp being a list of expressions
         # and that's nuts. Unfortunately for the nuttiness, I *do* need to be able
@@ -480,13 +493,14 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         gpfaInfo = []
         lstSzs = []
         for subExp in bssExp:
+            ind+=1
             lstSzs.append(len(gai[subExp]))
-            gpfaResH, gpfaInfoH = gai[subExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True)
+            gpfaResH, gpfaInfoH = gai[subExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, useFa=useFa)
 
             gpfaRes.append(gpfaResH)
             gpfaInfo.append(gpfaInfoH)
     else:
-        gpfaRes, gpfaInfo = gai[bssExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, order=True)
+        gpfaRes, gpfaInfo = gai[bssExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
 
 # could probably make this work... but better to just keep the above, no?
 #    gpfaRes2, gpfaInfo2 = gai[bssExp].grabGpfaResults(returnInfo=True, order=True)
@@ -543,7 +557,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
 
 
         if plotOutput:
-            for idx, (description, dimsTest, testIndsCondAll, dimResult, normalGpfaScoreAll, binSize, condLabels, alignmentBins) in enumerate(zip(gpfaInfoHere['datasetNames'][-1], gpfaDimsTested[-1], gpfaTestIndsOutAll[-1], gpfaOutDimAll[-1], normScoreAll[-1], gpfaBinSize[-1], gpfaCondLabels[-1], gpfaAlignmentBins[-1])):
+            for idx, (description, dimsTest, testIndsCondAll, dimResult, normalGpfaScoreAll, binSize, condLabels, alignmentBins) in enumerate(zip(gpfaInfoHere['datasetNames'], gpfaDimsTested[-1], gpfaTestIndsOutAll[-1], gpfaOutDimAll[-1], normScoreAll[-1], gpfaBinSize[-1], gpfaCondLabels[-1], gpfaAlignmentBins[-1])):
 
                 # grab first cval--they'll be the same for each cval, which is what
                 # these lists store
@@ -572,17 +586,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 tmVals = [tmValsStartBest, tmValsEndBest]
                 visualizeGpfaResults(plotInfo, dimResult,  tmVals, cvApproach, normalGpfaScoreAll, dimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins)
 
-#        listBSS = bssExpToCompute.grabBinnedSpikes()
-#
-#        if len(bssExp[gai[gap[gpfaParams]]]) == 0:
-#            gpfaParamsHash = gap.hash()
-#            saveGpfaRelativePath = Path(dsiPks['dataset_relative_path']).parent / ('binnedSpikeSet_%s' % bSSProcParamsHash[:5]) / binnedSpikeSetDill
-#            
-#            gpfaInfoSpecParams = dict(
-#                condition_nums = numStimulusConditions
-#            )
-#        else:
-#            bssStillCompute = 
+    return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
         
     
    
