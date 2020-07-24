@@ -26,6 +26,7 @@ import warnings
 from math import sqrt, log
 import numpy as np
 from scipy import linalg
+import scipy as sp
 
 
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -217,14 +218,22 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         if np.linalg.matrix_rank(covX) == n_features:
             scale = np.exp(2*np.sum(np.log(np.diag(np.linalg.cholesky(covX))))/n_features)
         else:
-            raise Exception("FA:NumObs", "Not enough observations! Rank covariance mat = " + str(np.linalg.matrix_rank(covX)) + ". Num features = " + str(n_features))
+            # unlike Matlab, np's cholesky below fails if you're not full
+            # rank... kind of correctly, honestly
+            # At least I remember it doing so... let's try again
+            warnings.warn('FactorAnalysis data matrix is not full rank')
+            r = np.linalg.matrix_rank(covX)
+            e = np.sort(np.linalg.eig(covX)[0])[::-1]
+            scale = sp.stats.mstats.gmean(e[:r])
+#            raise Exception("FA:NumObs", "Not enough observations! Rank covariance mat = " + str(np.linalg.matrix_rank(covX)) + ". Num features = " + str(n_features))
 
-        L = np.random.randn(n_features, n_components)*scale
+        L = np.random.randn(n_features, n_components)*np.sqrt(scale/n_components)
+        I = np.eye(n_components)
         psi = np.diag(covX)
         for i in range(self.max_iter):
             invPsi = np.diag(1/psi)
             iPsiL = invPsi @ L
-            MM = invPsi - iPsiL @ np.linalg.inv(np.eye(n_components) + L.T @ iPsiL) @ iPsiL.T
+            MM = invPsi - iPsiL @ np.linalg.inv(I + L.T @ iPsiL) @ iPsiL.T
 
             beta = L.T @ MM
 
