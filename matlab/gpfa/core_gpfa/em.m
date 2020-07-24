@@ -171,6 +171,19 @@ function [estParams, seq, LL, iterTime] = em(currentParams, seq, varargin)
     elseif (LLi < LLold)
       fprintf('\nError: Data likelihood has decreased from %g to %g\n',... 
         LLold, LLi);
+      fprintf('\nIt has decreased by %g', LLi-LLold);
+      fprintf('\nEps is %g', eps);
+      if abs(LLi-LLold)>eps
+          fprintf('\nThe decrease is more than eps');
+      elseif abs(LLi-LLold)<eps
+          fprintf('\nThe decrease is less than eps');
+      else
+          fprintf('\nThe decrease is identical to eps');
+      end
+        if ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
+            fprintf('\nYet, the change is small so we''re bumpin'' outta here')
+            break
+        end
       keyboard;
     elseif ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
       break;
