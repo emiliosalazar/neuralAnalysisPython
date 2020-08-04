@@ -10,6 +10,7 @@ class FA:
     def __init__(self, binnedSpikes, crossvalidateNum):
         self.dimOutput = {}
         self.binnedSpikes = binnedSpikes
+        self.crossvalidateNum = crossvalidateNum
         self.trainInds, self.testInds =  self.computeTrainTestIndRandom(numFolds = crossvalidateNum)
 
     def computeTrainTestIndRandom(self, numFolds = 4, initSeed = 0):
@@ -34,12 +35,18 @@ class FA:
         fADims = []
         bnSp = self.binnedSpikes
 
+        trainInds = self.trainInds
+        testInds = self.testInds
+        if self.crossvalidateNum == 1: # effectively no crossvalidations
+            trainInds = testInds
+
+
         self.dimOutput[numDim] = {}
-        self.dimOutput[numDim]['crossvalidateNum'] = len(self.trainInds)
+        self.dimOutput[numDim]['crossvalidateNum'] = self.crossvalidateNum
         allEstParams = []
         seqsTrainNew = []
         seqsTestNew = []
-        for cVal, (trnInd, tstInd) in enumerate(zip(self.trainInds, self.testInds)):
+        for cVal, (trnInd, tstInd) in enumerate(zip(trainInds, testInds)):
             fA = FactorAnalysis(n_components = numDim)
 
             if bnSp.dtype=='object':

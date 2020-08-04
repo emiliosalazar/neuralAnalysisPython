@@ -16,11 +16,12 @@ os.environ['GOTO_NUM_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 import numpy as np
 import scipy as sp
+from multiprocessing import Pool, TimeoutError
 # I don't want *all* future imports of numpy to be affected like this... so
 # clearing the environment variables here...
-del os.environ['OPENBLAS_NUM_THREADS']
-del os.environ['GOTO_NUM_THREADS']
-del os.environ['OMP_NUM_THREADS']
+#del os.environ['OPENBLAS_NUM_THREADS']
+#del os.environ['GOTO_NUM_THREADS']
+#del os.environ['OMP_NUM_THREADS']
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from methods.GeneralMethods import prepareMatlab
 from matlab.engine import MatlabExecutionError
@@ -142,17 +143,18 @@ class GPFA:
         #     from matlab import engine 
         #     eng = engine.start_matlab()
         
-        if not crossvalidateNum:
-            seqTrain = self.gpfaSeqDict
-            seqTest = []
-            seqTrainStr = "[seqTrain{:}]"
-            seqTestStr = "subsref([seqTrain{:}], struct('type', '()', 'subs', {{[]}}))"
+        if crossvalidateNum == 1: # effectively not crossvalidating...
+            self.trainInds, self.testInds =  self.computeTrainTestIndRandom(numFolds = crossvalidateNum)
+            # with no crossvalidations, the train inds *are* the test inds...
+            self.trainInds = self.testInds
+            seqsTrain, seqsTest = self.trainAndTestSeq()
         else:
             self.trainInds, self.testInds =  self.computeTrainTestIndRandom(numFolds = crossvalidateNum)
             # self.trainInds, self.testInds = self.computeTrainTestIndOrdered(numFolds = crossvalidateNum)
             seqsTrain, seqsTest = self.trainAndTestSeq()
-            seqTrainStr = "[seqTrain{:}]"
-            seqTestStr = "[seqTest{:}]"
+
+        seqTrainStr = "[seqTrain{:}]"
+        seqTestStr = "[seqTest{:}]"
             
         if segLength is None:
             segLength = min([sq['T'] for sq in self.gpfaSeqDict])
@@ -162,7 +164,6 @@ class GPFA:
         seqsTrainNew = []
         seqsTestNew = []
         allEstParams = []
-        from multiprocessing import Pool
         
         
         
@@ -257,7 +258,6 @@ class GPFA:
     
     @multiprocessNumpy
     def crossvalidatedGpfaError(self, approach = "logLikelihood", eng=None, dimsCrossvalidate = None):
-        from multiprocessing import Pool, TimeoutError
         
         # if eng is None:
         #     from methods.GeneralMethods import prepareMatlab
