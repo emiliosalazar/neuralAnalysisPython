@@ -424,7 +424,7 @@ class BinnedSpikeSet(np.ndarray):
 
     # this is different from chaining timeAverage and trialAverage together
     # when there are different numbers of bins in different trials
-    def avgValByChannel(self):
+    def avgValByChannelOverBins(self):
         if self.dtype == 'object':
             chanFirst = self.swapaxes(0,1)
             avgValChan = np.stack([np.mean(np.hstack(chan), axis=1) for chan in chanFirst])
@@ -434,7 +434,20 @@ class BinnedSpikeSet(np.ndarray):
         
         return avgValChan
 
-    def stdValByChannel(self):
+    def stdValByChannelOverBins(self):
+        if self.size == 0:
+            stdValChan = np.empty(self.shape[1])
+        elif self.dtype == 'object':
+            chanFirst = self.swapaxes(0,1)
+            stdValChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
+            breakpoint() # because I'm not sure this is correct...
+        else:
+            numChannels = self.shape[1]
+            stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1)
+        
+        return stdValChan
+
+    def stdValByChannelOverTrials(self):
         if self.size == 0:
             stdValChan = np.empty(self.shape[1])
         elif self.dtype == 'object':
@@ -453,8 +466,8 @@ class BinnedSpikeSet(np.ndarray):
     # I expect other functions feeding into this one to check that the units
     # make sense
     def fanoFactorByChannel(self):
-        avgValChan = self.avgValByChannel()
-        stdValChan = self.stdValByChannel()
+        avgValChan = self.avgValByChannelOverBins()
+        stdValChan = self.stdValByChannelOverBins()
 
         # fano factor is variance/mean
         return stdValChan**2/avgValChan
