@@ -3,7 +3,7 @@ This is a script useful for whenever I want to explore the database--it sets up
 a bunch of variables and parameters to get crackin'!
 """
 
-from setup.DataJointSetup import DatasetGeneralLoadParams,DatasetInfo,BinnedSpikeSetProcessParams,BinnedSpikeSetInfo,FilterSpikeSetParams,GpfaAnalysisParams,GpfaAnalysisInfo
+from setup.DataJointSetup import DatasetGeneralLoadParams,DatasetInfo,BinnedSpikeSetProcessParams,BinnedSpikeSetInfo,FilterSpikeSetParams,GpfaAnalysisParams,GpfaAnalysisInfo,AnalysisRunInfo
 import numpy as np
 from pathlib import Path
 from methods.GeneralMethods import loadDefaultParams
@@ -18,6 +18,7 @@ bsi = BinnedSpikeSetInfo()
 fsp = FilterSpikeSetParams()
 gap = GpfaAnalysisParams()
 gai = GpfaAnalysisInfo()
+ari = AnalysisRunInfo()
 
 if __name__ == "__main__":
     if False:

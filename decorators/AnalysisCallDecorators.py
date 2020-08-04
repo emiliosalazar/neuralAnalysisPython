@@ -28,29 +28,37 @@ def saveCallsToDatabase(func):
         callSignature = inspect.signature(func)
         methodInputs = inspect.getcallargs(func, *args, **kwargs)
 
+        gitRepo = sh.git.bake('--no-pager', _cwd = rootPath) # a level up from decorators is now baked in ... >.>
+        diffRepo = str(gitRepo.diff('--no-color'))
+        gitHash = str(gitRepo.log("--pretty=format:%H", "-n 1"))
+
+        # this is smaller than the varchar size in the db!
+        if len(diffRepo) > 100000:
+            raise Exception("Commit yo' shit!")
+
         runStartTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         funcRet = func(*args, **kwargs)
         runEndTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        gitRepo = sh.git.bake('--no-pager', _cwd = rootPath) # a level up from decorators is now baked in ... >.>
-        diffRepo = gitRepo.diff('--no-color')
-        gitHash = gitRepo.log("--pretty=format:%H", "-n 1")
+
+        asiInsertInfo = dict(
+            analysis_method = analysisMethod,
+            method_call_signature = str(analysisMethod) + str(callSignature),
+            git_commit = gitHash,
+            patch = diffRepo,
+            method_inputs = methodInputs,
+            date_start = runStartTime,
+            date_end = runEndTime,
+        )
 
         if funcRet is not None:
-            outputFiles = funcRet['outputFiles'] if 'outputFiles' in funcRet else None
-        else:
-            outputFiles = None
-#        ari.insert1(dict(
-#            analysis_method = analysisMethod,
-#            method_call_signature = str(analysisMethod) + str(callSignature),
-#            git_commit = gitHash,
-#            patch = diffRepo,
-#            method_inputs = methodInputs,
-#            date_start = runStartTime,
-#            date_end = runEndTime,
-#            output_files = outputFiles,
-#            metadata = ,
-#        ))
+            asiInsertInfo.update(dict(output_figures_relative_path = funcRet['outputFiguresRelativePath'])) if 'outputFiguresRelativePath' in funcRet else None
+            asiInsertInfo.update(dict(output_files = funcRet['outputFiles'])) if 'outputFiles' in funcRet else None
+            asiInsertInfo.update(dict(output_files = funcRet['metadata'])) if 'metadata' in funcRet else None
+
+        ari.insert1(dict(
+            **asiInsertInfo
+        ))
         return funcRet
     
     return saveCallToDb
