@@ -43,6 +43,8 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
         endOffsetLocation = 'stateEnd'
 
     bSSProcParams = dict(
+        key_state_start = keyStateName, # in this function the key state is the start and end
+        key_state_end = keyStateName, # in this function the key state is the start and end
         start_offset = -furthestTimeBeforeState,
         start_offset_from_location = startOffsetLocation,
         end_offset = furthestTimeAfterState, # note I'm ignoring the + binSizeMs/20... hope I don't rue the day...
@@ -428,7 +430,7 @@ def ldaComputation(listBSS, plot=True):
 # of (-250,0) tells us that the *last* bin is aligned at the alignment point
 # for the end (whatever that may be--say, the delay end), and should be plotted
 # starting -250 ms before
-def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, balanceConds = True, computeResiduals = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
+def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, labelUse = 'stimulusMainLabel', balanceConds = True, computeResiduals = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
                     crossvalidateNumFolds = 4, xDimTest = [2,5,8], overallFiringRateThresh=0.5, perConditionGroupFiringRateThresh = 0.5, signalDescriptor = "",plotOutput=True, units='count', useFa = False):
     
     # from classes.GPFA import GPFA
@@ -439,22 +441,24 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
 
     gai = GpfaAnalysisInfo()
     gap = GpfaAnalysisParams()
+    bsi = BinnedSpikeSetInfo()
 
-    labelUse = 'stimulusMainLabel'
+    gpfaParams = dict(
+        overall_fr_thresh = overallFiringRateThresh,
+        balance_conds = balanceConds,
+        sqrt_spikes = sqrtSpikes,
+        num_conds = 1 if not combineConditions else (0 if numStimulusConditions is None else numStimulusConditions),
+        combine_conditions = 'no' if not combineConditions else ('all' if numStimulusConditions is None else 'subset'),
+        num_folds_crossvalidate = crossvalidateNumFolds,
+        on_residuals = computeResiduals,
+        units = units
+    )
+
+
+    
     for idxXdim,dim in enumerate(xDimTest):
         print("Testing/loading dimensionality %d. Left to test: " % dim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
-        gpfaParams = dict(
-            dimensionality = dim,
-            overall_fr_thresh = overallFiringRateThresh,
-            balance_conds = balanceConds,
-            sqrt_spikes = sqrtSpikes,
-            num_conds = 1 if not combineConditions else (0 if numStimulusConditions is None else numStimulusConditions),
-            combine_conditions = 'no' if not combineConditions else ('all' if numStimulusConditions is None else 'subset'),
-            num_folds_crossvalidate = crossvalidateNumFolds,
-            on_residuals = computeResiduals,
-            units = units
-        )
-
+        gpfaParams.update(dict(dimensionality = dim))
         if len(gap[gpfaParams]) == 0:
             gap.insert1(gpfaParams)
 

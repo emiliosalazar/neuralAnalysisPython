@@ -28,16 +28,45 @@ if __name__ == "__main__":
         bspVals = bsp.fetch(as_dict=True)
         for bspDict in bspVals:
             bspDictId = bspDict.pop('bss_params_id')
+
+            bspDictPk = {'bss_params_id' : bspDictId}
+            bspHere = bsp[bspDictPk]
+            binSpks = bsi[bspHere]
+
+            # check that all the BSPs came from the same key state
+            keyStatesStart = []
+            keyStatesEnd = []
+            for bnSpIn in binSpks:
+                bsiHere = bsi[{k:v for k,v in bnSpIn.items() if k in bsi.primary_key}]
+                keyStateNames = dsi[bsiHere].grabDatasets()[0].keyStates
+                stState = bnSpIn['start_alignment_state']
+                endState = bnSpIn['end_alignment_state']
+                keyStateStart = [kyNm for kyNm, stNm in keyStateNames.items() if stNm == stState][0]
+                keyStatesStart.append(keyStateStart)
+                keyStateEnd = [kyNm for kyNm, stNm in keyStateNames.items() if stNm == stState][0]
+                keyStatesEnd.append(keyStateEnd)
+
+            # set said key state in the bsp dict
+            if np.all(keyStateStart == np.array(keyStatesStart)) and np.all(keyStateEnd == np.array(keyStatesEnd)):
+                if bspDict['key_state_start'] != keyStateStart or bspDict['key_state_end'] != keyStateEnd:
+                    breakpoint()
+                    bspDict['key_state_start'] = keyStateStart
+                    bspDict['key_state_end'] = keyStateEnd
+                    bspHere._update('key_state_start', value=bspDict['key_state_start'])
+                    bspHere._update('key_state_end', value=bspDict['key_state_end'])
+            else:
+                breakpoint()
+                raise Exception
+
+
+            # compute new hash
             bspDictJson = json.dumps(bspDict, sort_keys=True)
             bspDictHash = hashlib.md5(bspDictJson.encode('ascii')).hexdigest()
             bspDictHashNew = bspDictHash[:5]
 
-            bspDictPk = {'bss_params_id' : bspDictId}
-            binSpks = bsi[bsp[bspDictPk]]
-
-            for bnSpkIn in binSpks:
-                bsiHere = bsi[{k:v for k,v in bnSpkIn.items() if k in bsi.primary_key}]
-                bssOldPthToDill = dataPath / bnSpkIn['bss_relative_path']
+            for bnSpk in binSpks:
+                bsiHere = bsi[{k:v for k,v in bnSpk.items() if k in bsi.primary_key}]
+                bssOldPthToDill = dataPath / bnSpk['bss_relative_path']
 
                 bssOldPthParent = bssOldPthToDill.parent
 
@@ -47,15 +76,17 @@ if __name__ == "__main__":
 
 #            breakpoint()
                 try:
+                    pass
                     bsiHere._update('bss_relative_path', value=bssNewRelPthToDillForDb)
                 except:
                     breakpoint()
                 try:
-                    print('moving\n\n%s\n\nto\n\n%s' % (bssOldPthParent, bssNewPthParent))
+                    print('****\nmoving\n\n%s\n\nto\n\n%s\n****' % (bssOldPthParent, bssNewPthParent))
                     shutil.move(str(bssOldPthParent), str(bssNewPthParent))
                 except FileNotFoundError:
                     print('%s has probably already been moved' % bssOldPthParent)
 
+            breakpoint()
             binSpks['bss_relative_path']
     breakpoint()
     #    gai['start_alignment_state="Target"']['dataset_id=6'][gap['dimensionality=5']].delete()

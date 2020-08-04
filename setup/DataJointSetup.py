@@ -446,6 +446,8 @@ class BinnedSpikeSetProcessParams(dj.Manual):
     # dataset info extraction params
     bss_params_id : int auto_increment # params id
     ---
+    key_state_start : varchar(20) # key state abstracts actual start state names each task type uses
+    key_state_end : varchar(20) # key state abstracts actual end state names each task type uses
     start_offset : int # offset in ms (from start_time_alignment in the specific params)
     start_offset_from_location : enum('stateStart', 'stateEnd') # location to offset from in start_alignment_state
     end_offset : int # offset in ms (from end_time_alignment in the specific params)
