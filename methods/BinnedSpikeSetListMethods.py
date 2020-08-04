@@ -543,7 +543,89 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
     gpfaAlignmentBins = []
     gpfaDimsTested = []
 
-    for gpfaResHere, gpfaInfoHere in zip(gpfaRes, gpfaInfo):
+    # NOTE If it happens that bssExp is not a list this'll break >.>
+    gpfaResBest = []
+    for gpfaInfoHere, gpfaResHere in zip(gpfaInfo, gpfaRes):
+        gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
+
+        bssPaths = [pthAndCond[0] for pthAndCond in gpfaCrunchedResults.keys()]
+        # Can't say I reeeally like eval here, but I think I gotta do it...
+        condNumsTested = [eval(pthAndCond[2]) for pthAndCond in gpfaCrunchedResults.keys()]
+
+        dimBestLogLikelihood = [d['xDimScoreBestAll'] for _, d in gpfaCrunchedResults.items()]
+
+        gpfaResBestExp = {}
+#        gpfaParams.update(dict(num_folds_crossvalidate = 1))
+
+        for dimHere, bssPath, cond in zip(dimBestLogLikelihood, bssPaths, condNumsTested):
+            dimHere = dimHere[0]
+            gpfaParams.update(dict(dimensionality=dimHere))
+            gpfaAnalysisInfoConds = gai['bss_relative_path="%s"' % bssPath]
+            bssExpWithGpfa = bsi['bss_relative_path="%s"' % bssPath]
+#            gpfaAnalysisInfoConds = gai['bss_relative_path="%s"' % (relPath/'filteredSpikeSet.dill')]
+#            bssExpWithGpfa = bsi['bss_relative_path="%s"' % (relPath/'filteredSpikeSet.dill')]
+#            if len(gpfaAnalysisInfoConds) == 0:
+#                gpfaAnalysisInfoConds = gai['bss_relative_path="%s"' % (relPath/'binnedSpikeSet.dill')]
+#                bssExpWithGpfa = bsi['bss_relative_path="%s"' % (relPath/'binnedSpikeSet.dill')]
+
+#            gpfaAnalysisInfoConds = gpfaAnalysisInfoConds[gap[dict(dimensionality=dimHere)]]
+            gpfaAnalysisInfoConds = gpfaAnalysisInfoConds[gap[gpfaParams]]
+#            hsh, condNumsAllDb = gpfaAnalysisInfoConds.fetch('gpfa_hash', 'condition_nums')
+            hsh, condNumsAllDb = gpfaAnalysisInfoConds.fetch('gpfa_hash', 'condition_nums')
+            assert len(hsh[condNumsAllDb == cond]) == 1, "Too many analysis infos fit these parameters"
+            hshThisCond = hsh[condNumsAllDb == cond][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
+            gpfaAnalysisInfoThisCondDim = gpfaAnalysisInfoConds[dict(gpfa_hash = hshThisCond)]
+            gpParams = gap[gpfaAnalysisInfoThisCondDim]
+
+            gpfaParamsNoCval = gpfaParams.copy()
+            # note that 1-fold crossvalidation is effectively no
+            # crossvalidation--which is what we want here because we've gotten
+            # our optimal dimensionality to fit on!
+            gpfaParamsNoCval.update({'num_folds_crossvalidate' : 1})
+
+            if len(gap[gpfaParamsNoCval]) == 0:
+                gap.insert1(gpfaParamsNoCval)
+
+#            if not useFa:
+            gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
+            gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
+            gpHashComp = gpHash[condsComputed==cond]
+            if len(gpHashComp):
+                gpHashComp = gpHashComp[0]
+
+            bssExpComputed = bssExpWithGpfa[gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]]
+            bssExpToCompute = bssExpWithGpfa - gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]
+#                bssExpComputed = bssExpWithGpfa[gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]]
+#                bssExpToCompute = bssExpWithGpfa - gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]
+        
+            # note that this *adds* values to GpfaAnalysisInfo, so we can't
+            # just filter gai by bssExpToCompute (nothing will be there!)
+            perConditionGroupFiringRateThresh = gpfaAnalysisInfoConds['condition_grp_fr_thresh'][0]
+            labelUse = gpfaAnalysisInfoConds['label_use'][0]
+            # NOTE: we set useFa to FALSE here because EVEN IF we're extracting
+            # the FA parameters, GPFA still needs to be run (the way that this
+            # is contructed...)
+            gai.computeGpfaResults(gap[gpfaParamsNoCval], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = cond, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=False)
+
+            # Not the prettiest, but we rerun this to account for the fact
+            # that the correct gpfaHash is now different...
+            gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
+            gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
+            gpHashComp = gpHash[condsComputed==cond]
+            if len(gpHashComp):
+                gpHashComp = gpHashComp[0]
+
+            bssExpComputed = bssExpWithGpfa[gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]]
+
+#gpfaInfo = (gai[bssExpComputed]['gpfa_hash="{hash}"'.format(hash=gpHashComp)] * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
+
+
+            gpfaResBestCond, gpfaInfoBestCond = gai[bssExpComputed]['gpfa_hash="{hash}"'.format(hash=gpHashComp)][gap[gpfaParamsNoCval]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
+            gpfaResBestExp.update(gpfaResBestCond)
+
+        gpfaResBest.append(gpfaResBestExp)
+
+    for gpfaResHere, gpfaInfoHere in zip(gpfaResBest, gpfaInfo):
         gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
 
         bssPaths = [pthAndCond[:2] for pthAndCond in gpfaCrunchedResults.keys()]
