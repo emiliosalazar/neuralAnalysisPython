@@ -789,7 +789,13 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
         stdCorrPerCondOBPT.append([residCorr.std(axis=(0,1)) for residCorr in rsCorr])
     
     fRChMnByArea = []
-    fRChStdByArea = []
+    fRChStdMnByArea = []
+    fRChMnStdByArea = []
+    fRChStdStdByArea = []
+    fRChPrBinMnByArea = []
+    fRChPrBinStdMnByArea = []
+    fRChPrBinMnStdByArea = []
+    fRChPrBinStdStdByArea = []
     fanoFactorChMnByArea = []
     fanoFactorChStdByArea = []
     fanoFactorChOBTMnByArea = []
@@ -797,7 +803,13 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
     labelUse = 'stimulusMainLabel'
     for bnSpCnt in listBSS:
         fRChMnByAreaHere = []
-        fRChStdByAreaHere = []
+        fRChStdMnByAreaHere = []
+        fRChMnStdByAreaHere = []
+        fRChStdStdByAreaHere = []
+        fRChPrBinMnByAreaHere = []
+        fRChPrBinStdMnByAreaHere = []
+        fRChPrBinMnStdByAreaHere = []
+        fRChPrBinStdStdByAreaHere = []
         fanoFactorChMnByAreaHere = []
         fanoFactorChStdByAreaHere = []
         fanoFactorChOBTMnByAreaHere = []
@@ -808,7 +820,13 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
 
             grpSpkCnt, uniqueLabel = bSC.groupByLabel(bSC.labels[labelUse])
             fRChMnByAreaHere.append([np.mean(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
-            fRChStdByAreaHere.append([np.std(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
+            fRChStdMnByAreaHere.append([np.std(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
+            fRChMnStdByAreaHere.append([np.mean(gSC.stdFiringRateByChannel()) for gSC in grpSpkCnt])
+            fRChStdStdByAreaHere.append([np.std(gSC.stdFiringRateByChannel()) for gSC in grpSpkCnt])
+            fRChPrBinMnByAreaHere.append([np.mean(gSC.avgValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinStdMnByAreaHere.append([np.std(gSC.avgValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinMnStdByAreaHere.append([np.mean(gSC.stdValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinStdStdByAreaHere.append([np.std(gSC.stdValByChannelOverBins()) for gSC in grpSpkCnt])
             fanoFactorChMnByAreaHere.append([np.mean(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
             fanoFactorChStdByAreaHere.append([np.std(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
 
@@ -821,15 +839,27 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
             fanoFactorChOBTStdByAreaHere.append([np.std(gSC.increaseBinSize(gTLms).fanoFactorByChannel()) for gSC, gTLms in zip(grpSpkCnt, grpTrlLenMs)])
 
         fRChMnByArea.append(np.stack(fRChMnByAreaHere))
-        fRChStdByArea.append(np.stack(fRChStdByAreaHere))
+        fRChStdMnByArea.append(np.stack(fRChStdMnByAreaHere))
+        fRChMnStdByArea.append(np.stack(fRChMnStdByAreaHere))
+        fRChStdStdByArea.append(np.stack(fRChStdStdByAreaHere))
+        fRChPrBinMnByArea.append(np.stack(fRChPrBinMnByAreaHere))
+        fRChPrBinStdMnByArea.append(np.stack(fRChPrBinStdMnByAreaHere))
+        fRChPrBinMnStdByArea.append(np.stack(fRChPrBinMnStdByAreaHere))
+        fRChPrBinStdStdByArea.append(np.stack(fRChPrBinStdStdByAreaHere))
         fanoFactorChMnByArea.append(np.stack(fanoFactorChMnByAreaHere))
         fanoFactorChStdByArea.append(np.stack(fanoFactorChStdByAreaHere))
         fanoFactorChOBTMnByArea.append(np.stack(fanoFactorChOBTMnByAreaHere))
         fanoFactorChOBTStdByArea.append(np.stack(fanoFactorChOBTStdByAreaHere))
     
     resultsDict = {
-        'mean channel firing rate (Hz)' : fRChMnByArea,
-        'std channel firing rate (Hz)' : fRChStdByArea,
+        'mean of mean(firing rate (Hz) of channels per trial)' : fRChMnByArea,
+        'std of mean(firing rate (Hz) of channels per trial)' : fRChStdMnByArea,
+        'mean of std(firing rate (Hz) of channels per trial)' : fRChMnStdByArea,
+        'std of std(firing rate (Hz) of channels per trial)' : fRChStdStdByArea,
+        'mean of mean(firing rate (Hz) of channels per bin)' : fRChPrBinMnByArea,
+        'std of mean(firing rate (Hz) of channels per bin)' : fRChPrBinStdMnByArea,
+        'mean of std(firing rate (Hz) of channels per bin)' : fRChPrBinMnStdByArea,
+        'std of std(firing rate (Hz) of channels per bin)' : fRChPrBinStdStdByArea,
         'mean(r_{sc})' : mnCorrPerCond,
         'std(r_{sc})' : stdCorrPerCond,
         'mean(r_{sc} 1 bn/tr)' : mnCorrPerCondOBPT,
