@@ -483,7 +483,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
 
     # this is gonna filter the GpfaAnalysisParams (gap) which will be used to
     # filter the infos
-    gpfaParamsAll = [{'dimensionality' : d} for d in xDimTest]
+    gpfaParamsAll = [{'dimensionality' : d, 'num_folds_crossvalidate' : crossvalidateNumFolds} for d in xDimTest]
     ind=0
     if type(bssExp) is list:
         # Um.... DataJoint can apparently handle bssExp being a list of expressions
@@ -542,8 +542,8 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
     for gpfaResHere, gpfaInfoHere in zip(gpfaRes, gpfaInfo):
         gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
 
-        keysRes = [Path(pthAndCond).parent for pthAndCond in gpfaCrunchedResults.keys()]
-        _, smDimGrph = np.unique(keysRes, return_inverse=True)
+        bssPaths = [pthAndCond[:2] for pthAndCond in gpfaCrunchedResults.keys()]
+        _, smDimGrph = np.unique(bssPaths, return_inverse=True, axis=0)
         dimExp.append([d['xDimBestAll'] for _, d in gpfaCrunchedResults.items()])
         dimMoreLL.append([d['xDimScoreBestAll'] for _, d in gpfaCrunchedResults.items()])
         normScoreAll.append([d['normalGpfaScoreAll'] for _, d in gpfaCrunchedResults.items()])

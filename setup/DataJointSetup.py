@@ -1109,9 +1109,9 @@ class GpfaAnalysisInfo(dj.Manual):
 #                gpfaPaths = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums', 'dimensionality', 'dataset_name', as_dict=True)
 #        else:
         if order:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums', 'dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
         else:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums', 'dimensionality', 'dataset_name', as_dict=True)
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', as_dict=True)
 
         for info in gpfaInfo:
             bssPath = Path(info['bss_relative_path'])
@@ -1121,7 +1121,8 @@ class GpfaAnalysisInfo(dj.Manual):
 #                relPath /= Path(path['fss_rel_path_from_parent']).parent
 #                bssPath = bssPath.parent / path['fss_rel_path_from_parent']
             
-            relPathToFile = relPath / info['gpfa_rel_path_from_bss']
+            relPathFromBss = info['gpfa_rel_path_from_bss']
+            relPathToFile = relPath / relPathFromBss
             fullPath = dataPath / relPathToFile
             gpfaOutPaths.append(fullPath)
             bssPaths.append(bssPath)
@@ -1129,7 +1130,8 @@ class GpfaAnalysisInfo(dj.Manual):
 
 
             conditionNum = info['condition_nums']
-            relPathAndCond = relPath / str(conditionNum)
+            numCrossvals = info['num_folds_crossvalidate']
+            relPathAndCond = (str(bssPath), str(numCrossvals), str(conditionNum))
             if relPathAndCond not in gpfaResults:
                 # set the first element to information about this run...
                 gpfaResults[relPathAndCond] = {'condition': conditionNum}
@@ -1283,7 +1285,7 @@ class GpfaAnalysisInfo(dj.Manual):
         for key in bssKeys:
             relPath = Path(key['bss_relative_path']).parent 
 #            relPath /= Path(key['fss_rel_path_from_parent']).parent if 'fss_rel_path_from_parent' in key else ""
-            gpfaRelPathFromBss = Path('gpfa') / ('params_%s' % gpfaParamsHash[:5] )
+            gpfaRelPathFromBss = Path('gpfa') / ('params_%s' % gpfaParamsHash[:5] ) 
             fullPathToConditions = dataPath / relPath / gpfaRelPathFromBss
             binnedSpikeSet = bsiOrFsi[key].grabBinnedSpikes()
 

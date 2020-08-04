@@ -135,7 +135,7 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
 
         # this key is enough to put all dimensions with the same condition
         # together
-        gpfaParamsKey = str(relPathAndCond)
+        gpfaParamsKey = relPathAndCond
         if gpfaParamsKey not in groupedResults:
             groupedResults[gpfaParamsKey] = dict(
                     dimResults = [dimResultsHere],
@@ -218,7 +218,7 @@ def crunchFaResults(faResultsDictOfDicts, cvApproach = "logLikelihood", shCovThr
 
         # this key is enough to put all dimensions with the same condition
         # together
-        gpfaParamsKey = str(relPathAndCond)
+        gpfaParamsKey = relPathAndCond
         if gpfaParamsKey not in groupedResults:
             groupedResults[gpfaParamsKey] = dict(
                     dimResults = [dimResultsHere],
