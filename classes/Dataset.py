@@ -53,7 +53,18 @@ class Dataset():
             
             self.statesPresented = [trlDat['stateTransitions'][0][0] for trlDat in annots['Data']['TrialData'][0]]
             
-            self.stateNames = annots['Data']['Parameters'][0][0]['stateNames'][0][0]
+            # here, if there are multiple sets of state names, we assign
+            # stateNames to an object array containing one set per trial;
+            # otherwise, we assign stateNames to the one unique set
+            stateNamesList = [trlDat['stateNames'][0][0] for trlDat in annots['Data']['Parameters'][0]]
+#            self.stateNames = annots['Data']['Parameters'][0][0]['stateNames'][0][0]
+            if not np.all([np.all(stNms == stateNamesList[0]) for stNms in stateNamesList]):
+                stateNamesObjArr = np.ndarray((len(stateNamesList),), dtype='object')
+                stateNamesObjArr[:] = [stNms.squeeze() for stNms in stateNamesList]
+                self.stateNames = stateNamesObjArr 
+            else:
+                self.stateNames = stateNamesList[0]
+
             stateHandLoc = annots['Data']['Parameters'][0][0]['StateTable'][0,0][0,0]['Hand'][0,0]['window'][0,0:3]
             
             kinematicsTemp = [trlDat['HandKinematics'][0][0]['cursorKinematics'][0][0] for trlDat in annots['Data']['TrialData'][0]]
@@ -191,7 +202,11 @@ class Dataset():
                 filtTrialLabels[label] = values[mask,:]
 
             filteredTrials.trialLabels = filtTrialLabels
-        filteredTrials.stateNames = filteredTrials.stateNames
+        if len(filteredTrials.stateNames)>1:
+            filteredTrials.stateNames = filteredTrials.stateNames[mask]
+        else:
+            filteredTrials.stateNames = filteredTrials.stateNames
+
         filteredTrials.statesPresented = [filteredTrials.statesPresented[hr] for hr in range(0, len(filteredTrials.statesPresented)) if mask[hr]]
         filteredTrials.cosTuningCurveParams = {'thBestPerChan': np.empty(0), 'modPerChan': np.empty(0), 'bslnPerChan': np.empty(0), 'tuningCurves': np.empty(0)}
         filteredTrials.minTimestamp = filteredTrials.minTimestamp
@@ -231,12 +246,12 @@ class Dataset():
 
     def trialsWithState(self, stateName, asLogical=True):
         stNm = self.stateNames
-        #stNm = stNm[None, :]
-        stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
+        if len(stNm)==1: # otherwise there's already a unique name per trial
+            stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
         stPres = self.statesPresented
         stPres = [stPr[0, stPr[0]!=-1] for stPr in stPres]
         stPresTrl = zip(stPres, stNm, range(0, len(self.statesPresented)))
-        trialsWithState = np.stack([np.any(np.core.defchararray.find(np.stack(stNm[np.int32(stPres-1)]),stateName)!=-1) for stPres, stNm, trialNum in stPresTrl])
+        trialsWithState = np.stack([np.any(np.core.defchararray.find(np.stack(stNames[np.int32(stPres-1)]),stateName)!=-1) for stPres, stNames, trialNum in stPresTrl])
 
         if not asLogical:
             trialsWithState = np.where(targetWithState)[0]
@@ -484,10 +499,14 @@ class Dataset():
         return groupedSpikes
     
     def timeOfState(self, state):
-        statePresNum = np.where(self.stateNames == state)[1][0]+1 # remember Matlab is 1-indexed
+        stNm = self.stateNames
+        if len(stNm)==1: # otherwise there's already a unique name per trial
+            stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
         
         stateTmPres = []
-        for statesPres in self.statesPresented:
+        for stNames, statesPres in zip(stNm, self.statesPresented):
+            statePresNum = np.nonzero(stNames == state)[0][0]+1 # remember Matlab is 1-indexed
+
             locStateLog = statesPres[0,:]==(statePresNum) # remember Matlab is 1-indexed
             if np.any(locStateLog):
                 locState = np.where(locStateLog)[0][0]
@@ -507,24 +526,28 @@ class Dataset():
         # chunk with unnamed neural data at the beginning, and we want to grab
         # that. Keeping here for the moment...
         stateNameStatesEnd = []
+        stNm = self.stateNames
+        if len(stNm)==1: # otherwise there's already a unique name per trial
+            stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
+
         if stateName == 'Start of trial':
-            for statesPres in self.statesPresented:
+            for stNames, statesPres in zip(stNm, self.statesPresented):
                 startTmsPres.append(0)
                 endTmsPres.append(statesPres[1,0])
-                stateNamesStatesEnd.append(self.stateNames(int(self.statesPres[1,1]-1)))
+                stateNamesStatesEnd.append(stNames[int(self.statesPres[1,1]-1)])
         elif stateName == 'End of trial':
             for trl, statesPres in enumerate(self.statesPresented):
                 startTmsPres.append(statesPres[1,-1])
                 endTmsPres.append(self.maxTimestamp[trl])
-                stateNamesStatesEnd.append(self.stateNames('End of trial'))
+                stateNamesStatesEnd.append('End of trial')
         elif stateName == 'Entire trial':
             for trl, statePres in enumerate(self.statesPresented):
                 startTmsPres.append(0)
                 endTmsPres.append(self.maxTimestamp[trl]) # no true way to know how much longer it technically goes...
-                stateNamesStatesEnd.append(self.stateNames('End of trial'))
+                stateNamesStatesEnd.append('End of trial')
         else:
-            indStatePres = np.where(self.stateNames == stateName)[1][0] # this is a horizontal vector...
-            for statesPres in self.statesPresented:
+            for stNames, statesPres in zip(stNm, self.statesPresented):
+                indStatePres = np.nonzero(stNames == stateName)[0][0] # this is a horizontal vector...
                 locStateLog = statesPres[0,:]==(indStatePres+1) # remember Matlab is 1-indexed
                 if np.any(locStateLog):
                     locStateStrtSt = np.where(locStateLog)[0][0]
@@ -533,11 +556,11 @@ class Dataset():
 
                     stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
                     # go to next state until we find one not to ignore
-                    while self.stateNames[0,stNumPres] in ignoreStates:
+                    while stNames[stNumPres] in ignoreStates:
                         locStateEndSt = locStateEndSt + 1 
                         stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
 
-                    stateNameStatesEnd.append(self.stateNames[0,stNumPres][0]) # result of how mats are loaded >.>
+                    stateNameStatesEnd.append(stNames[stNumPres][0]) # result of how mats are loaded >.>
 
                     startTmsPres.append(statesPres[1, delayStartSt])
                     endTmsPres.append(statesPres[1, locStateEndSt])
