@@ -42,7 +42,7 @@ from methods.BinnedSpikeSetListMethods import rscComputations
 from methods.GpfaMethods import computePopulationMetrics
 
 # for plotting the metrics
-from methods.plotUtils.UnsortedPlotMethods import pltAllVsAll
+from methods.plotUtils.UnsortedPlotMethods import plotAllVsAll, plotMetricVsExtractionParams
 
 
 @saveCallsToDatabase
@@ -54,6 +54,8 @@ def sweepOfExtractionParams():
     bsp = BinnedSpikeSetProcessParams()
     fsp = FilterSpikeSetParams()
 
+
+    outputFiguresRelativePath = []
     singKey = []
     singKey.append(dsi['brain_area="M1" AND dataset_name LIKE "%2019-03-22%"'].fetch("KEY")[0]) # M1
 #    singKey.append(dsi['brain_area="PFC" AND dataset_name LIKE "%2018-07-14%"'].fetch("KEY")[0]) # PFC
@@ -161,10 +163,13 @@ def sweepOfExtractionParams():
                 bSSHere = bsi[filtBssKeys].grabBinnedSpikes()[0]
 
         maxNumNeuron = bSSHere.shape[1]
-        numNeuronTests = np.round(np.geomspace(minNumNeuron, maxNumNeuron, numValsSweep))
-
         numTrls = np.unique(bSSHere.labels[labelName],axis=0,return_counts=True)[1]
         maxNumTrlPerCond = np.min(numTrls)
+        if numValsSweep == 1: # if we're not sweeping values, we'll just use the default
+            minNumNeuron = maxNumNeuron
+            minNumTrlPerCond = maxNumTrlPerCond
+        numNeuronTests = np.round(np.geomspace(minNumNeuron, maxNumNeuron, numValsSweep))
+
         numTrialsPerCondTests = np.round(np.geomspace(minNumTrlPerCond, maxNumTrlPerCond, numValsSweep))
 
         from itertools import product
@@ -201,7 +206,7 @@ def sweepOfExtractionParams():
     useFaLog = [False,True]
 
     
-    dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds, brainAreasTechnique = [],[],[],[],[], []
+    dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds, brainAreasTechnique, brainAreasNoTechnique = [],[],[],[],[], [], []
     for useFa in useFaLog:
         dimsH, dimsLLH, gpfaDimOutH, gpfaTestIndsH, gpfaTrainIndsH = gpfaComputation(
             subsampleExpressions,timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd = timeBeforeAndAfterEnd,
@@ -216,6 +221,7 @@ def sweepOfExtractionParams():
         gpfaTrainInds += gpfaTrainIndsH
 
         brainAreasTechnique += [bA + ' %s' % ('FA' if useFa else 'GPFA') for bA in brainAreas]
+        brainAreasNoTechnique += brainAreas
 
     brainAreas = brainAreasTechnique
     subsampleExpressions*=len(useFaLog)
@@ -230,7 +236,7 @@ def sweepOfExtractionParams():
 
 
     if plotGpfa:
-        saveFiguresToPdf(pdfname=("gpfaOverOverNeuronTrialSweep-%s and %s" % (brainAreas[0],brainAreas[-1])))
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=("gpfaOverOverNeuronTrialSweep-%s and %s" % (brainAreas[0],brainAreas[-1]))))
         plt.close('all')
 
     
@@ -262,7 +268,7 @@ def sweepOfExtractionParams():
         plotFiringRates(binnedSpksShortStOffSubsamplesCnt, descriptions, supTitle = supTitle + " count", cumulative = False)
 
 
-        saveFiguresToPdf(pdfname="genericMetricsOnNeurTrialSweep-%s and %s")
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="genericMetricsOnNeurTrialSweep-%s and %s"))
         plt.close('all')
 
         
@@ -276,14 +282,13 @@ def sweepOfExtractionParams():
     rscMetricDict = rscComputations(binnedResidSubsamples, descriptions, labelName, separateNoiseCorrForLabels = separateNoiseCorrForLabels, normalize = normalize, plotResid = plotResid)
 
     if plotResid:
-        saveFiguresToPdf(pdfname=("residualsOverNeuronTrialSweep-%s" % brainAreas[0]))
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=("residualsOverNeuronTrialSweep-%s" % brainAreas[0])))
         plt.close('all')
 
     metricDict = {}
     metricDict.update(popMetricsDict)
     metricDict.update(rscMetricDict)
 
-#    pltAllVsAll(descriptions, metricDict, brainAreas, tasks)
 
     plotScatterMetrics = True
     if plotScatterMetrics:
@@ -293,33 +298,43 @@ def sweepOfExtractionParams():
         labelForColor = np.concatenate((binSize, faOrGpfa[:,None]),axis=1)
         labelForMarkers = np.concatenate((numNeurs[:,None], numTrls[:,None]),axis=1)
 
-        pltAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
-        saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'bin&meth','trlNeur')))
+        plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'bin&meth','trlNeur'))))
         plt.close('all')
 
         labelForColor = faOrGpfa
-        pltAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
-        saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'method','trlNeur')))
+        plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'method','trlNeur'))))
         plt.close('all')
 
         labelForColor = faOrGpfa
         labelForMarkers = binSize
-        pltAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
-        saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'method','binSz')))
+        plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'method','binSz'))))
         plt.close('all')
 
         labelForColor = np.concatenate((faOrGpfa[:,None],numNeurs[:,None], numTrls[:,None]),axis=1)
         labelForMarkers = binSize
-        pltAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
-        saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'methodTrlNeur','binSz')))
+        plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'methodTrlNeur','binSz'))))
         plt.close('all')
 
         labelForColor = numTrls
         labelForMarkers = numNeurs
-        pltAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
-        saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'numTrl','numNeur')))
+        plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers, dsNames[0])
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterMetricsOverNeuronTrialSweep-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'numTrl','numNeur'))))
         plt.close('all')
 
+        descriptions = ["(%d trl, %d ch) - %s" % (tN, cN, dN) for tN, cN, dN in zip(*tNcN, brainAreasNoTechnique)]
+        labelForSplit = faOrGpfa
+        labelForMarkers = binSize
+        labelForColor = np.concatenate((numNeurs[:,None], numTrls[:,None]),axis=1)
+        splitNames = ['GPFA', 'FA']
+        plotMetricVsExtractionParams(descriptions, popMetricsDict, splitNames, labelForSplit, labelForColor, labelForMarkers, supTitle="")
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterFaVsGpfaPopMetrics-%s and %s-col=%s-mrk=%s' % (brainAreas[0],brainAreas[-1],'bin','trlNeur'))))
+        plt.close('all')
+
+    return outputFiguresRelativePath
 
 if __name__=='__main__':
-    crossareaMatchedCovarianceComparison()
+    sweepOfExtractionParams()
