@@ -3,6 +3,10 @@ This function is responsible for the cross-area analyses/scatter matrices etc
 Like HeadlessAnalysisRun2-5.py for now...
 """
 from matplotlib import pyplot as plt
+import os
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['GOTO_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
 import numpy as np
 import re
 import dill as pickle # because this is what people seem to do?
@@ -42,7 +46,7 @@ from methods.BinnedSpikeSetListMethods import rscComputations
 from methods.GpfaMethods import computePopulationMetrics
 
 # for plotting the metrics
-from methods.plotUtils.UnsortedPlotMethods import pltAllVsAll
+from methods.plotUtils.UnsortedPlotMethods import plotAllVsAll, plotMetricVsExtractionParams
 
 
 @saveCallsToDatabase
@@ -120,17 +124,46 @@ def crossareaMatchedCovarianceComparison():
     sqrtSpikes = False
     crossvalidateNumFolds = 4
     computeResiduals = True
+    computeResidualsLog = [True,False]
     balanceConds = True
     timeBeforeAndAfterStart = (furthestTimeBeforeState, furthestTimeAfterState)
     timeBeforeAndAfterEnd = None
+    labelUse = 'stimulusMainLabel'
 
-    dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds = gpfaComputation(
-        subsampleExpressions,timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd = timeBeforeAndAfterEnd,
-                              balanceConds = balanceConds, numStimulusConditions = numStimulusConditions, combineConditions=combineConditions, computeResiduals = computeResiduals, sqrtSpikes = sqrtSpikes,
-                              crossvalidateNumFolds = crossvalidateNumFolds, xDimTest = xDimTest, overallFiringRateThresh=firingRateThresh, perConditionGroupFiringRateThresh = firingRateThresh, plotOutput = plotGpfa)
+    bnSpOut, dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds, brainAreasResiduals, brainAreasNoResiduals = [],[],[],[],[], [], [], []
+    for computeResiduals in computeResidualsLog:
+        dimsH, dimsLLH, gpfaDimOutH, gpfaTestIndsH, gpfaTrainIndsH = gpfaComputation(
+            subsampleExpressions,timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd = timeBeforeAndAfterEnd,
+                                  labelUse = labelUse, balanceConds = balanceConds, numStimulusConditions = numStimulusConditions, combineConditions=combineConditions, computeResiduals = computeResiduals, sqrtSpikes = sqrtSpikes,
+                                  crossvalidateNumFolds = crossvalidateNumFolds, xDimTest = xDimTest, overallFiringRateThresh=firingRateThresh, perConditionGroupFiringRateThresh = firingRateThresh, plotOutput = plotGpfa)
+
+        dims += dimsH
+        dimsLL += dimsLLH
+        gpfaDimOut += gpfaDimOutH
+        gpfaTestInds += gpfaTestIndsH
+        gpfaTrainInds += gpfaTrainIndsH
+
+        brainAreasResiduals += [bA + ' %s' % ('Resid' if computeResiduals else 'NotResid') for bA in brainAreas]
+        brainAreasNoResiduals += brainAreas
+
+        bnSpSubsmp = []
+        for indAr, (bnSpArea) in enumerate(binnedResidShStOffSubsamples):
+            if computeResiduals:
+                bnSpSubsmp.append([bnSp.baselineSubtract(labels=bnSp.labels[labelUse])[0] for bnSp in bnSpArea])
+            else:
+                bnSpSubsmp.append(bnSpArea)
+
+        bnSpOut += bnSpSubsmp
+
+
+    brainAreas = brainAreasResiduals
+    subsampleExpressions*=len(computeResidualsLog)
+    dsNames*=len(computeResidualsLog)
+    tasks*=len(computeResidualsLog)
+    binnedResidShStOffSubsamples = bnSpOut
 
     if plotGpfa:
-        saveFiguresToPdf(pdfname=("GPFAManyAreasNeur%dTrl%d" % (maxNumNeuron, maxNumTrlPerCond)))
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=("GPFAManyAreasNeur%dTrl%d" % (maxNumNeuron, maxNumTrlPerCond))))
         plt.close('all')
 
     
@@ -161,7 +194,7 @@ def crossareaMatchedCovarianceComparison():
         plotFiringRates(binnedSpksShortStOffSubsamplesCnt, descriptions, supTitle = supTitle + " count", cumulative = False)
 
 
-        saveFiguresToPdf(pdfname="genericMetrics")
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="genericMetrics"))
         plt.close('all')
 
         
@@ -175,18 +208,38 @@ def crossareaMatchedCovarianceComparison():
     rscMetricDict = rscComputations(binnedResidShStOffSubsamples, descriptions, labelName, separateNoiseCorrForLabels = separateNoiseCorrForLabels, normalize = normalize, plotResid = plotResid)
 
     if plotResid:
-        saveFiguresToPdf(pdfname="residualsOverSubsets")
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="residualsOverSubsets"))
         plt.close('all')
 
     metricDict = {}
     metricDict.update(popMetricsDict)
     metricDict.update(rscMetricDict)
 
-    pltAllVsAll(descriptions, metricDict, brainAreas, tasks)
 
     plotScatterMetrics = True
+
+#    descriptions = dsNames*len(computeResidualsLog)
+ #[data[idx]['description'] for idx in dataIndsProcess]
     if plotScatterMetrics:
-        saveFiguresToPdf(pdfname='scatterMetricsOverSubsets')
+        plotAllVsAll(descriptions, metricDict, brainAreas, tasks)
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='scatterMetricsAcrossAreaSubsetsStimulus'))
+        plt.close('all')
+
+        
+        splitNames = ['Full trace', 'Residuals'] # this follows computeResidualsLog WHEN CONVERTED TO INT INDEX (i.e. False = 0, True = 1
+        resOrNoRes = np.repeat(computeResidualsLog, len(subsampleExpressions)/len(computeResidualsLog))
+        resOrNoRes = resOrNoRes.astype(int)
+        labelForSplit = resOrNoRes
+        labelForMarkers = np.array(tasks)
+        labelForColor = np.array(brainAreas)
+        plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForSplit, labelForColor, labelForMarkers, supTitle="")
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterResidVsNoResidAcrsArSbPopMetricsStimulus')))
+        plt.close('all')
+
+    outputInfo = {}
+    outputInfo.update(dict(outputFiguresRelativePath = outputFiguresRelativePath)) if len(outputFiguresRelativePath)>0 else None
+
+    return outputInfo
 
 
 if __name__=='__main__':
