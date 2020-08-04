@@ -121,3 +121,5 @@ def saveFiguresToPdf(pdfname=None,analysisDescription = None,figNumsToSave=None)
     with PdfPages(pdfname) as pdf:
         for fig in figNumsToSave: ## will open an empty extra figure :(
             pdf.savefig( fig )
+
+    return str(pdfname.relative_to(savePath))
