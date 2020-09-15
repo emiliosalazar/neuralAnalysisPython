@@ -43,7 +43,13 @@ def plotAllVsAll(descriptions, metricDict, labelForCol, labelForMarker, supTitle
 
 def plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForSplit, labelForCol, labelForMarker, supTitle=""):
     colorsUse = BinnedSpikeSet.colorset
-    unLabForSplit, colSplit = np.unique(labelForSplit, return_inverse=True, axis=0)
+    try:
+        unLabForSplit, colSplit = np.unique(labelForSplit, return_inverse=True, axis=0)
+    except TypeError:
+        # allows us to use strings for hte label here...
+        splitNames, colSplitTemp = np.unique(labelForSplit, return_inverse=True)
+        unLabForSplit, colSplit = np.unique(colSplitTemp, return_inverse=True) # converts the strings in unLabForSplit to integers!
+
     if unLabForSplit.size!=2:
         raise Exception("Currently can only plot a 2-way split!")
     if np.sum(colSplit==unLabForSplit[0]) != np.sum(colSplit==unLabForSplit[1]):
