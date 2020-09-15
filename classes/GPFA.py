@@ -208,9 +208,9 @@ class GPFA:
                         self.testInds[bCVNum] = testInds.pop()
                         seqsTrain, seqsTest = self.trainAndTestSeq()
 
-                        datTest = self.gpfaInputDictToBinSpikeList(seq = seqsTrain)
-                        datTest = np.stack(datTest, axis=1)
-                        fRNew = np.linalg.matrix_rank(datTests) >= datTest.shape[0]
+                        datTest = self.gpfaInputDictToBinSpikeList(seq = seqsTrain[bCVNum])
+                        datTest = np.concatenate(datTest, axis=1)
+                        fRNew = np.linalg.matrix_rank(datTest) >= datTest.shape[0]
                         breakpoint()
 
                         # now we're doing it as a pool because if we do it on
@@ -218,7 +218,7 @@ class GPFA:
                         # restart Python >.>
                         resNew = poolHere.apply_async(parallelGpfa, (fname, bCVNum, xDim, seqsTrain[bCVNum], seqsTest[bCVNum], forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr))
                         try:
-                            resultsByCrossVal[bCVNum] = resNew.get() + fRNew
+                            resultsByCrossVal[bCVNum] = resNew.get() + (fRNew, )
                         except MatlabExecutionError as e:
                             pass
                         else:
@@ -238,6 +238,17 @@ class GPFA:
             seqsTrainNew = resultsByVar[1]
             seqsTestNew = resultsByVar[2]
             fullRank = resultsByVar[3]
+
+            # this is a little check I'm doing because I'm paranoid about
+            # incorrect data being paired during a crash
+            trainInds = [np.array([trl['trialId'] for trl in cval]) for cval in seqsTrainNew]
+            testInds = [np.array([trl['trialId'] for trl in cval]) for cval in seqsTestNew]
+            if not np.all([np.all(us == sv) for us,sv in zip(trainInds, self.trainInds)]):
+                breakpoint()
+                raise Exception('not saving what you used!')
+            if not np.all([np.all(us == sv) for us,sv in zip(testInds, self.testInds)]):
+                breakpoint()
+                raise Exception('not saving what you used!')
             
         # To prevent these variables from causing other methods/classes to load
         # numpy in a non-'optimized' (parallel) state, we delete (effectively

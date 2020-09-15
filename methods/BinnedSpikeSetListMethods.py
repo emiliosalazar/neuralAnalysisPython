@@ -28,7 +28,7 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
 #    if type(data) == DatasetInfo:
 #    data = data.grabDatasets()
 
-    defaultParams = loadDefaultParams(defParamBase = ".")
+    defaultParams = loadDefaultParams()
     dataPath = defaultParams['dataPath']
 
 
@@ -597,7 +597,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             bssExpToCompute = bssExpWithGpfa - gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]
 #                bssExpComputed = bssExpWithGpfa[gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]]
 #                bssExpToCompute = bssExpWithGpfa - gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]
-        
+
             # note that this *adds* values to GpfaAnalysisInfo, so we can't
             # just filter gai by bssExpToCompute (nothing will be there!)
             perConditionGroupFiringRateThresh = gpfaAnalysisInfoConds['condition_grp_fr_thresh'][0]
@@ -823,15 +823,15 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
             fRChStdMnByAreaHere.append([np.std(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
             fRChMnStdByAreaHere.append([np.mean(gSC.stdFiringRateByChannel()) for gSC in grpSpkCnt])
             fRChStdStdByAreaHere.append([np.std(gSC.stdFiringRateByChannel()) for gSC in grpSpkCnt])
-            fRChPrBinMnByAreaHere.append([np.mean(gSC.avgValByChannelOverBins()) for gSC in grpSpkCnt])
-            fRChPrBinStdMnByAreaHere.append([np.std(gSC.avgValByChannelOverBins()) for gSC in grpSpkCnt])
-            fRChPrBinMnStdByAreaHere.append([np.mean(gSC.stdValByChannelOverBins()) for gSC in grpSpkCnt])
-            fRChPrBinStdStdByAreaHere.append([np.std(gSC.stdValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinMnByAreaHere.append([np.mean(gSC.convertUnitsTo('Hz').avgValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinStdMnByAreaHere.append([np.std(gSC.convertUnitsTo('Hz').avgValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinMnStdByAreaHere.append([np.mean(gSC.convertUnitsTo('Hz').stdValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinStdStdByAreaHere.append([np.std(gSC.convertUnitsTo('Hz').stdValByChannelOverBins()) for gSC in grpSpkCnt])
             fanoFactorChMnByAreaHere.append([np.mean(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
             fanoFactorChStdByAreaHere.append([np.std(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
 
             if bSC.dtype == 'object':
-                grpTrlLenMs = [gSC.binSize*np.array([gSC[0].shape[0] for gSC in gpSpCn]) for gpSpCn in grpSpkCnt]
+                grpTrlLenMs = [np.array([gSC.binSize*gSC[0].shape[0] for gSC in gpSpCn]) for gpSpCn in grpSpkCnt]
             else:
                 grpTrlLenMs = [np.array([gSC.shape[2]*gSC.binSize]) for gSC in grpSpkCnt]
             
@@ -891,6 +891,7 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
         
     ax = frFig.add_subplot(221)
     
+    binWidth = 5
     for colInd, (bnSp, desc) in enumerate(zip(listBSS, descriptions)):
         if type(bnSp) is list:
             for bS in bnSp:
@@ -899,7 +900,9 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
                     histDat = bS.sumTrialCountByChannel()
                 elif units == 'Hz':
                     histDat = bS.avgFiringRateByChannel()
-                ax.hist(histDat.view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+
+                bins = np.arange(0, histDat.max(), binWidth)
+                ax.hist(histDat.view(np.ndarray), bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
                 desc = None # only label first shuffle
         else:
             units = bnSp.units
@@ -907,7 +910,9 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
                 histDat = bnSp.sumTrialCountByChannel()
             elif units == 'Hz':
                 histDat = bnSp.avgFiringRateByChannel()
-            ax.hist(histDat.view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+
+            bins = np.arange(0, histDat.max(), binWidth)
+            ax.hist(histDat.view(np.ndarray), bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
             units = bnSp.units
 
     if units == 'count':
@@ -922,14 +927,28 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
     ax.set_ylabel('Probability')
     
     ax = frFig.add_subplot(223)
+    binWidth = 1
     for colInd, (bnSp, desc) in enumerate(zip(listBSS, descriptions)):
         if type(bnSp) is list:
             for bS in bnSp:
-                ax.hist(bS.timeAverage().trialStd().view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+                units = bS.units
+                if units == 'count':
+                    histDat = bS.timeSum().trialStd().view(np.ndarray)
+                elif units == 'Hz':
+                    histDat = bS.timeAverage().trialStd().view(np.ndarray)
+
+                bins = np.arange(0, histDat.max(), binWidth)
+                ax.hist(histDat, bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
                 desc = None # only label the first shuffle
             units = bS.units # replace every time, but should be the same for all...
         else:
-            ax.hist(bnSp.timeAverage().trialStd().view(np.ndarray), density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
+            units = bnSp.units
+            if units == 'count':
+                histDat = bnSp.timeSum().trialStd()
+            elif units == 'Hz':
+                histDat = bnSp.timeAverage().trialStd()
+            bins = np.arange(0, histDat.max(), binWidth)
+            ax.hist(histDat.view(np.ndarray), bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
             units = bnSp.units # replace every time, but should be the same for all...
             
     if units == 'count':

@@ -50,92 +50,78 @@ from methods.plotUtils.UnsortedPlotMethods import plotAllVsAll, plotMetricVsExtr
 
 
 @saveCallsToDatabase
-def crossareaMatchedCovarianceComparison():
+def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerationParamsDict, subsampleParams, gpfaParams, correlationParams,plotParams):
 
     dsgl = DatasetGeneralLoadParams()
     dsi = DatasetInfo()
     bsi = BinnedSpikeSetInfo()
     fsp = FilterSpikeSetParams()
 
+    outputFiguresRelativePath = []
 
-    keyStateName = 'delay' # we look around the *delay*
-    offshift = 75 #ms
-    lenSmallestTrl = 301 #ms; 
-    binSizeMs = 25 # good for PFC LDA #50 # 
-    trialType = 'successful'
-    firingRateThresh = 1
-    fanoFactorThresh = 4
-    baselineSubtract = False
-    furthestTimeBeforeState=-offshift # note that this starts it *forwards* from the delay
-    # this'll bleed a little into the start of the new stimulus with the
-    # offset, but before any neural response can happen
-    furthestTimeAfterState=lenSmallestTrl+offshift
-    # this means that the data will lie around the delay start
-    setStartToStateEnd = False
-    setEndToStateStart = True
-    unitsOut = 'count' # this shouldn't affect GPFA... but will affect fano factor cutoffs...
+    if len(datasetSqlFilter)>0:
+        dsiUse = dsi[datasetSqlFilter]
+    else:
+        dsiUse = dsi
 
     print("Computing/loading binned spike sets")
-    _, bssiKeys = genBSLAroundState(dsi,
-                                        keyStateName,
-                                        trialType = trialType,
-                                        lenSmallestTrl=lenSmallestTrl, 
-                                        binSizeMs = binSizeMs, 
-                                        furthestTimeBeforeState=furthestTimeBeforeState,
-                                        furthestTimeAfterState=furthestTimeAfterState,
-                                        setStartToStateEnd = setStartToStateEnd,
-                                        setEndToStateStart = setEndToStateStart,
-                                        returnResiduals = baselineSubtract,
-                                        unitsOut = unitsOut,
-                                        firingRateThresh = firingRateThresh,
-                                        fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
+    offshift = binnedSpikeSetGenerationParamsDict.pop('offshift')
+    _, bssiKeys = genBSLAroundState(dsiUse,
+                                        **binnedSpikeSetGenerationParamsDict
                                         )
 
     # only doing one subsample for now...
-    numSubsamples = 1
+    numSubsamples = subsampleParams['numSubsamples']
     # subsamples will have at least 60 neurons
-    minNumNeurons = 60
+    minNumNeurons = subsampleParams['minNumNeurons']
+    minNumTrlPerCond = subsampleParams['minNumTrlPerCond']
 
-    bssExp = bsi[bssiKeys][fsp['ch_num>%d' % minNumNeurons]]
-    # technically already loaded above, but in future we'll want to be able to
-    # grab the directly from the db call
-    binnedSpikesList = bssExp.grabBinnedSpikes() 
-    maxNumNeuron = np.min([bnSp.shape[1] for bnSp in binnedSpikesList])
+    extraOpts = subsampleParams['extraOpts']
     labelName = 'stimulusMainLabel'
-    numTrls = [np.unique(bnSp.labels[labelName],axis=0,return_counts=True)[1] for bnSp in binnedSpikesList]
-    maxNumTrlPerCond = np.min(np.hstack(numTrls))
-    extraOpts = {
-        dsi[dsgl['task="cuedAttention"']] : {
-            'description' : 'choose first blank',
-            'filter' : (lambda res : res.grabBinnedSpikes()[0].labels['sequencePosition']==2)
-            }
-        }
+
+
+    bssExp = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)]]
+    chTrlNums = fsp[bssExp].fetch('ch_num', 'trial_num_per_cond_min')
+
+    # now, in order to prevent small changes in what datasets get in making
+    # everything get reextracted because of different neuron numbers, I'm
+    # taking these as set by the input
+    if np.min(chTrlNums[0]) < minNumNeuron:
+        breakpoint() # should never be reached, really
+    else:
+        maxNumNeuron = minNumNeuron # np.min(chTrlNums[0])
+    
+    if np.min(chTrlNums[1]) < minNumTrlPerCond:
+        breakpoint() # should never be reached, really
+    else:
+        maxNumTrlPerCond = minNumTrlPerCond 
+
     binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssExp, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
 
     print("Computing GPFA")
     """ These are the GPFA parameters """
-    plotGpfa = False
-    # cutting off dim of 15... because honestly residuals don't seem to even go
-    # past 8
-    xDimTest = [2,5,8,12]#[2,5,8,12,15]
-    firingRateThresh = 1 if not baselineSubtract else 0
-    combineConditions = False
-    numStimulusConditions = None # uses all stimulus conditions
-    sqrtSpikes = False
-    crossvalidateNumFolds = 4
-    computeResiduals = True
-    computeResidualsLog = [True,False]
-    balanceConds = True
-    timeBeforeAndAfterStart = (furthestTimeBeforeState, furthestTimeAfterState)
-    timeBeforeAndAfterEnd = None
-    labelUse = 'stimulusMainLabel'
+    iterateParams = gpfaParams.pop('iterateParams', None)
+    if iterateParams:
+        from itertools import product
+        iterateSeparated = [[{k:vind} for vind in v] for k,v in iterateParams.items()]
+        paramIterator = list(product(*iterateSeparated)) # making a list so it has a length
+    else:
+        paramIterator = [gpfaParams]
+
 
     bnSpOut, dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds, brainAreasResiduals, brainAreasNoResiduals = [],[],[],[],[], [], [], []
-    for computeResiduals in computeResidualsLog:
+    for paramSet in paramIterator:
+        # we'll note that this basically means the for loop is for show when
+        # we're not iterating
+        if iterateParams:
+            [gpfaParams.update(paramVal) for paramVal in paramSet]
+            descStrName = ['{}={}'.format(k,v) for paramVal in paramSet for k,v in paramVal.items() ]
+        else:
+            descStrName = ""
+
         dimsH, dimsLLH, gpfaDimOutH, gpfaTestIndsH, gpfaTrainIndsH = gpfaComputation(
-            subsampleExpressions,timeBeforeAndAfterStart = timeBeforeAndAfterStart, timeBeforeAndAfterEnd = timeBeforeAndAfterEnd,
-                                  labelUse = labelUse, balanceConds = balanceConds, numStimulusConditions = numStimulusConditions, combineConditions=combineConditions, computeResiduals = computeResiduals, sqrtSpikes = sqrtSpikes,
-                                  crossvalidateNumFolds = crossvalidateNumFolds, xDimTest = xDimTest, overallFiringRateThresh=firingRateThresh, perConditionGroupFiringRateThresh = firingRateThresh, plotOutput = plotGpfa)
+            subsampleExpressions, **gpfaParams
+        )
 
         dims += dimsH
         dimsLL += dimsLLH
@@ -143,31 +129,39 @@ def crossareaMatchedCovarianceComparison():
         gpfaTestInds += gpfaTestIndsH
         gpfaTrainInds += gpfaTrainIndsH
 
-        brainAreasResiduals += [bA + ' %s' % ('Resid' if computeResiduals else 'NotResid') for bA in brainAreas]
+        brainAreasResiduals += [bA + ' {}'.format(','.join(descStrName)) for bA in brainAreas]
         brainAreasNoResiduals += brainAreas
 
         bnSpSubsmp = []
-        for indAr, (bnSpArea) in enumerate(binnedResidShStOffSubsamples):
-            if computeResiduals:
-                bnSpSubsmp.append([bnSp.baselineSubtract(labels=bnSp.labels[labelUse])[0] for bnSp in bnSpArea])
-            else:
+        if iterateParams:
+            for indAr, (bnSpArea) in enumerate(binnedResidShStOffSubsamples):
+                paramsIterated = {k : v for paramVal in paramSet for k,v in paramVal.items()}
+                # only do this step if you're iterating params AND
+                # computeResiduals is one of them AND the residuals were
+                # actually computed
+                if paramsIterated.pop('computeResiduals',None): 
+                    bnSpSubsmp.append([bnSp.baselineSubtract(labels=bnSp.labels[gpfaParams['labelUse']])[0] for bnSp in bnSpArea])
+                else:
+                    bnSpSubsmp.append(bnSpArea)
+        else:
+            for indAr, (bnSpArea) in enumerate(binnedResidShStOffSubsamples):
                 bnSpSubsmp.append(bnSpArea)
 
         bnSpOut += bnSpSubsmp
 
 
     brainAreas = brainAreasResiduals
-    subsampleExpressions*=len(computeResidualsLog)
-    dsNames*=len(computeResidualsLog)
-    tasks*=len(computeResidualsLog)
+    subsampleExpressions*=len(paramIterator)
+    dsNames*=len(paramIterator)
+    tasks*=len(paramIterator)
     binnedResidShStOffSubsamples = bnSpOut
 
-    if plotGpfa:
-        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=("GPFAManyAreasNeur%dTrl%d" % (maxNumNeuron, maxNumTrlPerCond))))
+    if plotParams['plotGpfa']:
+        plotGpfaParams = plotParams['plotGpfa']
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=("{}{}Neur{}Trl{}".format(plotGpfaParams['pdfnameSt'],plotParams['analysisIdentifier'], maxNumNeuron, maxNumTrlPerCond))))
         plt.close('all')
 
     
-    plotGenericMetrics = False
     binnedSpksShortStOffSubsamplesFR = []
     binnedSpksShortStOffSubsamplesCnt = []
     for spkCnts in binnedResidShStOffSubsamples:
@@ -183,10 +177,10 @@ def crossareaMatchedCovarianceComparison():
     # some descriptive data plots
     descriptions = dsNames #[data[idx]['description'] for idx in dataIndsProcess]
 
-    if plotGenericMetrics:
-        supTitle = "%s %s %s" % (keyStateName, 
-                                    "end" if setStartToStateEnd else "start",
-                                    "offshift" if offshift != 0 else "")
+    if plotParams['plotGenericMetrics']:
+        plotGenericMetricParams = plotParams['plotGenericMetrics']
+        supTitle = plotGenericMetricParams['supTitle']
+
         plotStimDistributionHistograms(binnedSpksShortStOffSubsamplesFR, descriptions)
         plotFiringRates(binnedSpksShortStOffSubsamplesFR, descriptions, supTitle = supTitle + " firing rates", cumulative = False)
 
@@ -194,21 +188,21 @@ def crossareaMatchedCovarianceComparison():
         plotFiringRates(binnedSpksShortStOffSubsamplesCnt, descriptions, supTitle = supTitle + " count", cumulative = False)
 
 
-        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="genericMetrics"))
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotGenericMetricParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
+    breakpoint()
         
     # Population metrics
     popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims)
 
     #%% Residual correlations
-    plotResid = False
-    separateNoiseCorrForLabels = not combineConditions
-    normalize = False
-    rscMetricDict = rscComputations(binnedResidShStOffSubsamples, descriptions, labelName, separateNoiseCorrForLabels = separateNoiseCorrForLabels, normalize = normalize, plotResid = plotResid)
+    plotResid = correlationParams['plotResid']
+    rscMetricDict = rscComputations(binnedResidShStOffSubsamples, descriptions, labelName, **correlationParams)
 
-    if plotResid:
-        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="residualsOverSubsets"))
+    if plotParams['plotResid']:
+        plotResidParams = plotParams['plotResid']
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotResidParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
     metricDict = {}
@@ -216,25 +210,45 @@ def crossareaMatchedCovarianceComparison():
     metricDict.update(rscMetricDict)
 
 
-    plotScatterMetrics = True
 
 #    descriptions = dsNames*len(computeResidualsLog)
  #[data[idx]['description'] for idx in dataIndsProcess]
-    if plotScatterMetrics:
+    if plotParams['plotScatterMetrics']:
+        plotAllVsAllParams = plotParams['plotScatterMetrics']['plotAllVsAllParams']
+        plotMetVsExtPrmParams = plotParams['plotScatterMetrics']['plotMetVsExtPrmParams']
+
         plotAllVsAll(descriptions, metricDict, brainAreas, tasks)
-        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='scatterMetricsAcrossAreaSubsetsStimulus'))
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotAllVsAllParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
         
-        splitNames = ['Full trace', 'Residuals'] # this follows computeResidualsLog WHEN CONVERTED TO INT INDEX (i.e. False = 0, True = 1
-        resOrNoRes = np.repeat(computeResidualsLog, len(subsampleExpressions)/len(computeResidualsLog))
-        resOrNoRes = resOrNoRes.astype(int)
-        labelForSplit = resOrNoRes
-        labelForMarkers = np.array(tasks)
-        labelForColor = np.array(brainAreas)
-        plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForSplit, labelForColor, labelForMarkers, supTitle="")
-        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=('scatterResidVsNoResidAcrsArSbPopMetricsStimulus')))
-        plt.close('all')
+        breakpoint()
+        if len(plotMetVsExtPrmParams) > 0:
+            splitNames = plotMetVsExtPrmParams['splitNames']
+            labelForSplit = plotMetVsExtPrmParams['labelForSplit']
+            labelForMarkers = plotMetVsExtPrmParams['labelForMarkers']
+            labelForColor = plotMetVsExtPrmParams['labelForColor']
+
+            if type(labelForSplit) is str:
+                labelForSplit = np.array(eval(labelForSplit))
+            else:
+                labelForSplit = np.repeat(labelForSplit, len(subsampleExpressions)/len(labelForSplit))
+                labelForSplit = labelForSplit.astype(int)
+
+            if type(labelForMarkers) is str:
+                labelForMarkers = np.array(eval(labelForMarkers))
+            else:
+                labelForMarkers = np.repeat(labelForMarkers, len(subsampleExpressions)/len(labelForMarkers))
+
+            if type(labelForColor) is str:
+                labelForColor = np.array(eval(labelForColor))
+            else:
+                labelForColor = np.repeat(labelForColor, len(subsampleExpressions)/len(labelForColor))
+
+            plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForSplit, labelForColor, labelForMarkers, supTitle="")
+
+            outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotMetVsExtPrmParams['pdfnameSt'],plotParams['analysisIdentifier'])))
+            plt.close('all')
 
     outputInfo = {}
     outputInfo.update(dict(outputFiguresRelativePath = outputFiguresRelativePath)) if len(outputFiguresRelativePath)>0 else None

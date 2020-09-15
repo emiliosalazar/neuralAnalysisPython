@@ -10,7 +10,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from methods.GeneralMethods import loadDefaultParams, userChoice
 
-defaultParams = loadDefaultParams(defParamBase = ".")
+defaultParams = loadDefaultParams()#defParamBase = ".")
 sys.path.append(defaultParams['datajointLibraryPath'])
 import datajoint as dj
 import dill as pickle
@@ -83,6 +83,7 @@ class DatasetInfo(dj.Manual):
     date_acquired : date # date data was acquired
     explicit_ignore_channels : blob # channels explicitly removed (for spike sorting goodness)
     channels_keep : blob # channels kept from overall dataset (*after* explicit_ignore_channels are removed--useful for finding channels not removed from coincidence detection)
+    spike_identification_method : enum('threshold','nas','handSort','other') # to store how waveforms are identified as spikes
     """
     
     # I don't want to use the external storage paradigm they have, as I'm not
@@ -242,7 +243,7 @@ class DatasetInfo(dj.Manual):
                 endStateArr = np.asarray(endState)
                 timeInStateArr = endStateArr - startStateArr
 
-                _, trialFiltLen = dataset.filterTrials(timeInStateArr>lenSmallestTrial)
+                _, trialFiltLen = dataset.filterTrials(timeInStateArr>=lenSmallestTrial)
                 trialsKeep &= trialFiltLen
 
                 dataset = dataset.filterTrials(trialsKeep)[0]
@@ -596,7 +597,7 @@ class BinnedSpikeSetInfo(dj.Manual):
 
 #            bssFilterParamsCheck = bssFilterParams.copy()
 #            bssFilterParamsCheck.update(key)
-            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key}] 
+            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key + ['parent_bss_relative_path']}] 
             existingSS = existingSS[self.fetch('bss_params_id', as_dict=True)[0]]
             # this is important for not grabbing repeats when looking for the
             # originally filtered binned spike set
@@ -725,7 +726,11 @@ class BinnedSpikeSetInfo(dj.Manual):
             # NOTE might be worth being able to specify how many subsets to
             # grab in grabBinnedSpikes so we don't have too much
             # overhead... for later
-            randomSubsets = bsi[fssKeys].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
+#            randomSubsets = bsi[fssKeys].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
+            # NOTE: I think usign fssKeys was from a prior iteration fo
+            # FilteredSpikeSetParams that was a child of BSI--now I believe I
+            # can directly filter with the existingSS value
+            randomSubsets = bsi[existingSS].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
 
             if len(randomSubsets) < numSubsets:
 
@@ -752,6 +757,7 @@ class BinnedSpikeSetInfo(dj.Manual):
                         randomSubsets += [randomSubset]
                         trlChanFilters.append((trlsUse, chansUse))
                         fssKeys.append(fssKey)
+
 
             if returnInfo:
                 return randomSubsets, trlChanFilters, bssInfo['dataset_names'][0], fssKeys

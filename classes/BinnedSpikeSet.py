@@ -240,6 +240,24 @@ class BinnedSpikeSet(np.ndarray):
             else:
                 out = np.average(self, axis=2)
             return out
+
+    def timeSum(self):
+        if self.size == 0:
+            # the sum of nothing is nothing
+            if self.shape[2] == 0:
+                print('no timepoints, huh?')
+                return np.empty((self.shape[0], 0)).view(BinnedSpikeSet)
+            return np.empty(self.shape[:2]).view(BinnedSpikeSet)
+        else:
+            if self.dtype == 'object':
+                out = self.copy()
+                out[:] = [np.sum(np.stack(trl), axis=1) for trl in out]
+                # at this point it's no longer an object, so take on the type
+                # it shoulda been
+                out = out.astype(self[0,0].dtype)
+            else:
+                out = np.sum(self, axis=2)
+            return out
     
     def timeStd(self):
         return np.std(self, axis=2, ddof=1) # ddof=1 makes this sample standard deviation #np.sqrt(self.timeAverage()) #
@@ -327,6 +345,8 @@ class BinnedSpikeSet(np.ndarray):
             spikesUse = self.copy()
             overallBaseline = []
             if self.dtype == 'object':
+                from copy import deepcopy
+                spikesUse = deepcopy(self) # with an object, you gotta make sure to copy the object dimension >.>
                 if np.unique(self.alignmentBins, axis=0).shape[0] == 1:
                     for lbl in unq:
                         lblTrls = np.all(labels==lbl,axis=lbl.ndim)
@@ -381,8 +401,10 @@ class BinnedSpikeSet(np.ndarray):
 
         if self.dtype == 'object':
             chanFirst = hzBinned.swapaxes(0,1)
-            avgFiringStdChan = [np.std(np.hstack(chan), axis=1) for chan in chanFirst]
-            breakpoint() # because I'm not sure this is correct... NOTE want mean before std?
+            # NOTE this outputs an np.array type while the else outputs a
+            # BinnedSpikeSet... I don't think it matters at this level, but in
+            # case it does at some point I'm letting it be remembered here...
+            avgFiringStdChan = np.array([np.stack([trl.mean() for trl in chan]).std(ddof=1) for chan in chanFirst])
 
         else:
             avgFiringStdChan = hzBinned.timeAverage().trialStd()
@@ -426,9 +448,8 @@ class BinnedSpikeSet(np.ndarray):
     # when there are different numbers of bins in different trials
     def avgValByChannelOverBins(self):
         if self.dtype == 'object':
-            chanFirst = self.swapaxes(0,1)
-            avgValChan = np.stack([np.mean(np.hstack(chan), axis=1) for chan in chanFirst])
-            breakpoint() # because I'm not sure this is correct...
+            chanFlat = np.concatenate(self, axis=2).squeeze()
+            avgValChan = chanFlat.mean(axis=1)
         else:
             avgValChan = self.timeAverage().trialAverage()
         
@@ -438,12 +459,11 @@ class BinnedSpikeSet(np.ndarray):
         if self.size == 0:
             stdValChan = np.empty(self.shape[1])
         elif self.dtype == 'object':
-            chanFirst = self.swapaxes(0,1)
-            stdValChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
-            breakpoint() # because I'm not sure this is correct...
+            chanFlat = np.concatenate(self, axis=2).squeeze()
+            stdValChan = chanFlat.std(axis=1,ddof=1)
         else:
             numChannels = self.shape[1]
-            stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1)
+            stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1,ddof=1)
         
         return stdValChan
 
@@ -457,6 +477,7 @@ class BinnedSpikeSet(np.ndarray):
         else:
             numChannels = self.shape[1]
             stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1)
+            breakpoint() # because I'm pretty sure this is wrong since it doesn't average over trials
         
         return stdValChan
 
@@ -968,9 +989,27 @@ class BinnedSpikeSet(np.ndarray):
 #        residualSpikesGoodChans, chansGood = residualSpikes.channelsNotRespondingSparsely(zeroRate = np.array(overallBaseline)[unqInv])
 #        residualSpikesGoodChans, chansGood = residualSpikesGoodChans.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
         
-        
-        chanFirst = residualSpikesGoodChans.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
-        chanFlat = chanFirst.reshape((residualSpikesGoodChans.shape[1], -1)) # chan are now rows, time is cols
+        if residualSpikes.dtype == 'object':
+            residualSpikesFlat = np.concatenate(residualSpikes, axis=2) 
+            chanFlat = residualSpikesFlat.squeeze()
+            # make an array of number of time points for each trial; will be
+            # use for appropriately repeating the labels
+            numTp = [trl[0].shape[0] for trl in residualSpikes]
+
+            # do the same as above for the baseline subtracted values, without baseline
+            # subtracting--now we can find the true geometric mean firing rate
+            flatCnt = np.concatenate(self[:,chansGood], axis=2).squeeze()
+            flatCntMn = flatCnt.mean(axis=1)
+            flatCntMn = np.expand_dims(flatCntMn, axis=1) # need to add back a lost dimension
+        else:
+            chanFirst = residualSpikesGoodChans.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
+            chanFlat = chanFirst.reshape((residualSpikesGoodChans.shape[1], -1)) # chan are now rows, time is cols
+            numTp = self.shape[2]
+            # do the same as above for the baseline subtracted values, without baseline
+            # subtracting--now we can find the true geometric mean firing rate
+            flatCnt = np.array(self[:,chansGood,:].swapaxes(0,1).reshape((chansGood.size,-1)))
+            flatCntMn = flatCnt.mean(axis=1)
+            flatCntMn = np.expand_dims(flatCntMn, axis=1) # need to add back a lost dimension
         
         # let's remove trials that are larger than 3*std
         stdChanResp = np.std(chanFlat, axis=1)
@@ -978,11 +1017,6 @@ class BinnedSpikeSet(np.ndarray):
         chanMask = np.abs(chanFlat) < 0 # mask nothing... for now
         maskChanFlat = np.ma.array(np.array(chanFlat), mask = np.array(chanMask))
         
-        # do the same as above for the baseline subtracted values, without baseline
-        # subtracting--now we can find the true geometric mean firing rate
-        flatCnt = np.array(self[:,chansGood,:].swapaxes(0,1).reshape((chansGood.size,-1)))
-        flatCntMn = flatCnt.mean(axis=1)
-        flatCntMn = np.expand_dims(flatCntMn, axis=1) # need to add back a lost dimension
         geoMeanCnt = np.sqrt(flatCntMn @ flatCntMn.T)
         
         uniqueLabel, labelPresented = np.unique(labels, axis=0, return_inverse=True)
@@ -1014,7 +1048,7 @@ class BinnedSpikeSet(np.ndarray):
         corrSpksPerCond = np.empty(geoMeanCnt.shape + (0,))
         
         if separateNoiseCorrForLabels:
-            labelPresented = np.repeat(labelPresented, self.shape[2])
+            labelPresented = np.repeat(labelPresented, numTp)
             for lblNum, _ in enumerate(uniqueLabel):
                 lblSpks = maskChanFlat[:, labelPresented==lblNum]
                 covLblSpks = np.ma.cov(lblSpks)
@@ -1683,7 +1717,7 @@ def std(array, axis=None, dtype=None, out=None, ddof = 0, keepdims = np._NoValue
     units = array.units
 
     from itertools import chain
-    if  type(array) is BinnedSpikeSet and array.dtype=='object':
+    if type(array) is BinnedSpikeSet and array.dtype=='object':
         if axis < 3:
             raise Exception("Can't really std object arrays for the moment...")
         # NOTE I think numpy can deal with object averaging... we'll have to see...
