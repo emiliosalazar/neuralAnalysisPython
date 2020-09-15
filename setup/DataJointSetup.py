@@ -10,7 +10,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from methods.GeneralMethods import loadDefaultParams, userChoice
 
-defaultParams = loadDefaultParams(defParamBase = ".")
+defaultParams = loadDefaultParams()#defParamBase = ".")
 sys.path.append(defaultParams['datajointLibraryPath'])
 import datajoint as dj
 import dill as pickle

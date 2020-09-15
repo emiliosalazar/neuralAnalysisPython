@@ -28,7 +28,7 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
 #    if type(data) == DatasetInfo:
 #    data = data.grabDatasets()
 
-    defaultParams = loadDefaultParams(defParamBase = ".")
+    defaultParams = loadDefaultParams()
     dataPath = defaultParams['dataPath']
 
 
@@ -597,7 +597,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             bssExpToCompute = bssExpWithGpfa - gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]
 #                bssExpComputed = bssExpWithGpfa[gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]]
 #                bssExpToCompute = bssExpWithGpfa - gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]
-        
+
             # note that this *adds* values to GpfaAnalysisInfo, so we can't
             # just filter gai by bssExpToCompute (nothing will be there!)
             perConditionGroupFiringRateThresh = gpfaAnalysisInfoConds['condition_grp_fr_thresh'][0]

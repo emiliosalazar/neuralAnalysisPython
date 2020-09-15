@@ -63,7 +63,7 @@ def prepareMatlab(eng=None):
         finally:
             eng.clear('all', nargout=0)
             # add the gpfaEngine path
-            defaultParams = loadDefaultParams(defParamBase = ".")
+            defaultParams = loadDefaultParams()
             matlabCodePath = Path(defaultParams['matlabCodePath'])
             eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
     else:
@@ -75,7 +75,7 @@ def prepareMatlab(eng=None):
         print('Matlab started')
         eng.clear('all', nargout=0)
         # add the gpfaEngine path
-        defaultParams = loadDefaultParams(defParamBase = ".")
+        defaultParams = loadDefaultParams()
         matlabCodePath = Path(defaultParams['matlabCodePath'])
         eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
         
