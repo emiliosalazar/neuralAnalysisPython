@@ -823,15 +823,15 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
             fRChStdMnByAreaHere.append([np.std(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
             fRChMnStdByAreaHere.append([np.mean(gSC.stdFiringRateByChannel()) for gSC in grpSpkCnt])
             fRChStdStdByAreaHere.append([np.std(gSC.stdFiringRateByChannel()) for gSC in grpSpkCnt])
-            fRChPrBinMnByAreaHere.append([np.mean(gSC.avgValByChannelOverBins()) for gSC in grpSpkCnt])
-            fRChPrBinStdMnByAreaHere.append([np.std(gSC.avgValByChannelOverBins()) for gSC in grpSpkCnt])
-            fRChPrBinMnStdByAreaHere.append([np.mean(gSC.stdValByChannelOverBins()) for gSC in grpSpkCnt])
-            fRChPrBinStdStdByAreaHere.append([np.std(gSC.stdValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinMnByAreaHere.append([np.mean(gSC.convertUnitsTo('Hz').avgValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinStdMnByAreaHere.append([np.std(gSC.convertUnitsTo('Hz').avgValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinMnStdByAreaHere.append([np.mean(gSC.convertUnitsTo('Hz').stdValByChannelOverBins()) for gSC in grpSpkCnt])
+            fRChPrBinStdStdByAreaHere.append([np.std(gSC.convertUnitsTo('Hz').stdValByChannelOverBins()) for gSC in grpSpkCnt])
             fanoFactorChMnByAreaHere.append([np.mean(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
             fanoFactorChStdByAreaHere.append([np.std(gSC.fanoFactorByChannel()) for gSC in grpSpkCnt])
 
             if bSC.dtype == 'object':
-                grpTrlLenMs = [gSC.binSize*np.array([gSC[0].shape[0] for gSC in gpSpCn]) for gpSpCn in grpSpkCnt]
+                grpTrlLenMs = [np.array([gSC.binSize*gSC[0].shape[0] for gSC in gpSpCn]) for gpSpCn in grpSpkCnt]
             else:
                 grpTrlLenMs = [np.array([gSC.shape[2]*gSC.binSize]) for gSC in grpSpkCnt]
             

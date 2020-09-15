@@ -401,8 +401,10 @@ class BinnedSpikeSet(np.ndarray):
 
         if self.dtype == 'object':
             chanFirst = hzBinned.swapaxes(0,1)
-            avgFiringStdChan = [np.std(np.hstack(chan), axis=1) for chan in chanFirst]
-            breakpoint() # because I'm not sure this is correct... NOTE want mean before std?
+            # NOTE this outputs an np.array type while the else outputs a
+            # BinnedSpikeSet... I don't think it matters at this level, but in
+            # case it does at some point I'm letting it be remembered here...
+            avgFiringStdChan = np.array([np.stack([trl.mean() for trl in chan]).std(ddof=1) for chan in chanFirst])
 
         else:
             avgFiringStdChan = hzBinned.timeAverage().trialStd()
@@ -446,9 +448,8 @@ class BinnedSpikeSet(np.ndarray):
     # when there are different numbers of bins in different trials
     def avgValByChannelOverBins(self):
         if self.dtype == 'object':
-            chanFirst = self.swapaxes(0,1)
-            avgValChan = np.stack([np.mean(np.hstack(chan), axis=1) for chan in chanFirst])
-            breakpoint() # because I'm not sure this is correct...
+            chanFlat = np.concatenate(self, axis=2).squeeze()
+            avgValChan = chanFlat.mean(axis=1)
         else:
             avgValChan = self.timeAverage().trialAverage()
         
@@ -458,12 +459,11 @@ class BinnedSpikeSet(np.ndarray):
         if self.size == 0:
             stdValChan = np.empty(self.shape[1])
         elif self.dtype == 'object':
-            chanFirst = self.swapaxes(0,1)
-            stdValChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
-            breakpoint() # because I'm not sure this is correct...
+            chanFlat = np.concatenate(self, axis=2).squeeze()
+            stdValChan = chanFlat.std(axis=1,ddof=1)
         else:
             numChannels = self.shape[1]
-            stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1)
+            stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1,ddof=1)
         
         return stdValChan
 
@@ -477,6 +477,7 @@ class BinnedSpikeSet(np.ndarray):
         else:
             numChannels = self.shape[1]
             stdValChan = self.swapaxes(0,1).reshape(numChannels,-1).std(axis=1)
+            breakpoint() # because I'm pretty sure this is wrong since it doesn't average over trials
         
         return stdValChan
 
@@ -1703,7 +1704,7 @@ def std(array, axis=None, dtype=None, out=None, ddof = 0, keepdims = np._NoValue
     units = array.units
 
     from itertools import chain
-    if  type(array) is BinnedSpikeSet and array.dtype=='object':
+    if type(array) is BinnedSpikeSet and array.dtype=='object':
         if axis < 3:
             raise Exception("Can't really std object arrays for the moment...")
         # NOTE I think numpy can deal with object averaging... we'll have to see...
