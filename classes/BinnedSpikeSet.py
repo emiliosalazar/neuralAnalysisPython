@@ -345,6 +345,8 @@ class BinnedSpikeSet(np.ndarray):
             spikesUse = self.copy()
             overallBaseline = []
             if self.dtype == 'object':
+                from copy import deepcopy
+                spikesUse = deepcopy(self) # with an object, you gotta make sure to copy the object dimension >.>
                 if np.unique(self.alignmentBins, axis=0).shape[0] == 1:
                     for lbl in unq:
                         lblTrls = np.all(labels==lbl,axis=lbl.ndim)
