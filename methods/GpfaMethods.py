@@ -108,6 +108,10 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
                 normalGpfaScore[idxDim,:] = gpfaResult['score' if 'score' in gpfaResult else 'normalGpfaScore']
 
         normalGpfaScoreMn = normalGpfaScore.mean(axis=1)
+        # NOTE: come back to this: rerun GPFA on this dataset and see if something weird happens again; unfortunately GPFA is stochastic, so it might not... which is what's worrisome about this particular situation...
+        # Btw, for future me: what I mean by weird is that for some reason it initially computed that dimensionality 12 was the maximum log likelihood dimensionality, and then it computed that it was actually 8. Not really sure why, as the same numbers should have been loaded up both times...
+#        if relPathAndCond == ('memoryGuidedSaccade/Pepe/2018/07/14/ArrayNoSort2_PFC/dataset_449d9/binnedSpikeSet_096e2/filteredSpikes_01062_4d9a9/filteredSpikeSet.dill', '4', '[3]'):
+#            breakpoint()
         if cvApproach is "logLikelihood":
             xDimScoreBest = dimSort[np.argmax(normalGpfaScoreMn)]
         elif cvApproach is "squaredError":
