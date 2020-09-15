@@ -242,7 +242,7 @@ class DatasetInfo(dj.Manual):
                 endStateArr = np.asarray(endState)
                 timeInStateArr = endStateArr - startStateArr
 
-                _, trialFiltLen = dataset.filterTrials(timeInStateArr>lenSmallestTrial)
+                _, trialFiltLen = dataset.filterTrials(timeInStateArr>=lenSmallestTrial)
                 trialsKeep &= trialFiltLen
 
                 dataset = dataset.filterTrials(trialsKeep)[0]
