@@ -1,27 +1,24 @@
-function dat = nev2datCuedAttn(nevFile)
+function [dat, sortcodeLookupTable, rasterTimeline] = nev2datCuedAttn(nevFile)
 % using the cued attention nev file, spit out the dat file that Adam Snyder
 % had created (and the format that I've been using) so I can play with it
 % more. This allows me to run the cued attention data through the NAS and
 % keep playing with it as I was before
 
-% erm, bad me... but recursively calling this function instead of for
-% looping the file ... >.>
+% man I used to have a recursive step in here instead of this simple thing.
+% How embarrassing.
 if iscell(nevFile) % allow to put in multiple NEV files to concatenate
-    dat = nev2datCuedAttn(nevFile{1});
+    dat = nev2dat(nevFile{1});
     for fl = 2:length(nevFile)
-        datFl = nev2datCuedAttn(nevFile{fl});
+        datFl = nev2dat(nevFile{fl});
         
-        newTrialId = num2cell([datFl.trialId] + dat(end).trialId);
-        newSeqId = num2cell([datFl.sequenceId] + dat(end).sequenceId);
-        [datFl.trialId] = deal(newTrialId{:});
-        [datFl.sequenceId] = deal(newSeqId{:});
-        dat = cat(1, dat, datFl);
+       
+        dat = [dat, datFl];
     end
-    return
+else
+    dat = nev2dat(nevFile);
 end
-datFirst = nev2dat(nevFile);
 
-codesPres = {datFirst.trialcodes};
+codesPres = {dat.trialcodes};
 % hard coded, but this exists in a codes matfile 
 stimOnCodes = [10:20]; 
 
@@ -32,7 +29,7 @@ codeNumCol = 2;
 codeTimeCol = 3;
 useTrial = cellfun(@(cP) any(ismember(cP(:, codeNumCol), stimOnCodes)), codesPres);
 
-datUse = datFirst(useTrial);
+datUse = dat(useTrial);
 
 % grab spike times in ms (ceilinged up so everything from 0-1ms is assigned
 % to 1 ms); also, I believe these are spikes detected--i.e. threshold
@@ -78,7 +75,8 @@ codesInTrialsMsFromSt = cellfun(@(tc, tms) [tc(:, 2) ceil(1000*(tc(:, 3)-tms(1))
 codesTarg = [10:17 19:20 70:80];
 codesUsedTarg = cellfun(@(codes) codes(ismember(codes(:, 1), codesTarg), :), codesInTrialsMsFromSt, 'uni', 0);
 codesUsedAfterTarg = cellfun(@(codes) codes([false; ismember(codes(:, 1), codesTarg)], :), codesInTrialsMsFromSt, 'uni', 0);
-spkArraysAroundStimPreses = cellfun(@(spArr, cdUsedTarg) cellfun(@(codeTime) computeSpikeArrayAroundCode(spArr, codeTime, [-300, 700]), num2cell(cdUsedTarg(:, 2)), 'uni', 0), spikeArrays, codesUsedTarg, 'uni', 0);
+rasterTimeline = -300:700;
+spkArraysAroundStimPreses = cellfun(@(spArr, cdUsedTarg) cellfun(@(codeTime) computeSpikeArrayAroundCode(spArr, codeTime, [rasterTimeline(1), rasterTimeline(end)]), num2cell(cdUsedTarg(:, 2)), 'uni', 0), spikeArrays, codesUsedTarg, 'uni', 0);
 sequenceLength = cellfun('length', spkArraysAroundStimPreses)';
 
 ex_codes; % better be on your path >.>
@@ -202,9 +200,9 @@ end
 
 function spikeArrayAroundCode = computeSpikeArrayAroundCode(spikeArray, codeTimeIndex, indexOffshiftBeforeAndAfterCode)
 indexStart = codeTimeIndex + indexOffshiftBeforeAndAfterCode(1);
-indexEnd = codeTimeIndex + indexOffshiftBeforeAndAfterCode(2) ; % -1 because if input is [0 1], we would want the single value of the codeTimeIndex
+indexEnd = codeTimeIndex + indexOffshiftBeforeAndAfterCode(2) ;
 
 spikeArrayAroundCode = spikeArray(:, indexStart:min([indexEnd end]));
-spikeArrayAroundCode(:, end+1:(indexEnd-indexStart)) = 0; % pad end if necessary
+spikeArrayAroundCode(:, end+1:(indexEnd-indexStart+1)) = 0; % pad end if necessary
 
 end
