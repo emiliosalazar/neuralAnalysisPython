@@ -61,19 +61,20 @@ def plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForS
     labelForCol = labelForCol[colSplit==unLabForSplit[0]]
     labelForMarker = labelForMarker[colSplit==unLabForSplit[0]]
     
-    from itertools import product,chain
-    # this variable will use matplotlib's maker of markers to combine polygon
-    # numbers and angles
-    polygonSides = range(2,8)
-    rotDegBtShapes = 20
-    # 0 is to make this a polygon
-    polyAng = [product([polySd], [0], np.arange(0, np.lcm(np.int(np.round(360/polySd)), rotDegBtShapes) if np.lcm(np.int(np.round(360/polySd)), rotDegBtShapes) < 360 else 360, rotDegBtShapes)) for polySd in polygonSides]
-    markerCombos = np.stack(chain.from_iterable(polyAng))
-    # sort by angle--this ends up ensuring that sequential plots have different
-    # polygons
-    markerCombos = markerCombos[markerCombos[:,2].argsort()]
-    # back in tuple form
-    markerCombos = tuple(tuple(mc) for mc in markerCombos)
+#    from itertools import product,chain
+#    # this variable will use matplotlib's maker of markers to combine polygon
+#    # numbers and angles
+#    polygonSides = range(3,8)
+#    rotDegBtShapes = 20
+#    # 0 is to make this a polygon
+#    polyAng = [product([polySd], [0], np.arange(0, np.lcm(np.int(np.round(360/polySd)), rotDegBtShapes) if np.lcm(np.int(np.round(360/polySd)), rotDegBtShapes) < 360 else 360, rotDegBtShapes)) for polySd in polygonSides]
+#    markerCombos = np.stack(chain.from_iterable(polyAng))
+#    # sort by angle--this ends up ensuring that sequential plots have different
+#    # polygons
+#    markerCombos = markerCombos[markerCombos[:,2].argsort()]
+#    # back in tuple form
+#    markerCombos = tuple(tuple(mc) for mc in markerCombos)
+    markerCombos = computeMarkerCombos()
 
     for metricNum, (metricName, metricVal) in enumerate(metricDict.items()):
         metricVal = [np.array(m).squeeze() for m in metricVal]
@@ -114,3 +115,21 @@ def grp_range(a):
     id_arr[0] = 0
     id_arr[idx[:-1]] = -a[:-1]+1
     return id_arr.cumsum()
+
+def computeMarkerCombos():
+    from itertools import product,chain
+# this variable will use matplotlib's maker of markers to combine polygon
+# numbers and angles
+    polygonSides = range(3,8)
+    rotDegBtShapes = 20
+# 0 is to make this a polygon
+    polyAng = [product([polySd], [0], np.arange(0, np.lcm(np.int(np.round(360/polySd)), rotDegBtShapes) if np.lcm(np.int(np.round(360/polySd)), rotDegBtShapes) < 360 else 360, rotDegBtShapes)) for polySd in polygonSides]
+    markerCombos = np.stack(chain.from_iterable(polyAng))
+# sort by angle--this ends up ensuring that sequential plots have different
+# polygons
+    markerCombos = markerCombos[markerCombos[:,2].argsort()]
+# back in tuple form
+    markerCombos = tuple(tuple(mc) for mc in markerCombos)
+
+    return markerCombos
+
