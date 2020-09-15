@@ -596,7 +596,7 @@ class BinnedSpikeSetInfo(dj.Manual):
 
 #            bssFilterParamsCheck = bssFilterParams.copy()
 #            bssFilterParamsCheck.update(key)
-            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key}] 
+            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key + ['parent_bss_relative_path']}] 
             existingSS = existingSS[self.fetch('bss_params_id', as_dict=True)[0]]
             # this is important for not grabbing repeats when looking for the
             # originally filtered binned spike set
@@ -725,7 +725,11 @@ class BinnedSpikeSetInfo(dj.Manual):
             # NOTE might be worth being able to specify how many subsets to
             # grab in grabBinnedSpikes so we don't have too much
             # overhead... for later
-            randomSubsets = bsi[fssKeys].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
+#            randomSubsets = bsi[fssKeys].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
+            # NOTE: I think usign fssKeys was from a prior iteration fo
+            # FilteredSpikeSetParams that was a child of BSI--now I believe I
+            # can directly filter with the existingSS value
+            randomSubsets = bsi[existingSS].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
 
             if len(randomSubsets) < numSubsets:
 
@@ -752,6 +756,7 @@ class BinnedSpikeSetInfo(dj.Manual):
                         randomSubsets += [randomSubset]
                         trlChanFilters.append((trlsUse, chansUse))
                         fssKeys.append(fssKey)
+
 
             if returnInfo:
                 return randomSubsets, trlChanFilters, bssInfo['dataset_names'][0], fssKeys
