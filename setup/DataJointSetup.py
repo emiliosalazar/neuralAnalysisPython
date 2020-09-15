@@ -83,6 +83,7 @@ class DatasetInfo(dj.Manual):
     date_acquired : date # date data was acquired
     explicit_ignore_channels : blob # channels explicitly removed (for spike sorting goodness)
     channels_keep : blob # channels kept from overall dataset (*after* explicit_ignore_channels are removed--useful for finding channels not removed from coincidence detection)
+    spike_identification_method : enum('threshold','nas','handSort','other') # to store how waveforms are identified as spikes
     """
     
     # I don't want to use the external storage paradigm they have, as I'm not

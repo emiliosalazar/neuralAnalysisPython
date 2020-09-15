@@ -27,36 +27,72 @@ defaultParams = loadDefaultParams(defParamBase = ".")
 dataPath = defaultParams['dataPath']
 
 data = []
-data.append({'description': 'Earl 2019-03-18 M1 - MGR',
+data.append({'description': 'Earl 2019-03-18 M1 thresh - MGR',
               'area' : 'M1',
-              'path': Path('memoryGuidedReach/Earl/2019/03/18/'),
+              'path': Path('memoryGuidedReach/Earl/2019/03/18/threshCrossings'),
               'keyStates' : {
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
               'alignmentStates': [],
-              'processor': 'Erinn'});
-data.append({'description': 'Earl 2019-03-22 M1 - MGR',
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'threshold'});
+data.append({'description': 'Earl 2019-03-18 M1 nas - MGR',
               'area' : 'M1',
-              'path': Path('memoryGuidedReach/Earl/2019/03/22/'),
+              'path': Path('memoryGuidedReach/Earl/2019/03/18/nasFromLincoln'),
               'keyStates' : {
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
               'alignmentStates': [],
-              'processor': 'Erinn'});
-data.append({'description': 'Earl 2019-03-23 M1 - MGR',
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Earl 2019-03-22 M1 thresh - MGR',
               'area' : 'M1',
-              'path': Path('memoryGuidedReach/Earl/2019/03/23/'),
+              'path': Path('memoryGuidedReach/Earl/2019/03/22/threshCrossings'),
               'keyStates' : {
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
               'alignmentStates': [],
-              'processor': 'Erinn'});
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'threshold'});
+data.append({'description': 'Earl 2019-03-22 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Earl/2019/03/22/nasFromLincoln'),
+              'keyStates' : {
+                  'delay': 'Delay Period',
+                  'stimulus': 'Target Flash',
+                  'action' : 'Target Reach'
+              },
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Earl 2019-03-23 M1 thresh - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Earl/2019/03/23/threshCrossings'),
+              'keyStates' : {
+                  'delay': 'Delay Period',
+                  'stimulus': 'Target Flash',
+                  'action' : 'Target Reach'
+              },
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'threshold'});
+data.append({'description': 'Earl 2019-03-23 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Earl/2019/03/23/nasFromLincoln'),
+              'keyStates' : {
+                  'delay': 'Delay Period',
+                  'stimulus': 'Target Flash',
+                  'action' : 'Target Reach'
+              },
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas'});
 data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
@@ -66,7 +102,8 @@ data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
 data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
@@ -76,7 +113,30 @@ data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Pepe A1 2018-07-14 PFC thresh - MGS',
+              'area' : 'PFC',
+              'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/ArrayNoSort1_PFC/'),
+              'keyStates' : {
+                  'delay': 'TARG_OFF',
+                  'stimulus': 'TARG_ON',
+                  'action' : 'SACCADE'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'threshold'});
+data.append({'description': 'Pepe A2 2018-07-14 PFC thresh - MGS',
+              'area' : 'PFC',
+              'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/ArrayNoSort2_PFC/'),
+              'keyStates' : {
+                  'delay': 'TARG_OFF',
+                  'stimulus': 'TARG_ON',
+                  'action' : 'SACCADE'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'threshold'});
 data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
@@ -86,7 +146,8 @@ data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
 data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
@@ -96,7 +157,8 @@ data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
 data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
@@ -106,7 +168,8 @@ data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'handSort'});
 data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
@@ -116,7 +179,8 @@ data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'handSort'});
 data.append({'description': 'Pepe 2016-02-03 V4 - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/03/Array1_V4/'),
@@ -126,7 +190,8 @@ data.append({'description': 'Pepe 2016-02-03 V4 - cuedAttn',
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'handSort'});
 data.append({'description': 'Pepe 2016-02-03 PFC - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/03/Array2_PFC/'),
@@ -136,7 +201,8 @@ data.append({'description': 'Pepe 2016-02-03 PFC - cuedAttn',
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio'});
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'handSort'});
 
 data = np.asarray(data) # to allow fancy indexing
 #%% process data
@@ -228,6 +294,7 @@ for dataUse in data[dataUseLogical]:
         'brain_area' : dataUse['area'],
         'task' : Path(dataUse['path']).parts[0],
         'date_acquired' : re.search('.*?(\d+-\d+-\d+).*', dataUse['description']).group(1),
+        'spike_identification_method' : dataUse['spikeIdMethod'],
     }
 
     dsi = DatasetInfo()
