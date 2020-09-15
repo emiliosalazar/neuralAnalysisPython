@@ -1,4 +1,4 @@
-function [slabel,spikes, net_labels] = runNASNet(filename,gamma,net_name,varargin)
+function [slabel,spikes, net_labels] = runNASNet(filename,gamma,net_name,wvLen,varargin)
 %
 % This script classifies waveforms using a trained neural network
 % (see Issar et al (2020)). The file can either be an NEV or a .mat file 
@@ -67,12 +67,10 @@ end
 [~,~,ext] = fileparts(filename);
 spikes = [];
 
-wvLen = 30;
 
 switch ext
     case '.nev'
         [spikes,waves] = read_nev(filename,'channels',ch);
-        
         if any(spikes(:,1)==0)
             %These are digital codes. There are no waveforms to classify for
             %these indices so create placeholder in waveform list so indexing works
