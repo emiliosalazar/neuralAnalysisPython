@@ -133,3 +133,56 @@ def computeMarkerCombos():
 
     return markerCombos
 
+
+def plotTimeEvolution(descriptions, timeShiftMetricDict, labelForMarkers, labelForColors, supTitle = ''):
+    colorsUse = BinnedSpikeSet.colorset
+
+    times = []
+
+    timeShiftMetricMats = {}
+    for tm, tmMetricDict in timeShiftMetricDict.items():
+        times.append(tmMetricDict.pop('timeCenterPoint'))
+        for metricName, metricVal in tmMetricDict.items():
+            # I'm actually not sure what squeeze() does here... it must be
+            # useful for some situations and I ported it from above
+            metricVal = np.array([np.array(m).squeeze() for m in metricVal])
+            mxLen = np.max([m.shape[0] for m in metricVal])
+            metricValNanPad = np.array([np.pad(m.astype('float'), ((0,mxLen-m.shape[0])), constant_values=(np.nan,)) for m in metricVal])
+            if metricName in timeShiftMetricMats:
+                currVals = timeShiftMetricMats[metricName]
+                timeShiftMetricMats[metricName] = np.insert(currVals, -1, metricValNanPad, axis=2)
+            else:
+                timeShiftMetricMats[metricName] = metricValNanPad[:,:,None] # make this a column vector
+
+    markerCombos = computeMarkerCombos()
+
+    unLabForCol, colNum = np.unique(labelForColors, return_inverse=True, axis=0)
+    unLabForTup, mcNum = np.unique(labelForMarkers, return_inverse=True, axis=0)
+
+    for metricName, metricTmMat in timeShiftMetricMats.items():
+        plt.figure()
+        plt.title('%s over time' % ( metricName ))
+        plt.suptitle(supTitle)
+        ax=plt.subplot(1,1,1)
+        
+        for dset, labDesc, colN, mcN in zip(metricTmMat, descriptions, colNum, mcNum):
+            # plot one for the label...
+            ax.plot(times[0], np.nan, label=labDesc, color=colorsUse[colN, :], marker=markerCombos[mcN], linestyle='-')
+            ax.plot(times, dset.T, color=colorsUse[colN, :], marker=markerCombos[mcN], linestyle='-')
+        
+        ax.set_xlabel('time (ms)')
+        ax.set_ylabel(metricName)
+        axBx = ax.get_position()
+        ax.set_position([axBx.x0, axBx.y0, axBx.width * 0.8, axBx.height])
+        ax.legend(prop={'size':5},loc='center left', bbox_to_anchor=(1, 0.5))
+        
+        # dashed line at zero-point alignment
+        axXlim = ax.get_xlim()
+        axYlim = ax.get_ylim()
+        newXMin = np.min([axXlim[0], 0])
+        newXMax = np.max([axXlim[1], 0])
+        ax.set_xlim(newXMin,newXMax)
+        ax.plot(np.array([0,0]), axYlim, 'k--')
+
+
+
