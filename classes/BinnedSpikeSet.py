@@ -240,6 +240,24 @@ class BinnedSpikeSet(np.ndarray):
             else:
                 out = np.average(self, axis=2)
             return out
+
+    def timeSum(self):
+        if self.size == 0:
+            # the sum of nothing is nothing
+            if self.shape[2] == 0:
+                print('no timepoints, huh?')
+                return np.empty((self.shape[0], 0)).view(BinnedSpikeSet)
+            return np.empty(self.shape[:2]).view(BinnedSpikeSet)
+        else:
+            if self.dtype == 'object':
+                out = self.copy()
+                out[:] = [np.sum(np.stack(trl), axis=1) for trl in out]
+                # at this point it's no longer an object, so take on the type
+                # it shoulda been
+                out = out.astype(self[0,0].dtype)
+            else:
+                out = np.sum(self, axis=2)
+            return out
     
     def timeStd(self):
         return np.std(self, axis=2, ddof=1) # ddof=1 makes this sample standard deviation #np.sqrt(self.timeAverage()) #
