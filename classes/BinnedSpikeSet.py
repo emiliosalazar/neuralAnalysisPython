@@ -989,9 +989,27 @@ class BinnedSpikeSet(np.ndarray):
 #        residualSpikesGoodChans, chansGood = residualSpikes.channelsNotRespondingSparsely(zeroRate = np.array(overallBaseline)[unqInv])
 #        residualSpikesGoodChans, chansGood = residualSpikesGoodChans.removeInconsistentChannelsOverTrials(zeroRate = np.array(overallBaseline)[unqInv])
         
-        
-        chanFirst = residualSpikesGoodChans.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
-        chanFlat = chanFirst.reshape((residualSpikesGoodChans.shape[1], -1)) # chan are now rows, time is cols
+        if residualSpikes.dtype == 'object':
+            residualSpikesFlat = np.concatenate(residualSpikes, axis=2) 
+            chanFlat = residualSpikesFlat.squeeze()
+            # make an array of number of time points for each trial; will be
+            # use for appropriately repeating the labels
+            numTp = [trl[0].shape[0] for trl in residualSpikes]
+
+            # do the same as above for the baseline subtracted values, without baseline
+            # subtracting--now we can find the true geometric mean firing rate
+            flatCnt = np.concatenate(self[:,chansGood], axis=2).squeeze()
+            flatCntMn = flatCnt.mean(axis=1)
+            flatCntMn = np.expand_dims(flatCntMn, axis=1) # need to add back a lost dimension
+        else:
+            chanFirst = residualSpikesGoodChans.swapaxes(0, 1) # channels are now main axis, for sampling in reshape below
+            chanFlat = chanFirst.reshape((residualSpikesGoodChans.shape[1], -1)) # chan are now rows, time is cols
+            numTp = self.shape[2]
+            # do the same as above for the baseline subtracted values, without baseline
+            # subtracting--now we can find the true geometric mean firing rate
+            flatCnt = np.array(self[:,chansGood,:].swapaxes(0,1).reshape((chansGood.size,-1)))
+            flatCntMn = flatCnt.mean(axis=1)
+            flatCntMn = np.expand_dims(flatCntMn, axis=1) # need to add back a lost dimension
         
         # let's remove trials that are larger than 3*std
         stdChanResp = np.std(chanFlat, axis=1)
@@ -999,11 +1017,6 @@ class BinnedSpikeSet(np.ndarray):
         chanMask = np.abs(chanFlat) < 0 # mask nothing... for now
         maskChanFlat = np.ma.array(np.array(chanFlat), mask = np.array(chanMask))
         
-        # do the same as above for the baseline subtracted values, without baseline
-        # subtracting--now we can find the true geometric mean firing rate
-        flatCnt = np.array(self[:,chansGood,:].swapaxes(0,1).reshape((chansGood.size,-1)))
-        flatCntMn = flatCnt.mean(axis=1)
-        flatCntMn = np.expand_dims(flatCntMn, axis=1) # need to add back a lost dimension
         geoMeanCnt = np.sqrt(flatCntMn @ flatCntMn.T)
         
         uniqueLabel, labelPresented = np.unique(labels, axis=0, return_inverse=True)
@@ -1035,7 +1048,7 @@ class BinnedSpikeSet(np.ndarray):
         corrSpksPerCond = np.empty(geoMeanCnt.shape + (0,))
         
         if separateNoiseCorrForLabels:
-            labelPresented = np.repeat(labelPresented, self.shape[2])
+            labelPresented = np.repeat(labelPresented, numTp)
             for lblNum, _ in enumerate(uniqueLabel):
                 lblSpks = maskChanFlat[:, labelPresented==lblNum]
                 covLblSpks = np.ma.cov(lblSpks)
