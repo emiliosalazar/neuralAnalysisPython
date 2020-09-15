@@ -216,7 +216,8 @@ dataUseLogical[dataIndsProcess] = True
 removeCoincidentChans = True
 coincidenceTime = 1 #ms
 coincidenceThresh = 0.2 # 20% of spikes
-checkNumTrls = 0.1 # use 10% of trials
+#checkNumTrls = 0.1 # use 10% of trials
+checkNumTrls = 1 # use 100% of trials
 datasetGeneralLoadParams = {
     'remove_coincident_chans' : removeCoincidentChans,
     'coincidence_time' : coincidenceTime, 
@@ -261,7 +262,7 @@ for dataUse in data[dataUseLogical]:
 #            pickle.dump(datasetHere, datasetDillFh)
             
     else:
-        print('processing data set ' + dataUse['description'])
+        print('processing dataset ' + dataUse['description'])
         datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = notChan, checkNumTrls=checkNumTrls, metastates = dataUse['alignmentStates'], keyStates = dataUse['keyStates'])
 
         
