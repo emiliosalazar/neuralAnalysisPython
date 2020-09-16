@@ -68,6 +68,13 @@ spikeArrays = cellfun(@(spR, spT) uint16(accumarray([double(spR), double(spT)], 
 % find code timing within a trial in the same ms alignment for spikes
 dataUseCodes = {datUse.trialcodes};
 codesInTrialsMsFromSt = cellfun(@(tc, tms) [tc(:, 2) ceil(1000*(tc(:, 3)-tms(1)))], dataUseCodes, {datUse.time}, 'uni', 0);
+% Alright this is kinda shit, but code 18 messes stuff up (hopefully
+% always?) so we're removing it...
+codesInTrialsMsFromStHas18 = any(cellfun(@(codes) any(codes(:, 1) == 18), codesInTrialsMsFromSt));
+if codesInTrialsMsFromStHas18
+    disp('Removing code 18 because... it does weird things?')
+end
+codesInTrialsMsFromSt = cellfun(@(code) code(code(:, 1) ~= 18, :), codesInTrialsMsFromSt, 'uni', 0);
 
 % ah, the joys of hardcoding... I wouldn't be surprised if only the first
 % few codes are actually 'stim codes', but I've found that the STIM8_ON
@@ -112,6 +119,17 @@ preTargInterval(startOfSeq) = preTargIntervalForNans(startOfSeq);
 % divide by 1000 to reflect the fact that the original data has these in ms
 postTargInterval = num2cell(postTargInterval/1000);
 preTargInterval = num2cell(preTargInterval/1000);
+
+% codes for actual saccade, fixation breaks, false alarms... and END_TRIAL
+% for some trials where that signals the end... also FIX_OFF for the
+% corner case described a bit below for BROKE_FIX...
+codesSaccade = [141, 152, 156, 3, 255];
+codesUsedSaccade = cellfun(@(codes) codes(ismember(codes(:, 1), codesSaccade), :), codesInTrialsMsFromSt, 'uni', 0);
+% we'll just choose the time of the first one that comes up as the actual
+% 'reaction time' (or time after last stimulus end) I guess...
+codesUsedSaccade = cellfun(@(codes) codes(1, :), codesUsedSaccade, 'uni', 0);
+lastStimOnToMovement = cellfun(@(cUT, cUS) cUS(2) - cUT(end, 2), codesUsedTarg, codesUsedSaccade, 'uni', 0);
+lastStimOnToMovement = repelem(lastStimOnToMovement', sequenceLength);
 
 spkArraysAroundStimSep = cat(1, spkArraysAroundStimPreses{:});
 sequenceLengthRep = num2cell(repelem(sequenceLength, sequenceLength));
@@ -214,8 +232,10 @@ dat = struct('trialId', trialId,...
     'postStimInterval', postTargInterval,...
     'nextCode', nextCode,...
     'trialResult', trialResult,...
-    'trialChoice', trialChoice...
-    ...'trialRt',
+    'trialChoice', trialChoice,...
+    ... this guy's gonna take the place of trialRt... partly because I still
+    ... don't know how trialRt was computed
+    'lastStimOnToMovement', lastStimOnToMovement... % 'trialRt'
 );
 
 end
