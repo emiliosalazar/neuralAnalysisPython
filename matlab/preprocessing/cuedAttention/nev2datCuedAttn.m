@@ -128,7 +128,8 @@ codesUsedSaccade = cellfun(@(codes) codes(ismember(codes(:, 1), codesSaccade), :
 % we'll just choose the time of the first one that comes up as the actual
 % 'reaction time' (or time after last stimulus end) I guess...
 codesUsedSaccade = cellfun(@(codes) codes(1, :), codesUsedSaccade, 'uni', 0);
-lastStimOnToMovement = cellfun(@(cUT, cUS) cUS(2) - cUT(end, 2), codesUsedTarg, codesUsedSaccade, 'uni', 0);
+% divide this by 1000 to put in seconds as the original data had it
+lastStimOnToMovement = cellfun(@(cUT, cUS) (cUS(2) - cUT(end, 2))/1000, codesUsedTarg, codesUsedSaccade, 'uni', 0);
 lastStimOnToMovement = repelem(lastStimOnToMovement', sequenceLength);
 
 spkArraysAroundStimSep = cat(1, spkArraysAroundStimPreses{:});
