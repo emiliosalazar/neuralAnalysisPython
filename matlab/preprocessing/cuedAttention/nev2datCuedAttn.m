@@ -75,6 +75,7 @@ codesInTrialsMsFromSt = cellfun(@(tc, tms) [tc(:, 2) ceil(1000*(tc(:, 3)-tms(1))
 codesTarg = [10:17 19:20 70:80];
 codesUsedTarg = cellfun(@(codes) codes(ismember(codes(:, 1), codesTarg), :), codesInTrialsMsFromSt, 'uni', 0);
 codesUsedAfterTarg = cellfun(@(codes) codes([false; ismember(codes(:, 1), codesTarg)], :), codesInTrialsMsFromSt, 'uni', 0);
+codesUsedBeforeTarg = cellfun(@(codes) codes(find(ismember(codes(:, 1), codesTarg))-1, :), codesInTrialsMsFromSt, 'uni', 0);
 rasterTimeline = -300:700;
 spkArraysAroundStimPreses = cellfun(@(spArr, cdUsedTarg) cellfun(@(codeTime) computeSpikeArrayAroundCode(spArr, codeTime, [rasterTimeline(1), rasterTimeline(end)]), num2cell(cdUsedTarg(:, 2)), 'uni', 0), spikeArrays, codesUsedTarg, 'uni', 0);
 sequenceLength = cellfun('length', spkArraysAroundStimPreses)';
@@ -86,10 +87,31 @@ codeNames = fieldnames(allExCodes);
 cellWithNames(codeNums) = codeNames;
 cellWithNames = cellWithNames';
 
+priorCode = cellfun(@(cUBT) cellWithNames(cUBT(:, 1)), codesUsedBeforeTarg, 'uni', 0);
+priorCode = cat(1, priorCode{:});
 thisCode = cellfun(@(cUT) cellWithNames(cUT(:, 1)), codesUsedTarg, 'uni', 0);
 thisCode = cat(1, thisCode{:});
 nextCode = cellfun(@(cUAT) cellWithNames(cUAT(:, 1)), codesUsedAfterTarg, 'uni', 0)';
 nextCode = cat(1, nextCode{:});
+
+
+timeInTarg = cellfun(@(cUT, cUAT) cUAT(:, 2) - cUT(:, 2), codesUsedTarg, codesUsedAfterTarg, 'uni', 0);
+% the post-target interval, as defined by Adam Snyder, is the time from the
+% end of one target to the beginning of the other + nan for the last
+% stimulus
+postTargInterval = cellfun(@(cUT, cUAT) [cUT(2:end, 2) - cUAT(1:end-1, 2); nan], codesUsedTarg, codesUsedAfterTarg, 'uni', 0);
+postTargInterval = cat(1, postTargInterval{:});
+% the pre-target interval is just the post-target interval rotated one
+% down...
+preTargInterval = [nan; postTargInterval(1:end-1)];
+preTargIntervalForNans = cellfun(@(cUBT, cUT) cUT(:, 2) - cUBT(:, 2), codesUsedBeforeTarg, codesUsedTarg, 'uni', 0);
+preTargIntervalForNans = cat(1, preTargIntervalForNans{:});
+startOfSeq = isnan(preTargInterval);
+preTargInterval(startOfSeq) = preTargIntervalForNans(startOfSeq);
+
+% divide by 1000 to reflect the fact that the original data has these in ms
+postTargInterval = num2cell(postTargInterval/1000);
+preTargInterval = num2cell(preTargInterval/1000);
 
 spkArraysAroundStimSep = cat(1, spkArraysAroundStimPreses{:});
 sequenceLengthRep = num2cell(repelem(sequenceLength, sequenceLength));
@@ -146,8 +168,8 @@ codesChoice = [120:129];
 targChoice = [71:80];
 codesUsedChoice = cellfun(@(codes) codes(ismember(codes(:, 1), codesChoice), :), codesInTrialsMsFromSt, 'uni', 0);
 choiceCode = cellfun(@(cUC) cellWithNames(cUC(:, 1)), codesUsedChoice, 'uni', 0);
-codesUsedTarg = cellfun(@(codes) codes(ismember(codes(:, 1), targChoice), :), codesInTrialsMsFromSt, 'uni', 0);
-targCode = cellfun(@(cUC) cellWithNames(cUC(:, 1)), codesUsedTarg, 'uni', 0);
+codesUsedTargChoice = cellfun(@(codes) codes(ismember(codes(:, 1), targChoice), :), codesInTrialsMsFromSt, 'uni', 0);
+targCode = cellfun(@(cUC) cellWithNames(cUC(:, 1)), codesUsedTargChoice, 'uni', 0);
 % so no choices are recorded when things are correct >.> but they're just
 % the cue position (which is also apparently the cue *choice*... unless
 % it's not a valid trial >.>)
@@ -188,8 +210,8 @@ dat = struct('trialId', trialId,...
     'posPick', posPick,...
     'targAmp', targAmp,...
     'thisCode', thisCode,...
-    ...'preStimInterval',
-    ...'postStimInterval',
+    'preStimInterval', preTargInterval,...
+    'postStimInterval', postTargInterval,...
     'nextCode', nextCode,...
     'trialResult', trialResult,...
     'trialChoice', trialChoice...
