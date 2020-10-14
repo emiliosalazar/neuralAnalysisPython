@@ -46,7 +46,7 @@ from methods.BinnedSpikeSetListMethods import rscComputations
 from methods.GpfaMethods import computePopulationMetrics
 
 # for plotting the metrics
-from methods.plotUtils.UnsortedPlotMethods import plotAllVsAll, plotMetricVsExtractionParams
+from methods.plotUtils.UnsortedPlotMethods import plotAllVsAll, plotMetricVsExtractionParams, plotMetricsBySeparation
 
 
 @saveCallsToDatabase
@@ -86,10 +86,10 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
     # now, in order to prevent small changes in what datasets get in making
     # everything get reextracted because of different neuron numbers, I'm
     # taking these as set by the input
-    if np.min(chTrlNums[0]) < minNumNeuron:
+    if np.min(chTrlNums[0]) < minNumNeurons:
         breakpoint() # should never be reached, really
     else:
-        maxNumNeuron = minNumNeuron # np.min(chTrlNums[0])
+        maxNumNeuron = minNumNeurons # np.min(chTrlNums[0])
     
     if np.min(chTrlNums[1]) < minNumTrlPerCond:
         breakpoint() # should never be reached, really
@@ -191,14 +191,13 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotGenericMetricParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
-    breakpoint()
-        
     # Population metrics
-    popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims)
+    popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims, binnedSpikeSetGenerationParamsDict['binSizeMs'])
 
     #%% Residual correlations
     plotResid = correlationParams['plotResid']
     rscMetricDict = rscComputations(binnedResidShStOffSubsamples, descriptions, labelName, **correlationParams)
+
 
     if plotParams['plotResid']:
         plotResidParams = plotParams['plotResid']
@@ -211,18 +210,27 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
 
 
+
 #    descriptions = dsNames*len(computeResidualsLog)
  #[data[idx]['description'] for idx in dataIndsProcess]
     if plotParams['plotScatterMetrics']:
         plotAllVsAllParams = plotParams['plotScatterMetrics']['plotAllVsAllParams']
         plotMetVsExtPrmParams = plotParams['plotScatterMetrics']['plotMetVsExtPrmParams']
+        plotMetBySeparation = plotParams['plotScatterMetrics']['plotMetBySeparation']
 
-        plotAllVsAll(descriptions, metricDict, brainAreas, tasks)
+        labelForColor = plotAllVsAllParams['labelForColor']
+        if type(labelForColor) is str:
+            labelForColor = np.array(eval(labelForColor))
+
+        labelForMarkers = plotAllVsAllParams['labelForMarkers']
+        if type(labelForMarkers) is str:
+            labelForMarkers = np.array(eval(labelForMarkers))
+
+        plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers)
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotAllVsAllParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
         
-        breakpoint()
         if len(plotMetVsExtPrmParams) > 0:
             splitNames = plotMetVsExtPrmParams['splitNames']
             labelForSplit = plotMetVsExtPrmParams['labelForSplit']
@@ -248,6 +256,33 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
             plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForSplit, labelForColor, labelForMarkers, supTitle="")
 
             outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotMetVsExtPrmParams['pdfnameSt'],plotParams['analysisIdentifier'])))
+            plt.close('all')
+
+        if len(plotMetBySeparation) > 0:
+            separationName = plotMetBySeparation['separationName']
+            labelForSeparation = plotMetBySeparation['labelForSeparation']
+            labelForMarkers = plotMetBySeparation['labelForMarkers']
+            labelForColors = plotMetBySeparation['labelForColors']
+
+            if type(labelForSeparation) is str:
+                labelForSeparation = np.array(eval(labelForSeparation))
+            else:
+                labelForSeparation = np.repeat(labelForSeparation, len(subsampleExpressions)/len(labelForSeparation))
+                labelForSeparation = labelForSeparation.astype(int)
+
+            if type(labelForMarkers) is str:
+                labelForMarkers = np.array(eval(labelForMarkers))
+            else:
+                labelForMarkers = np.repeat(labelForMarkers, len(subsampleExpressions)/len(labelForMarkers))
+
+            if type(labelForColors) is str:
+                labelForColors = np.array(eval(labelForColors))
+            else:
+                labelForColors = np.repeat(labelForColors, len(subsampleExpressions)/len(labelForColors))
+
+
+            plotMetricsBySeparation(metricDict, descriptions, separationName, labelForSeparation, labelForColors, labelForMarkers, supTitle = '')
+            outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotMetBySeparation['pdfnameSt'],plotParams['analysisIdentifier'])))
             plt.close('all')
 
     outputInfo = {}

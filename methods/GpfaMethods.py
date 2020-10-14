@@ -6,11 +6,18 @@ what the class can do
 from pathlib import Path
 import numpy as np
 
-def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensionality, dimensionalityExtractionParams):
+def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensionality, dimensionalityExtractionParams, binSizeMs):
 
     # prep the outputs we're getting
     shCovPropPopByExParams = []
     shCovPropNeurAvgByExParams = []
+    shCovPropNeurStdByExParams = []
+    shCovPropNeurNormDimByExParams = []
+    shCovPropNeurGeoNormDimExParams = []
+    ffLoadingSimByExParams = []
+    overallLoadingSimByExParams = []
+    tmscMnsByExParams = []
+    tmscStdsByExParams = []
     shVarGeoMnVsMnByExParams = []
     participationRatioByExParams = []
     for gpfaResult, dimsGpfaUse in zip(gpfaResultsByExtractionParams, logLikelihoodDimensionality):
@@ -22,11 +29,20 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
 
         shCovPropPopBySubset = []
         shCovPropNeurAvgBySubset = []
+        shCovPropNeurStdBySubset = []
+        shCovPropNeurNormDimBySubset = []
+        shCovPropNeurGeoNormDimBySubset = []
+        ffLoadingSimBySubset = []
+        overallLoadingSimBySubset = []
+        tmscMnsBySubset = []
+        tmscStdsBySubset = []
         shVarGeoMnVsMnBySubset = []
         participationRatioBySubset = []
         for (gpSubset, dGU) in zip(gpfaResult, dimsGpfaUse):
             # extract C and R parameters
             CR = []
+            Corth = []
+            timescales = []
             for gpfaCond, llDim in zip(gpSubset, dGU):
                 C = gpfaCond[int(llDim)]['allEstParams'][0]['C']
                 if C.shape[1] != llDim:
@@ -37,25 +53,62 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
                     breakpoint()
                     raise Exception("AAAH")
                 R = gpfaCond[int(llDim)]['allEstParams'][0]['R']
+                Co = gpfaCond[int(llDim)]['allEstParams'][0]['Corth']
+                timescale = gpfaCond[int(llDim)]['allEstParams'][0]['gamma']
                 CR.append((C,R))
+                Corth.append(Co)
+                timescales.append(binSizeMs/np.sqrt(timescale))
 
             shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
             shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
+            shCovPropNeurStd = [np.std(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
+            shCovPropNeurNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))/C.shape[1] for C, R in CR] 
+            shCovPropNeurGeoNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))**(1/C.shape[1]) for C, R in CR] 
+
+            
+            # NOTE: I'm doing all of this on the orthonormalized C! I believe
+            # this is correct as it reflects the dimensions matched to the
+            # eigenvalues--e.g. the first eigenvalue describes how much
+            # variance is explained by the first orthonormalized dimension
+            Cnorm1 = [C[:,1]/np.sqrt((C[:,1]**2).sum()) for C in Corth]
+            firstFactorLoadingSimilarity = [1-Cn1.size*Cn1.var() for Cn1 in Cnorm1]
+            Cnorm = [C/np.sqrt((C**2).sum()) for C in Corth]
+            overallLoadingSimilarity = [1-Cn.size*Cn.var() for Cn in Cnorm]
+            tmsclMn = [tmsc.mean() for tmsc in timescales]
+            tmsclStd = [tmsc.std() for tmsc in timescales]
+#            breakpoint()
+
             # note all we know is the determinant is the product of the e-vals
             # and the trace is their sum--this is a way to get at the geomean
             # and the mean without actually computing the eigenvalues
             # themselves XD
-            shVarGeoMnVsMn = [np.exp(1/C.shape[1]*np.linalg.slogdet(C.T @ C)[1]) / (np.trace(C @ C.T)/C.shape[1])  for C, R in CR]
+            if np.linalg.slogdet(C.T @ C)[0] != 1:
+                breakpoint() # determinant suggests shrinking!
+            shVarGeoMnVsMn = [(np.trace(C @ C.T)/C.shape[1]) / np.exp(1/C.shape[1]*np.linalg.slogdet(C.T @ C)[1])   for C, R in CR]
             participationRatio = [np.trace(C @ C.T)**2 / (np.trace(C @ C.T @ C @ C.T)) for C, R in CR] 
 
             
             shCovPropPopBySubset.append(np.array(shCovPropPop))
             shCovPropNeurAvgBySubset.append(np.array(shCovPropNeurAvg))
+            shCovPropNeurStdBySubset.append(np.array(shCovPropNeurStd))
+            shCovPropNeurNormDimBySubset.append(np.array(shCovPropNeurNormDim))
+            shCovPropNeurGeoNormDimBySubset.append(np.array(shCovPropNeurGeoNormDim))
+            ffLoadingSimBySubset.append(np.array(firstFactorLoadingSimilarity))
+            overallLoadingSimBySubset.append(np.array(overallLoadingSimilarity))
+            tmscMnsBySubset.append(np.array(tmsclMn))
+            tmscStdsBySubset.append(np.array(tmsclStd))
             shVarGeoMnVsMnBySubset.append(np.array(shVarGeoMnVsMn))
             participationRatioBySubset.append(np.array(participationRatio))
         
         shCovPropPopByExParams.append(shCovPropPopBySubset)
         shCovPropNeurAvgByExParams.append(shCovPropNeurAvgBySubset)
+        shCovPropNeurStdByExParams.append(shCovPropNeurStdBySubset)
+        shCovPropNeurNormDimByExParams.append(shCovPropNeurNormDimBySubset)
+        shCovPropNeurGeoNormDimExParams.append(shCovPropNeurGeoNormDimBySubset)
+        ffLoadingSimByExParams.append(np.array(ffLoadingSimBySubset))
+        overallLoadingSimByExParams.append(np.array(overallLoadingSimBySubset))
+        tmscMnsByExParams.append(np.array(tmscMnsBySubset))
+        tmscStdsByExParams.append(np.array(tmscStdsBySubset))
         shVarGeoMnVsMnByExParams.append(shVarGeoMnVsMnBySubset)
         participationRatioByExParams.append(participationRatioBySubset)
 #        else:
@@ -68,11 +121,19 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
 #            shCovPropNeurAvgByExParams.append(np.array(shCovPropNeurAvg))
 #            shLogDetGenCovPropPopByExParams.append(np.array(shLogDetGenCovPropPop))
 
+#    breakpoint()
     resultsDict = {
-        '% sh var' : [np.hstack(shPropN) for shPropN in shCovPropNeurAvgByExParams],
+        '%sv mean' : [np.hstack(shPropN) for shPropN in shCovPropNeurAvgByExParams],
+        '%sv std' : [np.hstack(shPropN) for shPropN in shCovPropNeurStdByExParams],
+        '%sv norm dim' : [np.hstack(shPropNormDim) for shPropNormDim in shCovPropNeurNormDimByExParams],
+#        '%sv geonorm dim' : [np.hstack(shPropGNormDim) for shPropGNormDim in shCovPropNeurGeoNormDimExParams],
         'dimensionality' : [np.hstack(dm) for dm in dimensionalityExtractionParams],
         'sh pop cov' : [np.hstack(shProp) for shProp in shCovPropPopByExParams],
-        'geomean/mean sh var' : [np.hstack(gMvMShV) for gMvMShV in shVarGeoMnVsMnByExParams],
+        '1st factor load sim' : [np.hstack(ffLdSim) for ffLdSim in ffLoadingSimByExParams],
+        'all factor load sim' : [np.hstack(allLdSim) for allLdSim in overallLoadingSimByExParams],
+#        'mean timescales' : [np.hstack(tmsc) for tmsc in tmscMnsByExParams],
+#        'std timescales' : [np.hstack(tmsc) for tmsc in tmscStdsByExParams],
+        'mean/geomean sh var' : [np.hstack(gMvMShV) for gMvMShV in shVarGeoMnVsMnByExParams],
         'participation ratio' : [np.hstack(pR) for pR in participationRatioByExParams],
     }
 

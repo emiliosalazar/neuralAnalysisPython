@@ -240,7 +240,7 @@ def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssExp, maxNumTr
     dsi = DatasetInfo()
 
     if order:
-        bssKeys = bssExp.fetch('KEY', order_by='dataset_id')
+        bssKeys = (bssExp * dsi).fetch('KEY', order_by='brain_area')
     else:
         bssKeys = bssExp.fetch('KEY')
 
@@ -852,6 +852,14 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
         fanoFactorChOBTStdByArea.append(np.stack(fanoFactorChOBTStdByAreaHere))
     
     resultsDict = {
+        'mean(r_{sc})' : mnCorrPerCond,
+        'std(r_{sc})' : stdCorrPerCond,
+        'mean(r_{sc} 1 bn/tr)' : mnCorrPerCondOBPT,
+        'std(r_{sc} 1 bn/tr)' : stdCorrPerCondOBPT,
+        'mean channel fano factor' : fanoFactorChMnByArea,
+        'std channel fano factor' : fanoFactorChStdByArea,
+        'mean channel fano factor (1 bn/tr)' : fanoFactorChOBTMnByArea,
+        'std channel fano factor (1 bn/tr)' : fanoFactorChOBTStdByArea,
         'mean of mean(firing rate (Hz) of channels per trial)' : fRChMnByArea,
         'std of mean(firing rate (Hz) of channels per trial)' : fRChStdMnByArea,
         'mean of std(firing rate (Hz) of channels per trial)' : fRChMnStdByArea,
@@ -860,14 +868,6 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
         'std of mean(firing rate (Hz) of channels per bin)' : fRChPrBinStdMnByArea,
         'mean of std(firing rate (Hz) of channels per bin)' : fRChPrBinMnStdByArea,
         'std of std(firing rate (Hz) of channels per bin)' : fRChPrBinStdStdByArea,
-        'mean(r_{sc})' : mnCorrPerCond,
-        'std(r_{sc})' : stdCorrPerCond,
-        'mean(r_{sc} 1 bn/tr)' : mnCorrPerCondOBPT,
-        'std(r_{sc} 1 bn/tr)' : stdCorrPerCondOBPT,
-        'mean channel fano factor' : fanoFactorChMnByArea,
-        'std channel fano factor' : fanoFactorChStdByArea,
-        'mean channel fano factor (1 bn/tr)' : fanoFactorChOBTMnByArea,
-        'std channel fano factor (1 bn/tr)' : fanoFactorChOBTStdByArea
     }
 
     return resultsDict
