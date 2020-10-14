@@ -1,20 +1,22 @@
-function preprocessCuedAttn(filename)
+function preprocessCuedAttn(filename, procDataDescriptor)
 % separate spike times of 1ms bins based on brain area
 % take only the first flash in the task
 % remove low firing rate units
 
 % these are hardcoded realilties for Pepe's dataset and how its processed before
 % coming into here...
+if nargin<2
+    procDataDescriptor = 'noDesc'
+end
 areas = {'V4', 'PFC'};
 fullLengthStimPres = 400; % number of index positions; also ms
 
-day = 1%1%:2
+%day = 1;%1%:2
 %     load(sprintf('./datasets/cuedA/%s', filenames{day}))
 load(filename)
 
 [code,chan] = find(sortcodeLookupTable');
-snrIdx = ismember(snr(:,1),chan) & ismember(snr(:,2),code);
-neuronSNR = snr(snrIdx,:);
+
 spikesV4 = setdiff(sortcodeLookupTable(1:96,:),0);
 numV4 = length(spikesV4);
 spikesPFC = setdiff(sortcodeLookupTable(97:end,:),0);
@@ -41,8 +43,8 @@ origInd = num2cell(1:length(dat));
 S = dat;
 [S.origInd] = deal(origInd{:});
 
-[pth, ~, ~] = fileparts(filename)
-save(fullfile(pth, sprintf('S_day%d.mat', day)), 'S');
+[pth, ~, ~] = fileparts(filename);
+save(fullfile(pth, sprintf('S_%s.mat', procDataDescriptor)), 'S');
 preprocessDate = today;
 
 
@@ -51,7 +53,7 @@ preprocessDate = today;
 for iarea = 1:length(areas)
 
 	S = [];
-	data = load(fullfile(pth, sprintf('S_day%d.mat', day)));
+	data = load(fullfile(pth, sprintf('S_%s.mat', procDataDescriptor)));
 
 	timeStimStart = find(rasterTimeline==0);
 	
@@ -62,9 +64,7 @@ for iarea = 1:length(areas)
 		Stemp = data.S(itrial);
 		xcSpks = [];
 		S(itrial).trialResult = data.S(itrial).trialResult;
-		if itrial==20
-		a = 5;
-		end
+
 		if Stemp.sequencePosition ~= 1
 			spikesTrialBefore = dat(Stemp.origInd-1).spikes;
 			blankInterval = 1000*dat(Stemp.origInd-1).postStimInterval;
@@ -121,7 +121,11 @@ for iarea = 1:length(areas)
 			% we consider the trial successful if it moved to the next stage
 			S(itrial).status = 1;
 		else
-			reactionTime = round(1000*data.S(itrial).trialRt);
+            if isfield(S(itrial), 'trialRt')
+                reactionTime = round(1000*data.S(itrial).trialRt);
+            else
+                reactionTime = round(1000*data.S(itrial).lastStimOnToMovement);
+            end
 			isCorrect = false;
 			switch data.S(itrial).trialResult
 				case 'CORRECT'
@@ -176,16 +180,21 @@ for iarea = 1:length(areas)
 		S(itrial).sequenceLength = Stemp.sequenceLength;
 	end
 
+    procDataPath = fullfile(pth, sprintf('Array%s%d_%s', procDataDescriptor, iarea, areas{iarea}))
+    if ~isdir(procDataPath)
+        mkdir(procDataPath)
+    end
+
 	if ischar(seqPosDesired) && strcmp(seqPosDesired, 'all')
-		save(fullfile(pth, sprintf('Array%d_%s/processedData.mat', iarea, areas{iarea})), ...
+		save(fullfile(procDataPath, 'processedData.mat'), ...
 			'S', 'preprocessDate', '-v7.3');
 	elseif length(seqPosDesired) == 1
-		save(fullfile(pth, sprintf('Array%d_%s/processedData_flash%d_%s.mat', iarea, areas{iarea}, seqPosDesired, areas{iarea})), ...
+		save(fullfile(procDataPath, sprintf('processedData_flash%d.mat', seqPosDesired)), ...
 			'S', 'preprocessDate', '-v7.3');
 %             save(sprintf('Array%d_%s/processedData.mat', iarea, areas{iarea}), ...
 %                 'S', '-v7.3');
 	else
-		save(fullfile(pth, sprintf('Array%d_%s/processedData_flashLast_%s.mat', iarea, areas{iarea}, areas{iarea})), ...
+		save(fullfile(procDataPath, 'processedData_flashLast.mat'), ...
 			'S', 'preprocessDate', '-v7.3');
 	end
 end
