@@ -49,6 +49,28 @@ data.append({'description': 'Earl 2019-03-18 M1 nas - MGR',
               'alignmentStates': [],
               'processor': 'Erinn',
               'spikeIdMethod' : 'nas'});
+data.append({'description': 'Earl 2019-03-20 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Earl/2019/03/20'),
+              'keyStates' : {
+                  'delay': 'Delay Period',
+                  'stimulus': 'Target Flash',
+                  'action' : 'Target Reach'
+              },
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Earl 2019-03-21 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Earl/2019/03/21'),
+              'keyStates' : {
+                  'delay': 'Delay Period',
+                  'stimulus': 'Target Flash',
+                  'action' : 'Target Reach'
+              },
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas'});
 data.append({'description': 'Earl 2019-03-22 M1 thresh - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/22/threshCrossings'),
@@ -181,6 +203,28 @@ data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
               'spikeIdMethod' : 'handSort'});
+data.append({'description': 'Pepe 2016-02-02 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Pepe 2016-02-02 PFC NAS - cuedAttn',
+              'area' : 'PFC',
+              'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort2_PFC/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
 data.append({'description': 'Pepe 2016-02-03 V4 - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/03/Array1_V4/'),
@@ -203,6 +247,73 @@ data.append({'description': 'Pepe 2016-02-03 PFC - cuedAttn',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
               'spikeIdMethod' : 'handSort'});
+data.append({'description': 'Pepe 2016-02-03 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Pepe 2016-02-03 PFC NAS - cuedAttn',
+              'area' : 'PFC',
+              'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort2_PFC/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Pepe 2016-02-04 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Pepe 2016-02-04 PFC NAS - cuedAttn',
+              'area' : 'PFC',
+              'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort2_PFC/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Pepe 2016-02-05 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+data.append({'description': 'Pepe 2016-02-05 PFC NAS - cuedAttn',
+              'area' : 'PFC',
+              'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort2_PFC/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas'});
+
 
 data = np.asarray(data) # to allow fancy indexing
 #%% process data
@@ -315,151 +426,3 @@ for dataUse in data[dataUseLogical]:
 
     datasetHere.id = dsId
     dataUse['dataset'] = datasetHere
-    
-
-##%% get desired time segment
-#from classes.BinnedSpikeSet import BinnedSpikeSet
-#from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsAroundState as genBSLAroundState
-#binnedSpikes = []
-#binnedSpikesAll = []
-#binnedSpikesOnlyDelay = []
-#binnedSpikesEnd = []
-#groupedSpikesTrialAvg = []
-#groupedSpikesEndTrialAvg = []
-#grpLabels = []
-#
-## this'll bleed a little into the start of the new stimulus with the offset,
-## but before any neural response can happen
-#lenSmallestTrl = 301 #ms; 
-#furthestBack = 300 #ms
-#furthestForward = 300
-#binSizeMs = 25 # good for PFC LDA #50 # 
-#
-#trialType = 'successful'
-#
-#stateNamesDelayStart = [data[ind]['keyStates']['delay'] for ind in dataIndsProcess]
-#
-#binnedSpikes, _ = genBSLAroundState(data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=furthestBack, 
-#                                    furthestTimeAfterState=furthestForward,
-#                                    setStartToDelayEnd = False,
-#                                    setEndToDelayStart = True)
-#
-#
-#binnedSpikesAll, _ = genBSLAroundState(data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=furthestBack, 
-#                                    furthestTimeAfterState=furthestForward,
-#                                    setStartToDelayEnd = False,
-#                                    setEndToDelayStart = False)
-#
-#binnedSpikesOnlyDelay, _ = genBSLAroundState(data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=0, 
-#                                    furthestTimeAfterState=0,
-#                                    setStartToDelayEnd = False,
-#                                    setEndToDelayStart = False)
-#
-#binnedSpikeEnd, _ = genBSLAroundState(data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=furthestBack, 
-#                                    furthestTimeAfterState=furthestForward,
-#                                    setStartToDelayEnd = True,
-#                                    setEndToDelayStart = False)
-#
-#binnedSpikesShortStart, _ = genBSLAroundState(data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=0, 
-#                                    furthestTimeAfterState=lenSmallestTrl,
-#                                    setStartToDelayEnd = False,
-#                                    setEndToDelayStart = True)
-#
-#binnedSpikesShortEnd, _ = genBSLAroundState(data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=lenSmallestTrl, 
-#                                    furthestTimeAfterState=0,
-#                                    setStartToDelayEnd = True,
-#                                    setEndToDelayStart = False)
-#
-## NOTE: this one is special because it returns *residuals*
-#offshift = 75 #ms
-#firingRateThresh = 1
-#fanoFactorThresh = 4
-#baselineSubtract = True
-#binnedResidualsShortStartOffshift, chFanosResidualsShortStartOffshift = genBSLAroundState(
-#                                    data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=-offshift, # note that this starts it *forwards* from the delay
-#                                    furthestTimeAfterState=lenSmallestTrl+offshift,
-#                                    setStartToDelayEnd = False,
-#                                    setEndToDelayStart = True,
-#                                    returnResiduals = baselineSubtract,
-#                                    removeBadChannels = True,
-#                                    unitsOut = 'count', # this shouldn't affect GPFA... but will affect fano factor cutoffs...
-#                                    firingRateThresh = firingRateThresh,
-#                                    fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
-#                                    )
-#baselineSubtract = False
-#furthestTimeBeforeDelay=-offshift # note that this starts it *forwards* from the delay
-#furthestTimeAfterDelay=lenSmallestTrl+offshift
-#binnedSpikesShortStartOffshift, _ = genBSLAroundState(data[dataIndsProcess],
-#                                    stateNamesDelayStart,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=lenSmallestTrl, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=-offshift, # note that this starts it *forwards* from the delay
-#                                    furthestTimeAfterState=lenSmallestTrl+offshift,
-#                                    setStartToDelayEnd = False,
-#                                    setEndToDelayStart = True,
-#                                    returnResiduals = baselineSubtract,
-#                                    removeBadChannels = True,
-#                                    unitsOut = 'count', # this shouldn't affect GPFA... but will affect fano factor cutoffs...
-#                                    firingRateThresh = firingRateThresh,
-#                                    fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
-#                                    )
-#
-#breakpoint()
-#baselineSubtract = False
-#furthestTimeBeforeState=300 # note that this starts it *forwards* from the delay
-#furthestTimeAfterState=300
-#dtExtract = dsi['brain_area="V4"'].grabDatasets()
-#stateNamesTarget = ['Target']*len(dtExtract)
-#binnedSpikesShortStartOffshift, _ = genBSLAroundState(dtExtract,
-#                                    stateNamesTarget,
-#                                    trialType = trialType,
-#                                    lenSmallestTrl=0, 
-#                                    binSizeMs = binSizeMs, 
-#                                    furthestTimeBeforeState=-300, # note that this starts it *forwards* from the delay
-#                                    furthestTimeAfterState=lenSmallestTrl+offshift,
-#                                    setStartToDelayEnd = False,
-#                                    setEndToDelayStart = False,
-#                                    returnResiduals = baselineSubtract,
-#                                    removeBadChannels = True,
-#                                    unitsOut = 'count', # this shouldn't affect GPFA... but will affect fano factor cutoffs...
-#                                    firingRateThresh = firingRateThresh,
-#                                    fanoFactorThresh = fanoFactorThresh # suggestion of an okay value (not too conservative as with 8, not too lenient as with 1)
-#                                    )
-
-breakpoint()
