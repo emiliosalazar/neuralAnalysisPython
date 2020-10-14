@@ -137,7 +137,7 @@ class GPFA:
         
     
     @multiprocessNumpy
-    def runGpfaInMatlab(self, fname,   crossvalidateNum = 0, xDim = 8, eng=None, segLength = None, forceNewGpfaRun = False):
+    def runGpfaInMatlab(self, fname,   crossvalidateNum = 0, xDim = 8, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio', eng=None, segLength = None, forceNewGpfaRun = False):
         
         # if eng is None:
         #     from matlab import engine 
@@ -182,7 +182,7 @@ class GPFA:
                 datTest = np.concatenate(datTest, axis=1)
                 fullRank.append(np.linalg.matrix_rank(datTest) >= datTest.shape[0])
 
-                res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr)))
+                res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, expMaxIterationMaxNum, tolerance, tolType)))
             
             # from time import sleep
             # print('blah')
@@ -216,7 +216,7 @@ class GPFA:
                         # now we're doing it as a pool because if we do it on
                         # the main process Matlab won't run again until we
                         # restart Python >.>
-                        resNew = poolHere.apply_async(parallelGpfa, (fname, bCVNum, xDim, seqsTrain[bCVNum], seqsTest[bCVNum], forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr))
+                        resNew = poolHere.apply_async(parallelGpfa, (fname, bCVNum, xDim, seqsTrain[bCVNum], seqsTest[bCVNum], forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, expMaxIterationMaxNum, tolerance, tolType))
                         try:
                             resultsByCrossVal[bCVNum] = resNew.get() + (fRNew, )
                         except MatlabExecutionError as e:
@@ -563,7 +563,7 @@ def makeKBig(params, T, covType = 'rbf', eng=None):
     
     return KAll, KAllInv, logdetKAll
     
-def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
+def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, expMaxIterationMaxNum, tolerance, tolType):
 
     print('Running GPFA crossvalidation #%d' % (cvNum+1))
     
@@ -579,10 +579,13 @@ def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, se
         eng.workspace['xDim'] = xDim*1.0
         eng.workspace['fname'] = str(fnameOutput)
         eng.workspace['segLength'] = np.inf #segLength*1.0
+        eng.workspace['emMaxIters'] = float(expMaxIterationMaxNum)
+        eng.workspace['tol'] = float(tolerance)
+        eng.workspace['tolType'] = tolType
         
         
         
-        eng.eval("gpfaEngine(" + seqTrainStr + ", " + seqTestStr + ", fname, 'xDim', xDim, 'binWidth', binWidth, 'segLength', segLength)", nargout=0)
+        eng.eval("gpfaEngine(" + seqTrainStr + ", " + seqTestStr + ", fname, 'xDim', xDim, 'binWidth', binWidth, 'segLength', segLength, 'emMaxIters', emMaxIters)", nargout=0)
 
     eng.evalc("results = load('"+str(fnameOutput)+"')")
     eng.evalc("results.method='gpfa'") # this is needed for the next step...

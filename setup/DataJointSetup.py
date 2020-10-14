@@ -68,7 +68,6 @@ class DatasetGeneralLoadParams(dj.Manual):
 
 @schema
 class DatasetInfo(dj.Manual):
-
     definition = """
     # dataset
     dataset_relative_path : varchar(500) # relative path to dataset
@@ -1091,6 +1090,11 @@ class GpfaAnalysisInfo(dj.Manual):
     label_use = "stimulusMainLabel" : varchar(50) # label to use for conditions
     cval_train_converged : blob # array with 1 or 0 for each crossvalidation indicating if GPFA converged
     cval_train_full_rank : blob # array with 1 or 0 for each cval indicating whether train set was full rank or not
+    max_iterations = 500 : int # max number of iterations, the default of 500 is what was in the code
+    tolerance = 1e-8 : float # tolerance for GPFA convergence--the default of 1e-8 was the default in code; what it means is defined in tolerance_type
+    tolerance_type = 'ratio' : enum('ratio', 'diff') # type of tolerance used for convergence--see below
+    ratio_final = null : blob # this represents the ratio tolerance value (change_curr/change_prev) - 1 which is < (ratio_tolerance) per crossvalidation
+    diff_final = null : blob # this represents the diff tolerance value (ll_curr-ll_prev) per crossvalidation
     """
     
     def grabGpfaResults(self, order=True, returnInfo = False, useFa = False):
@@ -1117,9 +1121,9 @@ class GpfaAnalysisInfo(dj.Manual):
 #                gpfaPaths = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums', 'dimensionality', 'dataset_name', as_dict=True)
 #        else:
         if order:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', order_by='dataset_id,dimensionality', as_dict=True)
         else:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', as_dict=True)
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', as_dict=True)
 
         for info in gpfaInfo:
             bssPath = Path(info['bss_relative_path'])
@@ -1230,7 +1234,7 @@ class GpfaAnalysisInfo(dj.Manual):
             return gpfaResults, dict(gpfaOutPaths = gpfaOutPaths, bssPaths = bssPaths, datasetNames = datasetNames)
         return gpfaResults
 
-    def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, forceNewGpfaRun = False, useFa = False):
+    def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio', forceNewGpfaRun = False, useFa = False):
         defaultParams = loadDefaultParams()
         dataPath = Path(defaultParams['dataPath'])
 
@@ -1287,7 +1291,9 @@ class GpfaAnalysisInfo(dj.Manual):
         )
         gpfaCallParams = {gpfaCallParamsMap[k] : v for k,v in gpfaParams.items() if k in gpfaCallParamsMap}
         gpfaCallParams['labelUse'] = labelUse
-
+        gpfaCallParams['expMaxIterationMaxNum'] = expMaxIterationMaxNum
+        gpfaCallParams['tolerance'] = tolerance
+        gpfaCallParams['tolType'] = tolType
 
         retValsAll = []
         for key in bssKeys:
@@ -1313,20 +1319,22 @@ class GpfaAnalysisInfo(dj.Manual):
                 retValsAll.append(retVals)
 
             condPaths = retVals[-1]
-            rankConvDat = retVals[-2]
+            gpfaRunFinalDets = retVals[-2]
             condInfo = list(zip(condsUse, condPaths))
             gpfaPrepComp = retVals[0]
 
 
-            for cI, gPC, rcD in zip(condInfo, gpfaPrepComp, rankConvDat):
+            for cI, gPC, rgfD in zip(condInfo, gpfaPrepComp, gpfaRunFinalDets):
                 conditionNumsUsed = np.array([cI[0]]) # so it can be saved in DataJoint
                 conditionSavePaths = str(cI[1]) # so it can be saved in DataJoint
-                crossvalFullRankStat = np.array(rcD[0])
-                crossvalConvergeStat = np.array(rcD[1])
+                crossvalFullRankStat = np.array(rgfD[0])
+                crossvalConvergeStat = np.array(rgfD[1])
+                crossvalFinalRatio = np.array(rgfD[2])
+                crossvalFinalDiff = np.array(rgfD[3])
 
                 gpfaHash = hashlib.md5(str(gPC).encode('ascii')).hexdigest()
                 try:
-                    self.insert1(dict(
+                    newGaiRow = dict(
                         **key,
                         **gapKey,
                         gpfa_rel_path_from_bss = str(Path(conditionSavePaths).relative_to(dataPath / relPath)), 
@@ -1335,12 +1343,28 @@ class GpfaAnalysisInfo(dj.Manual):
                         condition_grp_fr_thresh = perCondGroupFiringRateThresh,
                         label_use = labelUse,
                         cval_train_converged = crossvalConvergeStat,
-                        cval_train_full_rank = crossvalFullRankStat
-                    ))
+                        cval_train_full_rank = crossvalFullRankStat,
+                        max_iterations = int(expMaxIterationMaxNum),
+                        tolerance = float(tolerance),
+                        tolerance_type = tolType,
+                        ratio_final = crossvalFinalRatio,
+                        diff_final = crossvalFinalDiff,
+                    )
+                    self.insert1(newGaiRow)
                 except IntegrityError as e:
                     if str(e).find("UNIQUE constraint failed") != -1 and forceNewGpfaRun:
-                        print("Be careful using this... GPFA was forced to run again without changing recorded parameters--could result in data inconsistency issues!")
+                        print("Be careful using this... GPFA was forced to run again without changing recorded parameters--could result in data consistency issues!")
+                        gaiToUpdate = self[{k:v for k,v in newGaiRow.items() if k in self.fetch('KEY')[0].keys()}]
+                        gaiValsOriginal = gaiToUpdate.fetch(as_dict=True)
+                        newValChecks = [(ky,val==gaiValsOriginal[0][ky]) for ky,val in newGaiRow.items() if ky in gaiValsOriginal[0].keys() and ky not in self.fetch('KEY')[0].keys()]
+                        for vl in newValChecks:
+                            if not np.all(vl[1]):
+                                gaiToUpdate._update(vl[0], value = newGaiRow[vl[0]])
                     else:
+                        # check if this could happen because you're trying to
+                        # insert something that's there with no changes to
+                        # uniqueness...
+                        breakpoint()
                         pass
 #                        raise e
         return retValsAll

@@ -1230,7 +1230,7 @@ class BinnedSpikeSet(np.ndarray):
 
         return groupedBalancedSpikes, condDescriptors, condsUse
 
-    def fa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4):
+    def fa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio'):
         assert isinstance(xDim, int), "Must only provide one integer xDim at a time"
         from classes.FA import FA
         from time import time
@@ -1318,12 +1318,12 @@ class BinnedSpikeSet(np.ndarray):
 
         return faPrepDimOutputAll, faTestIndsAll, faTrainIndsAll, faScoreAll
 
-    def gpfa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, forceNewGpfaRun = False):
+    def gpfa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio', forceNewGpfaRun = False):
         from classes.GPFA import GPFA
         from time import time
 
         condSavePaths = []
-        rankConvInfo = []
+        gpfaRunFinalDetails = []
         xDimBestAll = []
         xDimScoreBestAll = []
         gpfaPrepAll = []
@@ -1400,7 +1400,7 @@ class BinnedSpikeSet(np.ndarray):
 
                 if not loadedDimCond or forceNewGpfaRun:
                     try:
-                        gpfaPrep.runGpfaInMatlab(fname=fullOutputPath,  crossvalidateNum=crossvalidateNum, xDim=xDim, forceNewGpfaRun = forceNewGpfaRun);
+                        gpfaPrep.runGpfaInMatlab(fname=fullOutputPath,  crossvalidateNum=crossvalidateNum, xDim=xDim, expMaxIterationMaxNum = expMaxIterationMaxNum, tolerance = tolerance, tolType = tolType, forceNewGpfaRun = forceNewGpfaRun);
 #                            if gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0] != grpSpks.shape[1]:
 #                                print("Diff chans expected vs saved by MATLAB: (dimTest, expChNum, savedChNum) - (%d, %d, %d)" % (xDim, self.shape[1], gpfaPrep.dimOutput[xDim]['allEstParams'][0]['C'].shape[0]))
 #                                print("Trying to force rerun of GPFA in case inputs have changed")
@@ -1422,8 +1422,10 @@ class BinnedSpikeSet(np.ndarray):
 #                gpfaScoreAll.append(gpfaScoreCond)
                 loadedSaved = loadedDimCond
                 converged = [estParam['converge'] for estParam in gpfaPrep.dimOutput[xDim]['allEstParams']]
+                finalRatioChange = [estParam['finalRatioChange'] for estParam in gpfaPrep.dimOutput[xDim]['allEstParams']]
+                finalDiffChange = [estParam['finalDiffChange'] for estParam in gpfaPrep.dimOutput[xDim]['allEstParams']]
                 trainIsFullRank = gpfaPrep.dimOutput[xDim]['fullRank']
-                rankConvInfo.append([trainIsFullRank,converged])
+                gpfaRunFinalDetails.append([trainIsFullRank,converged,finalRatioChange,finalDiffChange])
 #                        gpfaPrep.dimOutput = gpfaSaved['dimOutput'][()]
 #                        gpfaPrep.testInds = gpfaSaved['testInds']
 #                        gpfaPrep.trainInds = gpfaSaved['trainInds']
@@ -1497,7 +1499,7 @@ class BinnedSpikeSet(np.ndarray):
         gpfaTrainIndsAll = [getattr(gpfa, 'trainInds', None) for gpfa in gpfaPrepAll]
 
 #        return xDimBestAll, xDimScoreBestAll, gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll, condSavePaths
-        return gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll, rankConvInfo, condSavePaths
+        return gpfaPrepDimOutputAll, gpfaTestIndsAll, gpfaTrainIndsAll, gpfaRunFinalDetails, condSavePaths
 
 #%% implementation of some np functions
 
