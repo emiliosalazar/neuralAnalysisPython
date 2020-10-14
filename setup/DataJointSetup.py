@@ -1150,6 +1150,49 @@ class GpfaAnalysisInfo(dj.Manual):
             
             dimensionality = info['dimensionality']
             # note we're using numpy to load here
+
+            cValConv = info['cval_train_converged']
+            if np.any(cValConv == False):
+                # we're gonna rerun GPFA with a higher iteration number and
+                # also a lowered threshold so it will converge...
+                unconvergedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
+                condNums = unconvergedGpfa['condition_nums'][0]
+                gpfaRunArgsMap = dict(
+                    labelUse = unconvergedGpfa['label_use'][0],
+                    conditionNumbersGpfa = condNums,
+                    perCondGroupFiringRateThresh = unconvergedGpfa['condition_grp_fr_thresh'][0]
+                )
+                
+                expMaxIterationMaxNum = unconvergedGpfa['max_iterations']
+                tolerance = unconvergedGpfa['tolerance']
+                tolType = unconvergedGpfa['tolerance_type'][0] # remember to unpack the string
+                ratioFinal = unconvergedGpfa['ratio_final']
+                diffFinal = unconvergedGpfa['diff_final']
+                # we'll up the iteration number to 2000 (double the now-default
+                # of 1000) to give another chance at convergence...
+                # I... don't really want to be doing this...
+                if False: # redo it all ... expMaxIterationMaxNum < 2000:
+                    expMaxIterationMaxNum = 2000
+                    tolerance = 1e-8
+#                    expMaxIterationMaxNum = expMaxIterationMaxNum*4 # make sure to make it a float, not an int
+#                else:
+#                    if tolerance < 1e-6:
+#                        tolerance = tolerance*10
+#                    else:
+#                        # I'm gonna hate myself when overnight code gets stuck here, buuut...
+#                        breakpoint() # do not hate thyself
+#                if tolerance < 1e-6:
+#                    tolerance = tolerance*10
+#                else:
+#                    if expMaxIterationMaxNum < 2000:
+#                        expMaxIterationMaxNum = expMaxIterationMaxNum*4 # make sure to make it a float, not an int
+#                    else:
+#                        # I'm gonna hate myself when overnight code gets stuck here, buuut...
+#                        breakpoint() # do not hate thyself
+
+                    # for the moment we're only running if it hasn't been done at 2000 yet
+                    unconvergedGpfa.computeGpfaResults(gap[unconvergedGpfa],bsi[unconvergedGpfa], expMaxIterationMaxNum = expMaxIterationMaxNum, tolerance = tolerance, tolType = tolType, forceNewGpfaRun=True, **gpfaRunArgsMap)
+
             if not useFa:
                 print('Loading %s' % fullPath)
                 try:
