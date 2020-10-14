@@ -29,19 +29,7 @@ from decorators.ParallelProcessingDecorators import multiprocessNumpy
 
 class GPFA:
     def __init__(self, binnedSpikes):
-#        if type(binnedSpikes) is list or binnedSpikes.dtype=='object':
-#            # I'm honestly not really sure why this works, given that with the
-#            # axis=1 in the else statement, axis 1 stays the same size, but in
-#            # this statement with axis=2, axis 2 *changes size*...
-#            allTrlTogether = np.concatenate(binnedSpikes, axis=2)
-#        else:
-#            allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None,:,:]
-#        
-#        allTrlTogether.timeAverage().trialAverage()
-#        allTrlTogether.units = binnedSpikes.units
-#        _, chansKeep = allTrlTogether.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
-        # chansKeepCoinc = allTrlTogether.removeCoincidentSpikes()
-        # chansKeep = np.logical_and(chansKeepThresh, chansKeepCoinc)
+
         if type(binnedSpikes) is list:
             # the 0 index squeezes out that dimension--and it should be what happens,
             # as in this structuring you should have only one trial in here...
@@ -167,13 +155,6 @@ class GPFA:
         
         
         
-        # In order to ensure numpy processes work well in a multiprocess
-        # environment, we set these environment variables (they need to exist
-        # both when numpy gets loaded for the first time *AND* whenever the
-        # processes are running
-#        os.environ['OPENBLAS_NUM_THREADS'] = '1'
-#        os.environ['GOTO_NUM_THREADS'] = '1'
-#        os.environ['OMP_NUM_THREADS'] = '1'
         with Pool() as poolHere:
             res = []
             fullRank = []
@@ -184,10 +165,6 @@ class GPFA:
 
                 res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, expMaxIterationMaxNum, tolerance, tolType)))
             
-            # from time import sleep
-            # print('blah')
-            # sleep(20)
-            # print('bleh')
             resultsByCrossVal = [[]] * len(res) # empty set of lists
             badCrossVals = []
             for cvNum, (rs, fR) in enumerate(zip(res, fullRank)):
@@ -229,10 +206,6 @@ class GPFA:
 
 
             
-#            poolHere.close()
-#            poolHere.join()
-#            breakpoint()
-            
             resultsByVar = list(zip(*resultsByCrossVal))
             allEstParams = resultsByVar[0]
             seqsTrainNew = resultsByVar[1]
@@ -250,14 +223,6 @@ class GPFA:
                 breakpoint()
                 raise Exception('not saving what you used!')
             
-        # To prevent these variables from causing other methods/classes to load
-        # numpy in a non-'optimized' (parallel) state, we delete (effectively
-        # unset) the variables after our multiprocessing has finished
-#        del os.environ['OPENBLAS_NUM_THREADS']
-#        del os.environ['GOTO_NUM_THREADS']
-#        del os.environ['OMP_NUM_THREADS']
-        
-        # print('whowhat?')
         self.dimOutput[xDim] = {}
         self.dimOutput[xDim]['crossvalidateNum'] = crossvalidateNum
         self.dimOutput[xDim]['allEstParams'] = allEstParams
@@ -285,13 +250,6 @@ class GPFA:
             
             
             
-            # In order to ensure numpy processes work well in a multiprocess
-            # environment, we set these environment variables (they need to exist
-            # both when numpy gets loaded for the first time *AND* whenever the
-            # processes are running
-#            os.environ['OPENBLAS_NUM_THREADS'] = '1'
-#            os.environ['GOTO_NUM_THREADS'] = '1'
-#            os.environ['OMP_NUM_THREADS'] = '1'
             with Pool() as plWrap:
                 res = []
                 dimUsed = []
@@ -323,33 +281,14 @@ class GPFA:
 
                         
 
-#                resultsByDim = [rs.get() for rs in res]
-                # resultsByVar = list(zip(*resultsByDim))
-                
                 if dimsCrossvalidate is None:
                     ll = {dim : np.stack(llDim) for dim, llDim in zip(self.dimOutput.keys(), resultsByDim)}        
                 else:
                     ll = {dim : np.stack(llDim) for dim, llDim in zip(dimsCrossvalidate, resultsByDim)}        
-                    # llTemp = np.stack(llTemp)
-                    # llTemp = llTemp - np.min(llTemp)
-                    # llTemp = llTemp/np.max(llTemp)
-                    # ll[dimMax] = np.stack(llTemp)#np.mean(np.stack(llTemp))
-                # llErr[dimMax] = np.std(np.stack(llTemp))
-                    
-                
-            # To prevent these variables from causing other methods/classes to load
-            # numpy in a non-'optimized' (parallel) state, we delete (effectively
-            # unset) the variables after our multiprocessing has finished
-#            del os.environ['OPENBLAS_NUM_THREADS']
-#            del os.environ['GOTO_NUM_THREADS']
-#            del os.environ['OMP_NUM_THREADS']
 
             reducedGpfaScore = np.stack([np.nan])
             gpfaScore = np.stack([llH for _, llH in ll.items()])
             gpfaScoreErr = np.stack([np.nan])
-#            normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
-#            normalGpfaScore = np.mean(normalizedGpfaScore, axis=1)
-#            normalGpfaScoreErr = np.std(normalizedGpfaScore,axis=1)
             
             
             

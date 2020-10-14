@@ -97,10 +97,6 @@ class DatasetInfo(dj.Manual):
         dataPath = Path(defaultParams['dataPath'])
 
         datasets = []
-#        if expression is None:
-#            dsExp = self
-#        else:
-#            dsExp = (self & expression)
 
         # give some ordering here
         dsPaths, dsIds = self.fetch('dataset_relative_path', 'dataset_id', order_by='dataset_id')
@@ -590,14 +586,9 @@ class BinnedSpikeSetInfo(dj.Manual):
             
             # I could have checked this with the fss_param_hash if statement
             # above, but I wanted to be more explicit here
-#            try:
-#            except AttributeError:
-#                fsi = self.__class__()
-
-#            bssFilterParamsCheck = bssFilterParams.copy()
-#            bssFilterParamsCheck.update(key)
             existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key + ['parent_bss_relative_path']}] 
             existingSS = existingSS[self.fetch('bss_params_id', as_dict=True)[0]]
+
             # this is important for not grabbing repeats when looking for the
             # originally filtered binned spike set
             if 'parent_bss_relative_path' not in bssFilterParams:
@@ -606,16 +597,12 @@ class BinnedSpikeSetInfo(dj.Manual):
             if len(existingSS) > 1:
                 raise Exception('Multiple filtered spike sessions have been saved with these parameters')
             elif len(existingSS) > 0:
-#                breakpoint()
-#                print("LA")
                 prmPk = bsi[('bss_relative_path = "%s"' % str(pathRelativeToBase))].fetch("KEY",as_dict=True)[0]
                 if not fullPath.exists():
                     print('Db record existed for FilterSpikeSetParams but not file... saving file now')
                     fullPath.parent.mkdir(parents=True, exist_ok = True)
                     with fullPath.open(mode='wb') as filteredSpikeSetDillFh:
                         pickle.dump(bssFiltered, filteredSpikeSetDillFh)
-#                with fullPath.open(mode='rb') as filteredSpikeSetDillFh:
-#                    bssFiltered = pickle.load(filteredSpikeSetDillFh)
             else:
                 # this check is really here in case we're dropping in the
                 # 'original' FSS, whose path is the parent, so there's not need
@@ -648,7 +635,6 @@ class BinnedSpikeSetInfo(dj.Manual):
 
             if returnKey:
                 bssKey = dict(**prmPk)
-#                bssKey.update(dict(fss_rel_path_from_parent = bssFilterParams['fss_rel_path_from_parent']))
                 return bssFiltered, bssKey
             return bssFiltered
 
@@ -697,17 +683,6 @@ class BinnedSpikeSetInfo(dj.Manual):
             fsp = FilterSpikeSetParams()
             bsi = BinnedSpikeSetInfo()
             existingSS = fsp[bssFilterParams][{'parent_bss_relative_path' : self.fetch1('bss_relative_path')}]
-#            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key}] 
-#            try: # this does double duty checking if self is a FilteredSpikeSet already or not
-#                fsi = self.FilteredSpikeSetInfo()
-#                existingSS = fsi[bssFilterParams][self] 
-#            except AttributeError:
-#                # this is a nonrestricted version...
-#                fsi = self.__class__()
-#                # Explanation: find FilteredSpikeSets with those params, and
-#                # then of those find the ones with the matching parent
-#                # BinnedSpikeSet
-#                existingSS = fsi[bssFilterParams][{'parent_fss_rel_path_from_parent' : self.fetch('fss_rel_path_from_parent')[0]}]
 
 
             if list(existingSS['filter_description']).count(filterDescription) != len(existingSS['filter_description']):
@@ -1113,13 +1088,6 @@ class GpfaAnalysisInfo(dj.Manual):
         dsi = DatasetInfo()
         bsi = BinnedSpikeSetInfo()
 
-        # give some ordering here
-#        if self.fetch('fss_rel_path_from_parent').size: # not sure how to check if null...
-#            if order:
-#                gpfaPaths = (self * gap * dsi).fetch( 'gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums','dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
-#            else:
-#                gpfaPaths = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums', 'dimensionality', 'dataset_name', as_dict=True)
-#        else:
         if order:
             gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', order_by='dataset_id,dimensionality', as_dict=True)
         else:
@@ -1253,21 +1221,6 @@ class GpfaAnalysisInfo(dj.Manual):
                     else:
                         gpfaResLoaded = []
 
-#                faResLoadedInit = faResLoadedInit[0]
-#                faRes = faResLoadedInit['faRes']
-#                grpSpk = faResLoadedInit['groupedBalancedSpikes']
-#                assert len(grpSpk)==1, "should have only grabbed one FA condition run here..."
-#                grpSpk = grpSpk[0]
-#                gpfaResLoaded = dict(
-#                        dimOutput = faRes[0],
-#                        testInds = faRes[1],
-#                        trainInds = faRes[2],
-#                        score = faRes[3][0,:],
-#                        alignmentBins = grpSpk.alignmentBins[0],
-#                        condLabel = grpSpk.labels[labelUse][0],
-#                        binSize = grpSpk.binSize
-#                    )
-#
 
             gpfaResults[relPathAndCond].update({dimensionality : gpfaResLoaded})
 
@@ -1341,7 +1294,6 @@ class GpfaAnalysisInfo(dj.Manual):
         retValsAll = []
         for key in bssKeys:
             relPath = Path(key['bss_relative_path']).parent 
-#            relPath /= Path(key['fss_rel_path_from_parent']).parent if 'fss_rel_path_from_parent' in key else ""
             gpfaRelPathFromBss = Path('gpfa') / ('params_%s' % gpfaParamsHash[:5] ) 
             fullPathToConditions = dataPath / relPath / gpfaRelPathFromBss
             binnedSpikeSet = bsiOrFsi[key].grabBinnedSpikes()
