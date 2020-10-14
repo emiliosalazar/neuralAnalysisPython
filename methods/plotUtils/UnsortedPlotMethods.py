@@ -4,11 +4,12 @@ flux as I move thing to their final destinations...
 """
 import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
+from methods.plotUtils.ScatterBar import scatterBar
 from matplotlib import pyplot as plt
+from itertools import product,chain
 
 def plotAllVsAll(descriptions, metricDict, labelForCol, labelForMarker, supTitle=""):
     colorsUse = BinnedSpikeSet.colorset
-    from itertools import product,chain
     # this variable will use matplotlib's maker of markers to combine polygon
     # numbers and angles
     polygonSides = range(2,8)
@@ -21,7 +22,7 @@ def plotAllVsAll(descriptions, metricDict, labelForCol, labelForMarker, supTitle
     markerCombos = markerCombos[markerCombos[:,2].argsort()]
     # back in tuple form
     markerCombos = tuple(tuple(mc) for mc in markerCombos)
-#    breakpoint()
+    markerCombos = computeMarkerCombos()
     for metricNum, (metricName, metricVal) in enumerate(metricDict.items()):
         for metric2Num, (metric2Name, metric2Val) in enumerate(metricDict.items()):
             if metric2Num > metricNum:
@@ -46,7 +47,9 @@ def plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForS
     try:
         unLabForSplit, colSplit = np.unique(labelForSplit, return_inverse=True, axis=0)
     except TypeError:
-        # allows us to use strings for hte label here...
+        # allows us to use string objects for the label here... (note that the
+        # above allows us to use string *lists*... don't ask me why np.unique
+        # doesn't work well on object arrays of strings, it's dumb
         splitNames, colSplitTemp = np.unique(labelForSplit, return_inverse=True)
         unLabForSplit, colSplit = np.unique(colSplitTemp, return_inverse=True) # converts the strings in unLabForSplit to integers!
 
@@ -95,11 +98,14 @@ def plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForS
         [ax.scatter(m1, m2, label=desc, color=colorsUse[colN,:], marker=markerCombos[mcN]) for m1, m2, desc, colN, mcN in zip(metricValSplit1, metricValSplit2, descriptions, colNum, mcNum)]
         ax.set_xlabel(splitName1)
         ax.set_ylabel(splitName2)
+
+        # make space for a legend to the right of the plot
         axBx = ax.get_position()
         ax.set_position([axBx.x0, axBx.y0, axBx.width * 0.8, axBx.height])
         ax.legend(prop={'size':5},loc='center left', bbox_to_anchor=(1, 0.5))
         ax.axis('equal')
         
+        # draw a dashed line representing y=x line
         axXlim = ax.get_xlim()
         axYlim = ax.get_ylim()
         newMin = np.min([axXlim[0],axYlim[0]])
@@ -117,7 +123,6 @@ def grp_range(a):
     return id_arr.cumsum()
 
 def computeMarkerCombos():
-    from itertools import product,chain
 # this variable will use matplotlib's maker of markers to combine polygon
 # numbers and angles
     polygonSides = range(3,8)
@@ -184,5 +189,73 @@ def plotTimeEvolution(descriptions, timeShiftMetricDict, labelForMarkers, labelF
         ax.set_xlim(newXMin,newXMax)
         ax.plot(np.array([0,0]), axYlim, 'k--')
 
+def plotMetricsBySeparation(metricDict, descriptions, separationName, labelForSeparation, labelForColors, labelForMarkers, supTitle = ''):
+    colorsUse = BinnedSpikeSet.colorset
 
+    # note that labelForSeparation is ideally a *list* (not np.array) of string
+    # labels, so that it can be used for the x-axis as well!
+    try:
+        unLabForSep, colSep = np.unique(labelForSeparation, return_inverse=True, axis=0)
+        sepNames = unLabForSep
+    except TypeError:
+        # allows us to use string objects for the label here... (note that the
+        # above allows us to use string *lists*... don't ask me why np.unique
+        # doesn't work well on object arrays of strings, it's dumb
+        sepNames, colSepTemp = np.unique(labelForSeparation, return_inverse=True)
+        unLabForSep, colSep = np.unique(colSepTemp, return_inverse=True) # converts the strings in unLabForSep to integers!
+
+    unLabForCol, colNumAll = np.unique(labelForColors, return_inverse=True, axis=0)
+    unLabForTup, mcNumAll = np.unique(labelForMarkers, return_inverse=True, axis=0)
+
+    markerCombos = computeMarkerCombos()
+    for metricName, metricVal in metricDict.items():
+        metricVal = [np.array(m).squeeze() for m in metricVal]
+        
+        plt.figure()
+        plt.title('%s split by %s' % ( metricName, separationName))
+        plt.suptitle(supTitle)
+        ax=plt.subplot(1,1,1)
+        
+        
+        for xloc, lbl in enumerate(unLabForSep):
+            # here we're saying to grab the metric vals whose col (index?) for
+            # separation is equal to the index we're at, which is xloc... 
+            metricValSep = list(np.array(metricVal)[colSep==xloc])
+            colNum = colNumAll[colSep==xloc]
+            mcNum = mcNumAll[colSep==xloc]
+            descHere = list(np.array(descriptions)[colSep==xloc])
+                       
+            
+            numSepValsPerGroup = [mVal.shape[0] for mVal in metricValSep]
+            groupPartitions = np.cumsum(numSepValsPerGroup)
+            
+            scatterXY, scatterOrigInds = scatterBar(np.concatenate(metricValSep))
+            # scatterOrigInds comes out as a numPts x numBars array, but here
+            # we're only doing one bar for each group and the 0 index serves to
+            # squeeze it for appropriate indexing; honestly, the same goes for
+            # why the third dimension of scatterXY has a zero index as well
+            scatterXY = scatterXY[scatterOrigInds[:,0].astype('int'),:,0]
+            
+            metricValSepWithXPos = np.split(scatterXY, groupPartitions)
+             
+            # mtrcWX has two columns with the x and y positions; we transpose
+            # to make them two rows, which numpy can represent as the first two
+            # elements of a list, which the asterisk then unpacks
+            [ax.scatter(*((mtrcWX + [xloc,0]).T), label=desc, color=colorsUse[colN,:], marker=markerCombos[mcN]) for mtrcWX, desc, colN, mcN in zip(metricValSepWithXPos, descHere, colNum, mcNum)]
+        
+        ax.set_xticks(np.arange(len(unLabForSep)))
+        ax.set_xticklabels(unLabForSep)
+        ax.set_ylabel(metricName)
+        ax.set_xlabel(separationName)
+        
+        # make space for a legend to the right of the plot
+        axBx = ax.get_position()
+        ax.set_position([axBx.x0, axBx.y0, axBx.width * 0.8, axBx.height])
+        ax.legend(prop={'size':5},loc='center left', bbox_to_anchor=(1, 0.5))
+#        ax.axis('equal')
+
+
+
+    pass
+    
 
