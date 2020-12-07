@@ -1006,6 +1006,10 @@ class BinnedSpikeSet(np.ndarray):
                     
             corrSpksCondMn = corrSpksPerCond.mean(axis=2)
         else:
+            # when combining the labels, we z-score the spike counts first
+            for lblNum, _ in enumerate(uniqueLabel):
+                lblSpks = maskChanFlat[:, labelPresented==lblNum]
+                maskChanFlat[:, labelPresented==lblNum] = (lblSpks - lblSpks.mean(axis=1)[:,None])/lblSpks.std(axis=1)[:,None]
             covSpks = np.ma.cov(maskChanFlat)
             stdSpks = np.ma.std(maskChanFlat, axis=1)
             stdMult = np.outer(stdSpks, stdSpks)
@@ -1104,7 +1108,8 @@ class BinnedSpikeSet(np.ndarray):
             condsUse = np.arange(uniqueTargAngle.shape[0])
         else:
             # we allow the top level to choose random condNums if it wants them
-            condsUse = np.stack(condNums)
+            # but we sort them in case there's a combo--this ensures the names are the same for combos
+            condsUse = np.sort(np.stack(condNums))
 
         
         uniqueTargAngleDeg = uniqueTargAngle*180/np.pi
@@ -1112,6 +1117,12 @@ class BinnedSpikeSet(np.ndarray):
         
         if perConditionGroupFiringRateThresh > 0 and combineConds:
             breakpoint()
+            # I keep the below comment for posterity, but the solution is that
+            # it *doesn't make sense* to have a per condition firing rate if
+            # we're combining conditions, because GPFA is being computed for
+            # *everything*. To make things explicit, then, tell the user to
+            # choose one or the other
+            #
             # so there's a confusion if both of these are true... especially
             # when computeResiduals is in the mix--if computeResiduals is True,
             # we want to compute the residuals on a per-condition basis
@@ -1121,7 +1132,9 @@ class BinnedSpikeSet(np.ndarray):
             # combined correctly because some channels for some conditions
             # might be kicked off. In any case, I'm not sure when we'll run
             # into this, but when we do I will revisit.
-            raise Exception("Not sure how to order these operations, read the comment about revisiting")
+            raise Exception("If you are combining conditions, it doesn't make sense to have a per-condition firing rate threshold--either set perConditionGroupFiringRateThresh to 0, or combineConds to False")
+
+            grpSpksNpArr, _ = binnedSpikesUse.channelsAboveThresholdFiringRate(firingRateThresh=perConditionGroupFiringRateThresh)
         
         grpSpksNpArr, _ = binnedSpikesUse.groupByLabel(newLabels, labelExtract=uniqueTargAngle[condsUse]) # extract one label...
 
@@ -1141,11 +1154,25 @@ class BinnedSpikeSet(np.ndarray):
 
 
         if combineConds and (condNums is None or len(condNums)>1):
-            grpSpksNpArr = [BinnedSpikeSet(np.concatenate(grpSpksNpArr, axis=0), binSize = grpSpksNpArr[0].binSize)] # grpSpksNpArr
+            # okay, so if we combine conditions, on advice of Byron and Matt...
+            # and like 50% understanding why myself, we are going to z-score
+            # each channels response *within* each condition first (note that
+            # when looking at residuals, you've already mean subtracted, since
+            # they're residuals, but this function allows for that not to be
+            # the case, so appropriate z-scoring must include mean
+            # subtraction!)
+            grpSpksNpArr = [(g - g.mean(axis=0))/g.std(axis=0) for g in grpSpksNpArr]
+            grpSpksNpArr = [np.concatenate(grpSpksNpArr, axis=0)] # grpSpksNpArr
             condDescriptors = ['s' + '-'.join(['%d' % stN for stN in condsUse]) + 'Grpd']
+            # grouping all of them together
+            condsUse = [condsUse] # list turns out to be important keeping things together...
         else:
             grpSpksNpArr = grpSpksNpArr
             condDescriptors = ['%d' % stN for stN in condsUse]
+            # grouping into a list of individual lists
+            condsUse = [[cond] for cond in condsUse]
+
+
 
 
         # simple change of variable name
