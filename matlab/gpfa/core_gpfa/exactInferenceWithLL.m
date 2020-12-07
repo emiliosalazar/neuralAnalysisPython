@@ -116,7 +116,12 @@ function [seq, LL] = exactInferenceWithLL(seq, params, varargin)
     
     ctr = 1;
     for n = nList
-      seq(n).xsm   = reshape(xsmMat(:,ctr), xDim, T);      
+	  % we run full() on xsmMat because, while the prior matrix multiplications
+	  % usually pop out a full matrix despite K_big coming in sparse, there is
+	  % the corner case where there's a single dimension *and* a single time
+	  % point (i.e. xDim and T are 1), where xsmMat *remains* sparse, but just
+	  % 1x1 sparse... and that breaks downstream things in Python >.<
+      seq(n).xsm   = reshape(full(xsmMat(:,ctr)), xDim, T);      
       seq(n).Vsm   = Vsm;
       seq(n).VsmGP = VsmGP;
 
