@@ -19,7 +19,7 @@ class Dataset():
                          [56,108,176],[240,2,127],[191,91,23],[102,102,102]])/255
     colorsetMayavi = [tuple(col) for col in colorset]
     
-    def __init__(self, dataMatPath, preprocessor, notChan=None, checkNumTrls=0.1, metastates = [], keyStates = []):
+    def __init__(self, dataMatPath, preprocessor, notChan=None, checkNumTrls=0.1, metastates = [], keyStates = [], stateWithAngleName = 'ReachTargetAppear'):
         print("loading data")
         annots = LoadDataset(dataMatPath)
         print("data loaded")
@@ -49,7 +49,7 @@ class Dataset():
             
             markerTargWindowNames = [trlParam['MarkerTargets'][0][0]['targetName'][0] for trlParam in annots['Data']['Parameters'][0]]
             
-            _, self.markerTargAngles = self.computeTargetCoordsAndAngle(markerTargWindows, markerTargWindowNames, 'ReachTargetAppear')
+            _, self.markerTargAngles = self.computeTargetCoordsAndAngle(markerTargWindows, markerTargWindowNames, stateWithAngleName = stateWithAngleName)
             
             self.statesPresented = [trlDat['stateTransitions'][0][0] for trlDat in annots['Data']['TrialData'][0]]
             
@@ -174,6 +174,7 @@ class Dataset():
         allComboTimestamps = np.concatenate(self.spikeDatTimestamps.flatten(), axis=1)
         if np.any(allComboTimestamps < 0):
             print('things might break if there are negative timestamps right from the offset...')
+            print('or they might not... for now, just know that the minimum timestamp is {}'.format(allComboTimestamps.min()))
         
         self.minTimestamp = np.min(allComboTimestamps)
         self.maxTimestamp = np.stack([np.max(np.concatenate(spDT.flatten(), axis=1)) for spDT in self.spikeDatTimestamps])
@@ -406,46 +407,95 @@ class Dataset():
         else:
             print("No coincident channels to remove")
         print('Worth a manual review here, methinks')
+        print('Perhaps look at variables:')
+        print('    timesOtherChannelsCoincidentToThisChannelOrig')
+        print('    timesThisChannelCoincidentToOtherChannelsOrig')
+        print('    coincProp')
         breakpoint()
         
         # reset random state
         np.random.set_state(initSt)
         
         return chansKeepLog, badChansLog
+
+    def findInitialHighSpikeCountTrials(self):
+        # NOTE this is a heuristic function, meant for certain datasets where
+        # high firing indicates some sort of artifact (typically, movement)
+        # that occurs at the beginning of a session
+        breakpoint()
+
+        # first find the number of spikes per channel in each trial
+        totalTrialChanSpikeCounts = np.stack([np.array([trlChan.shape[1] for trlChan in trlChanSpks]) for trlChanSpks in self.spikeDatTimestamps])
+        # for each channel, find which trials were at least one standard deviation above average spike count
+        highSpkCountTrialPerChan = [fr > fr.mean() + fr.std() for fr in totalTrialChanSpikeCounts.T]
+        # for each trial, find how many channels had a high spike count rate
+        numHighSpkCountChansInTrial = np.sum(np.stack(highSpkCountTrialPerChan), axis=0)
+        # make a list of '1' and '0' for trials that had (or didn't) high spike counts on at least one channel
+        listOneZeroStrTrialHasHighSpikeCountChans = (numHighSpkCountChansInTrial>0).astype(int).astype('str')
+        # convert the list to a full-fledge string
+        strHighSpikeCountChan = ''.join(listOneZeroStrTrialHasHighSpikeCountChans)
+        # use the .find() method of strings to basically convolve a '00' and find the first time a pair of trials has no high spike count... we'll take that to be the end of the movement artifact
+        firstPairCalmTrials = strHighSpikeCountChan.find('00')
+
+        trialMaskHighSpikeCount = np.full(numHighSpkCountChansInTrial.shape[0], False)
+
+        trialMaskHighSpikeCount[:firstPairCalmTrials] = True
+
+        return trialMaskHighSpikeCount
+
+        
+    def filterChannels(self, chanMask):
+        self.spikeDatTimestamps = np.stack([trlTmstmp[chanMask] for trlTmstmp in self.spikeDatTimestamps])
+        self.spikeDatChannels = self.spikeDatChannels[:, chanMask]
+        self.spikeDatSort = self.spikeDatSort[:, chanMask]
+
+    def removeChannels(self, chan):
+        chanMask = np.full(self.spikeDatTimestamps[0].shape, True)
+        chanMask[chan] = False
+        self.filterChannels(chanMask)
+
+    def keepChannels(self, chan):
+        chanMask = np.full(self.spikeDatTimestamps[0].shape, False)
+        chanMask[chan] = True
+        self.filterChannels(chanMask)
     
-    def removeChannels(self, notChan):
-        keepChanMask = self.maskAgainstChannels(notChan)
+    def removeChannelsWithSort(self, sort):
+        keepChanMask = self.maskAgainstSort(sort)
         self.spikeDatTimestamps = np.stack([trlTmstmp[keepChanMask] for trlTmstmp in self.spikeDatTimestamps])
         self.spikeDatChannels = self.spikeDatChannels[:, keepChanMask]
         self.spikeDatSort = self.spikeDatSort[:, keepChanMask]
         
-    def keepChannels(self, keepChan):
-        keepChanMask = self.maskForChannels(keepChan)
+    def keepChannelsWithSort(self, sort):
+        keepChanMask = self.maskForSort(sort)
         self.spikeDatTimestamps = np.stack([trlTmstmp[keepChanMask] for trlTmstmp in self.spikeDatTimestamps])
         self.spikeDatChannels = self.spikeDatChannels[:, keepChanMask]
         self.spikeDatSort = self.spikeDatSort[:, keepChanMask]
     
-    def maskForChannels(self, chanList):
-        channelMask = np.full(self.spikeDatSort[0].shape, False)
-        for chan in chanList:
-            channelMask = np.logical_or(channelMask, self.spikeDatSort[0] == chan)
+    def maskForSort(self, sortList):
+        breakpoint()
+        sortMask = np.full(self.spikeDatSort[0].shape, False)
+        for sort in sortList:
+            sortMask = np.logical_or(sortMask, self.spikeDatSort[0] == sort)
             
-        return channelMask
+        return sortMask
             
-    def maskAgainstChannels(self, chanList):
-        channelMask = np.full(self.spikeDatSort[0].shape, True)
-        for chan in chanList:
-            channelMask = np.logical_and(channelMask, self.spikeDatSort[0] != chan)
+    def maskAgainstSort(self, sortList):
+        sortMask = np.full(self.spikeDatSort[0].shape, True)
+        for sort in sortList:
+            sortMask = np.logical_and(sortMask, self.spikeDatSort[0] != sort)
             
-        return channelMask
+        return sortMask
     
-    def computeTargetCoordsAndAngle(self, markTargWin, markTargWinNm, stateName = 'ReachTargetAppear'):
-        targetInTrialsWithTrial = np.stack([np.append(target[0][0:3], trialNum) for targetsTrial, targetNamesTrial, trialNum in zip(markTargWin, markTargWinNm, range(0, len(markTargWin))) for target, name in zip(targetsTrial, targetNamesTrial) if name[0][0][0].find(stateName)!=-1])
+    def computeTargetCoordsAndAngle(self, markTargWin, markTargWinNm, stateWithAngleName = 'ReachTargetAppear'):
+        targetInTrialsWithTrial = np.stack([np.append(target[0][0:3], trialNum) for targetsTrial, targetNamesTrial, trialNum in zip(markTargWin, markTargWinNm, range(0, len(markTargWin))) for target, name in zip(targetsTrial, targetNamesTrial) if name[0][0][0].find(stateWithAngleName)!=-1])
         _, idx = np.unique(targetInTrialsWithTrial, axis=0, return_index=True)
         #idx = list(np.sort(idx)) # because targetInTrialsWithTrial is still a list, not an nparray
         targetsCoords = targetInTrialsWithTrial[np.sort(idx), 0:3]
         
-        targCenter = np.median(targetsCoords, axis=0)
+        # this is making the assumption that the target coordinates are
+        # balanced... should probably update this to take into account some
+        # way of actually loading the known center...
+        targCenter = np.median(np.unique(targetsCoords, axis=0), axis=0)
         targetsCoords = targetsCoords - targCenter
         targAngle = np.arctan2(targetsCoords[:, 1], targetsCoords[:, 0])
         targAngle = np.expand_dims(targAngle, axis=1)
