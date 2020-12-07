@@ -16,10 +16,15 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
     shCovPropNeurGeoNormDimExParams = []
     ffLoadingSimByExParams = []
     overallLoadingSimByExParams = []
+    efLoadingSimByExParams = []
+    tmscAllByExParams = []
     tmscMnsByExParams = []
     tmscStdsByExParams = []
+    varExpByExParams = []
+    varExpByDimByExParams = []
     shVarGeoMnVsMnByExParams = []
     participationRatioByExParams = []
+    participationRatioRawCovByExParams = []
     for gpfaResult, dimsGpfaUse in zip(gpfaResultsByExtractionParams, logLikelihoodDimensionality):
         # lists of subsamples; often of area subsamples, but sometimes could be
         # subsamples with certain parameters (say, neuron number or trial
@@ -34,17 +39,25 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
         shCovPropNeurGeoNormDimBySubset = []
         ffLoadingSimBySubset = []
         overallLoadingSimBySubset = []
+        efLoadingSimBySubset = []
+        tmscAllBySubset = []
         tmscMnsBySubset = []
         tmscStdsBySubset = []
+        varExpBySubset = []
+        varExpByDimBySubset = []
         shVarGeoMnVsMnBySubset = []
         participationRatioBySubset = []
+        participationRatioRawCovBySubset = []
         for (gpSubset, dGU) in zip(gpfaResult, dimsGpfaUse):
             # extract C and R parameters
             CR = []
             Corth = []
             timescales = []
+            varExpTog = []
+            varExpByDim = []
             for gpfaCond, llDim in zip(gpSubset, dGU):
                 C = gpfaCond[int(llDim)]['allEstParams'][0]['C']
+                testSeqsOrigAndInferred = gpfaCond[int(llDim)]['seqsTestNew'][0]
                 if C.shape[1] != llDim:
                     # I at some point was indexing this, but I no longer
                     # think that's necessary because I'm now using the log
@@ -54,7 +67,36 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
                     raise Exception("AAAH")
                 R = gpfaCond[int(llDim)]['allEstParams'][0]['R']
                 Co = gpfaCond[int(llDim)]['allEstParams'][0]['Corth']
+
+                # doing some timescale things here, including checking how much
+                # variance is explained by each dimension (which has an
+                # associated timescale)
                 timescale = gpfaCond[int(llDim)]['allEstParams'][0]['gamma']
+                if llDim == 1:
+                    timescale = np.array([[timescale]]) # make it a 2d scalar array
+                # checking for the 'shape' lets me see if xsm is matrix
+                # multiplicable or a scalar--I could also check if it's an
+                # ndarray... but I'm actually not sure what typically comes
+                # out of how xsm is made... so I'll just leave this here
+                # for now
+                lowDSeqsNonorth = [seq['xsm'] if hasattr(seq['xsm'], 'shape') else np.array(seq['xsm'])[None,None] for seq in testSeqsOrigAndInferred]
+
+                highDReprojAll = [C@xsm for xsm in lowDSeqsNonorth]
+                
+                # the transpose on C lets me iterate through dimensions, the
+                # dimensional expansion of [:,None] on cDim then effectively
+                # undoes the tranpose
+                highDReprojByDimAll = [[cDim[:,None] @ xsmDim[None, :] for cDim, xsmDim in zip(C.T, xsm)] for xsm in lowDSeqsNonorth ]
+#                highDReprojByDimAll = [[cDim[:,None] @ xsmDim[None, :] for cDim, xsmDim in zip(C.T, xsm if hasattr(xsm, 'shape') else np.array(xsm)[None,None])] for xsm in lowDSeqsNonorth ]
+                grpByDim = list(zip(*highDReprojByDimAll)) # was grouped by trial
+                highDReprojByDimTog = [np.concatenate(dimProj, axis=1) for dimProj in grpByDim]
+                origSeqs = [seq['y'] for seq in testSeqsOrigAndInferred]
+
+                # no bueno... remove when ready
+#                varExp = [1-np.sum((prjDm-yOrig) ** 2) / np.trace(yOrig@yOrig.T) for prjDm, yOrig in zip(highDReprojAll, origSeqs)]
+                highDReprojTog = np.concatenate(highDReprojAll, axis=1)
+                origSeqsTog = np.concatenate(origSeqs, axis=1)
+
                 CR.append((C,R))
                 Corth.append(Co)
                 timescales.append(binSizeMs/np.sqrt(timescale))
@@ -70,13 +112,25 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             # this is correct as it reflects the dimensions matched to the
             # eigenvalues--e.g. the first eigenvalue describes how much
             # variance is explained by the first orthonormalized dimension
-            Cnorm1 = [C[:,1]/np.sqrt((C[:,1]**2).sum()) for C in Corth]
+            #
+            # Also remember that Python is zero-indexed for grabbing that first
+            # one >.>
+            Cnorm1 = [C[:,0]/np.sqrt((C[:,0]**2).sum()) for C in Corth]
             firstFactorLoadingSimilarity = [1-Cn1.size*Cn1.var() for Cn1 in Cnorm1]
             Cnorm = [C/np.sqrt((C**2).sum()) for C in Corth]
             overallLoadingSimilarity = [1-Cn.size*Cn.var() for Cn in Cnorm]
+            eachFactorLoadingSimilarity = [1 - Cdim.size*Cdim.var() for Cn in Cnorm for Cdim in Cn.T ]
+
+            # Some o' dat timescale junk
+            timescalesAll = [tm for tmGrp in timescales for tm in tmGrp]
+
             tmsclMn = [tmsc.mean() for tmsc in timescales]
             tmsclStd = [tmsc.std() for tmsc in timescales]
-#            breakpoint()
+
+            # and its variance explained bretheren...
+            # Don't forget the 1- ! (because I had...)
+            varExpByDimHere = [1-np.sum((indivDimPrj-origSeqsTog)**2) / np.trace(origSeqsTog @ origSeqsTog.T) for indivDimPrj in highDReprojByDimTog]
+            varExpTog = [1-np.sum((highDReprojTog-origSeqsTog)**2) / np.trace(origSeqsTog @ origSeqsTog.T)]
 
             # note all we know is the determinant is the product of the e-vals
             # and the trace is their sum--this is a way to get at the geomean
@@ -86,6 +140,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
                 breakpoint() # determinant suggests shrinking!
             shVarGeoMnVsMn = [(np.trace(C @ C.T)/C.shape[1]) / np.exp(1/C.shape[1]*np.linalg.slogdet(C.T @ C)[1])   for C, R in CR]
             participationRatio = [np.trace(C @ C.T)**2 / (np.trace(C @ C.T @ C @ C.T)) for C, R in CR] 
+            participationRatioRawCov = [np.trace(C @ C.T + R)**2 / (np.trace((C @ C.T + R) @ (C @ C.T + R) )) for C, R in CR] 
 
             
             shCovPropPopBySubset.append(np.array(shCovPropPop))
@@ -95,10 +150,15 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             shCovPropNeurGeoNormDimBySubset.append(np.array(shCovPropNeurGeoNormDim))
             ffLoadingSimBySubset.append(np.array(firstFactorLoadingSimilarity))
             overallLoadingSimBySubset.append(np.array(overallLoadingSimilarity))
+            efLoadingSimBySubset.append(np.array(eachFactorLoadingSimilarity))
+            tmscAllBySubset.append(np.array(timescalesAll))
             tmscMnsBySubset.append(np.array(tmsclMn))
             tmscStdsBySubset.append(np.array(tmsclStd))
+            varExpBySubset.append(np.array(varExpTog))
+            varExpByDimBySubset.append(np.array(varExpByDimHere))
             shVarGeoMnVsMnBySubset.append(np.array(shVarGeoMnVsMn))
             participationRatioBySubset.append(np.array(participationRatio))
+            participationRatioRawCovBySubset.append(np.array(participationRatioRawCov))
         
         shCovPropPopByExParams.append(shCovPropPopBySubset)
         shCovPropNeurAvgByExParams.append(shCovPropNeurAvgBySubset)
@@ -107,10 +167,15 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
         shCovPropNeurGeoNormDimExParams.append(shCovPropNeurGeoNormDimBySubset)
         ffLoadingSimByExParams.append(np.array(ffLoadingSimBySubset))
         overallLoadingSimByExParams.append(np.array(overallLoadingSimBySubset))
+        efLoadingSimByExParams.append(np.concatenate(efLoadingSimBySubset, axis=0)) # can only be plotted vs by dim var exp and tmscl
+        tmscAllByExParams.append(np.concatenate(tmscAllBySubset, axis=1)) # can only be plotted vs by dim var exp and by dim load factor
         tmscMnsByExParams.append(np.array(tmscMnsBySubset))
         tmscStdsByExParams.append(np.array(tmscStdsBySubset))
+        varExpByExParams.append(np.array(varExpBySubset))
+        varExpByDimByExParams.append(np.concatenate(varExpByDimBySubset,axis=0)) # can only be plotted vs tmscl and by dim load factor
         shVarGeoMnVsMnByExParams.append(shVarGeoMnVsMnBySubset)
         participationRatioByExParams.append(participationRatioBySubset)
+        participationRatioRawCovByExParams.append(participationRatioRawCovBySubset)
 #        else:
 #            CR = [(gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['C'][:,:gpfaDimParamsUse],gpfaCond[int(gpfaDimParamsUse)]['allEstParams'][0]['R']) for gpfaCond, gpfaDimParamsUse in zip(gpfaResult, dimsGpfaUse)]
 #            shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
@@ -128,13 +193,18 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
         '%sv norm dim' : [np.hstack(shPropNormDim) for shPropNormDim in shCovPropNeurNormDimByExParams],
 #        '%sv geonorm dim' : [np.hstack(shPropGNormDim) for shPropGNormDim in shCovPropNeurGeoNormDimExParams],
         'dimensionality' : [np.hstack(dm) for dm in dimensionalityExtractionParams],
-        'sh pop cov' : [np.hstack(shProp) for shProp in shCovPropPopByExParams],
+#        'sh pop cov' : [np.hstack(shProp) for shProp in shCovPropPopByExParams],
         '1st factor load sim' : [np.hstack(ffLdSim) for ffLdSim in ffLoadingSimByExParams],
-        'all factor load sim' : [np.hstack(allLdSim) for allLdSim in overallLoadingSimByExParams],
-#        'mean timescales' : [np.hstack(tmsc) for tmsc in tmscMnsByExParams],
+#        'all factor load sim' : [np.hstack(allLdSim) for allLdSim in overallLoadingSimByExParams],
+        'each factor load sim' : [np.stack(efLdSim) for efLdSim in efLoadingSimByExParams],
+        'mean timescales' : [np.hstack(tmsc) for tmsc in tmscMnsByExParams],
 #        'std timescales' : [np.hstack(tmsc) for tmsc in tmscStdsByExParams],
         'mean/geomean sh var' : [np.hstack(gMvMShV) for gMvMShV in shVarGeoMnVsMnByExParams],
         'participation ratio' : [np.hstack(pR) for pR in participationRatioByExParams],
+        'participation ratio raw cov' : [np.hstack(pR) for pR in participationRatioRawCovByExParams],
+        'all timescales' : [np.hstack(tmsc) for tmsc in tmscAllByExParams],
+        'var exp all' : [np.hstack(vrExp) for vrExp in varExpByExParams],
+        'var exp by dim' : [np.hstack(vrExpBD) for vrExpBD in varExpByDimByExParams],
     }
 
     return resultsDict
