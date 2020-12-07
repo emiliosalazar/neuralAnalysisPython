@@ -1411,15 +1411,17 @@ def concatenate(arrays, axis=0, out=None):
         concatEndInit = [arr.end for arr in arrays]
         concatEnd = list(chain(*concatEndInit))
         
-        unLabelKeys = np.unique([arr.labels.keys() for arr in arrays])
+        newLabels = {}
+        unLabelKeys = np.unique([list(arr.labels.keys()) for arr in arrays])
         for key in unLabelKeys:
             # might need to return to the below if keys start having to be lists...
-            keyVals = np.stack([arr.labels[key] for arr in arrays])
+            keyVals = np.concatenate([arr.labels[key] for arr in arrays])
             newLabels[key] = keyVals # list(chain(*keyVals))
             
         concatAlBinsInit = np.stack([arr.alignmentBins for arr in arrays])
         concatAlBins = list(chain(*concatAlBinsInit))
-        return BinnedSpikeSet(concatTrad, start=concatStart, end=concatEnd, binSize=binSizes[0], labels=newLabels, alignmentBins=concatAlBins, units = self.units)
+        units = arrays[0].units
+        return BinnedSpikeSet(concatTrad, start=concatStart, end=concatEnd, binSize=binSizes[0], labels=newLabels, alignmentBins=concatAlBins, units = units)
     elif axis < 3:
         # TODO for axis = 1 (each channel is its own trial) we can just expand start/end/alignment bins to reflect change
         # TODO for axis = 2 (one trial that's really long) we could just offset start/end/alignmentBins so there's many in one trial that are appropriately offshifted
