@@ -1129,7 +1129,12 @@ class GpfaAnalysisInfo(dj.Manual):
 
             conditionNum = info['condition_nums']
             numCrossvals = info['num_folds_crossvalidate']
-            relPathAndCond = (str(bssPath), str(numCrossvals), str(conditionNum))
+            import re
+            # gotta string to make it hashable, but string-ing np.array's make
+            # lists that have ' ' instead of ',', which makes them un-evalable
+            # back to a list >.> So this fixes that.
+            condNumStr = re.sub(' ', ',',str(conditionNum))
+            relPathAndCond = (str(bssPath), str(numCrossvals), condNumStr)
             if relPathAndCond not in gpfaResults:
                 # set the first element to information about this run...
                 gpfaResults[relPathAndCond] = {'condition': conditionNum}
@@ -1289,10 +1294,21 @@ class GpfaAnalysisInfo(dj.Manual):
         # is now changed to.  Note that numConds=None actually means *all*
         # conditions, but it's unclear how many conditions each bS will have
         # (which is actually why this is not stored in the GpfaAnalysisParams
-        # table
+        # table)
         numberOfConditions = gpfaParams['num_conds']
-        if cc != 'no' and ((conditionNumbersGpfa is None and numberOfConditions != 0) or (len(conditionNumbersGpfa) != numberOfConditions)):
+        # this if statement deals with what happens when you start combining conditions
+        if cc != 'no' and ((conditionNumbersGpfa is None and numberOfConditions != 0) or ((conditionNumbersGpfa is not None) and len(conditionNumbersGpfa) != numberOfConditions)):
             breakpoint()
+            # the first parenthetical asks that if you want to use all
+            # conditions, the numberOfConditions should equal zero you want to
+            # use all the conditions (conditionNumbersGpfa is
+            # None) then your numberOfConditions should be set to 0
+            #
+            # the second statement checks that if you *don't* want all the
+            # conditions, then the number of conditions provided
+            # len(conditionNumbersGpfa) should be equal to the numberOfConditions
+            # variable. Note that len() doesn't work on None variables, so I've
+            # gotta check that it's not none again
             raise Exception("Incorrect number of conditions provided")
         gpfaPrepParamsForCall['condNums'] = conditionNumbersGpfa # if cc == 'no' else nc
         gpfaPrepParamsForCall['perConditionGroupFiringRateThresh'] = perCondGroupFiringRateThresh
@@ -1338,7 +1354,7 @@ class GpfaAnalysisInfo(dj.Manual):
 
 
             for cI, gPC, rgfD in zip(condInfo, gpfaPrepComp, gpfaRunFinalDets):
-                conditionNumsUsed = np.array([cI[0]]) # so it can be saved in DataJoint
+                conditionNumsUsed = np.array(cI[0]) # so it can be saved in DataJoint
                 conditionSavePaths = str(cI[1]) # so it can be saved in DataJoint
                 crossvalFullRankStat = np.array(rgfD[0])
                 crossvalConvergeStat = np.array(rgfD[1])
