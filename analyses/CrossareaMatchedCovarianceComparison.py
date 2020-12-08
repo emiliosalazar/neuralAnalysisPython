@@ -70,33 +70,61 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
                                         **binnedSpikeSetGenerationParamsDict
                                         )
 
+
     # only doing one subsample for now...
     numSubsamples = subsampleParams['numSubsamples']
     # subsamples will have at least 60 neurons
     minNumNeurons = subsampleParams['minNumNeurons']
-    minNumTrlPerCond = subsampleParams['minNumTrlPerCond']
+
 
     extraOpts = subsampleParams['extraOpts']
     labelName = 'stimulusMainLabel'
 
 
-    bssExp = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)]]
-    chTrlNums = fsp[bssExp].fetch('ch_num', 'trial_num_per_cond_min')
 
-    # now, in order to prevent small changes in what datasets get in making
-    # everything get reextracted because of different neuron numbers, I'm
-    # taking these as set by the input
-    if np.min(chTrlNums[0]) < minNumNeurons:
-        breakpoint() # should never be reached, really
-    else:
-        maxNumNeuron = minNumNeurons # np.min(chTrlNums[0])
-    
-    if np.min(chTrlNums[1]) < minNumTrlPerCond:
-        breakpoint() # should never be reached, really
-    else:
-        maxNumTrlPerCond = minNumTrlPerCond 
+    combineConditions = gpfaParams['combineConditions']
+    if combineConditions:
+        minNumTrlAll = subsampleParams['minNumTrlAll']
+        bssKeys = bsi[bssiKeys][fsp['ch_num>=%d AND condition_num*trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
+        fspNumInfo = fsp[bsi[bssKeys]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num')
+        minTrlPerCond = fspNumInfo[1]
+        trialNum = fspNumInfo[2]
+        condNum = fspNumInfo[3]
 
-    binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssExp, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
+        maxNumTrlPerCond = minNumTrlAll/condNum
+        if np.any(minTrlPerCond < maxNumTrlPerCond):
+            breakpoint() # should never be reached, really
+        else:
+            # gotta change this to a list and an int to match what following
+            # functions expect...
+            maxNumTrlPerCond = list(maxNumTrlPerCond.astype(int))
+
+        if np.min(fspNumInfo[0]) < minNumNeurons:
+            breakpoint() # should never be reached, really
+        else:
+            maxNumNeuron = minNumNeurons # np.min(chTrlNumPerCond[0])
+    else:
+        minNumTrlPerCond = subsampleParams['minNumTrlPerCond']
+        bssKeys = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)]].fetch('KEY')
+        fspNumInfo = fsp[bsi[bssKeys]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num')
+        chTrlNumPerCond = fspNumInfo[:2]
+
+
+        # now, in order to prevent small changes in what datasets get in making
+        # everything get reextracted because of different neuron numbers, I'm
+        # taking these as set by the input
+        if np.min(chTrlNumPerCond[1]) < minNumTrlPerCond:
+            breakpoint() # should never be reached, really
+        else:
+            maxNumTrlPerCond = minNumTrlPerCond 
+
+        if np.min(chTrlNumPerCond[0]) < minNumNeurons:
+            breakpoint() # should never be reached, really
+        else:
+            maxNumNeuron = minNumNeurons # np.min(chTrlNumPerCond[0])
+
+
+    binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssKeys, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
 
     print("Computing GPFA")
     """ These are the GPFA parameters """
@@ -218,30 +246,42 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         plotMetVsExtPrmParams = plotParams['plotScatterMetrics']['plotMetVsExtPrmParams']
         plotMetBySeparation = plotParams['plotScatterMetrics']['plotMetBySeparation']
 
-        labelForColor = plotAllVsAllParams['labelForColor']
-        if type(labelForColor) is str:
-            labelForColor = np.array(eval(labelForColor))
+        if len(plotAllVsAllParams) > 0:
+            labelForColor = plotAllVsAllParams['labelForColor']
+            if type(labelForColor) is str:
+                labelForColor = np.array(eval(labelForColor))
 
-        labelForMarkers = plotAllVsAllParams['labelForMarkers']
-        if type(labelForMarkers) is str:
-            labelForMarkers = np.array(eval(labelForMarkers))
+            labelForMarkers = plotAllVsAllParams['labelForMarkers']
+            if type(labelForMarkers) is str:
+                labelForMarkers = np.array(eval(labelForMarkers))
 
-        plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers)
-        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotAllVsAllParams['pdfnameSt'],plotParams['analysisIdentifier'])))
-        plt.close('all')
+            plotAllVsAll(descriptions, metricDict, labelForColor, labelForMarkers)
+            outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotAllVsAllParams['pdfnameSt'],plotParams['analysisIdentifier'])))
+            plt.close('all')
 
         
         if len(plotMetVsExtPrmParams) > 0:
-            splitNames = plotMetVsExtPrmParams['splitNames']
+            splitNameDesc = plotMetVsExtPrmParams['splitNameDesc']
             labelForSplit = plotMetVsExtPrmParams['labelForSplit']
+            labelForPair = plotMetVsExtPrmParams['labelForPair']
             labelForMarkers = plotMetVsExtPrmParams['labelForMarkers']
             labelForColor = plotMetVsExtPrmParams['labelForColor']
 
+            locCopy = locals().copy()
+            locPlusGlob = locCopy.update(globals())
             if type(labelForSplit) is str:
-                labelForSplit = np.array(eval(labelForSplit))
+                labelForSplit = np.array(eval(labelForSplit, locCopy))
             else:
                 labelForSplit = np.repeat(labelForSplit, len(subsampleExpressions)/len(labelForSplit))
                 labelForSplit = labelForSplit.astype(int)
+
+            if type(labelForPair) is str:
+                labelForPair = np.array(eval(labelForPair, locCopy))
+            else:
+                breakpoint()
+                # is this *really* what you want to do?
+                labelForPair = np.repeat(labelForPair, 2)
+
 
             if type(labelForMarkers) is str:
                 labelForMarkers = np.array(eval(labelForMarkers))
@@ -253,7 +293,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
             else:
                 labelForColor = np.repeat(labelForColor, len(subsampleExpressions)/len(labelForColor))
 
-            plotMetricVsExtractionParams(descriptions, metricDict, splitNames, labelForSplit, labelForColor, labelForMarkers, supTitle="")
+            plotMetricVsExtractionParams(descriptions, metricDict, splitNameDesc, labelForPair, labelForSplit, labelForColor, labelForMarkers, supTitle="")
 
             outputFiguresRelativePath.append(saveFiguresToPdf(pdfname='{}{}'.format(plotMetVsExtPrmParams['pdfnameSt'],plotParams['analysisIdentifier'])))
             plt.close('all')
@@ -287,6 +327,17 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
     outputInfo = {}
     outputInfo.update(dict(outputFiguresRelativePath = outputFiguresRelativePath)) if len(outputFiguresRelativePath)>0 else None
+
+    outputInfo.update(dict(
+        allMetrics = metricDict,
+        groupingInfo = dict(
+            descriptions = descriptions,
+            brainAreas = brainAreas,
+            tasks = tasks,
+        ),
+        subsamplesUsed = subsampleExpressions,
+        )
+    )
 
     return outputInfo
 
