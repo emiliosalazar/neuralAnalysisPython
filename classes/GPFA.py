@@ -147,7 +147,7 @@ class GPFA:
         if segLength is None:
             segLength = min([sq['T'] for sq in self.gpfaSeqDict])
             
-        binWidth = self.binSize
+        binWidth = int(self.binSize) # rather annoying to have to play these type games... >.>
         
         seqsTrainNew = []
         seqsTestNew = []
@@ -488,7 +488,14 @@ def makeKBig(params, T, covType = 'rbf', eng=None):
     
     for dim in range(xDim):
         if covType is 'rbf':
-            K = (1 - params['eps'][0,dim]) * np.exp(-params["gamma"][0,dim] / 2 * np.power(timeDiff, 2)) + params["eps"][0,dim] * np.eye(T);
+            if xDim == 1:
+                eps = params['eps']
+                gamma = params['gamma']
+            else:
+                eps = params['eps'][0,dim]
+                gamma = params['gamma'][0,dim]
+
+            K = (1 - eps) * np.exp(-gamma / 2 * np.power(timeDiff, 2)) + eps * np.eye(T);
             
         else:
             raise Exception("GPFA:CovType", "unknown or unprogrammed covariance type")
