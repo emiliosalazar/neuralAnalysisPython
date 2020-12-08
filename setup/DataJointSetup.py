@@ -80,9 +80,12 @@ class DatasetInfo(dj.Manual):
     brain_area : varchar(100) # brain area
     task : varchar(100) # task the monkey was doing in this dataset
     date_acquired : date # date data was acquired
-    explicit_ignore_channels : blob # channels explicitly removed (for spike sorting goodness)
-    channels_keep : blob # channels kept from overall dataset (*after* explicit_ignore_channels are removed--useful for finding channels not removed from coincidence detection)
+    explicit_ignore_sorts : blob # channels explicitly removed (for spike sorting goodness)
+    channels_keep : blob # channels kept from overall dataset (*after* explicit_ignore_sorts are removed--useful for finding channels not removed from coincidence detection)
+    trials_keep : blob # trials kept from overall dataset (useful to keep track if some trials have to be explicitly removed for whatever reason)
     spike_identification_method : enum('threshold','nas','handSort','other') # to store how waveforms are identified as spikes
+    nas_used = null : varchar(100) # if nas is selected for spike id, this will hold the NAS used
+    nas_gamma = null : float # if nas is selected for spike id, this is the gamma threshold on the nas_used
     """
     
     # I don't want to use the external storage paradigm they have, as I'm not
@@ -966,6 +969,7 @@ class FilterSpikeSetParams(dj.Manual):
     condition_label : varchar(50) # label used to identify conditions for trial_num_per_cond_min
     ch_filter = null : blob # filter of the channels on the binned spike set info
     ch_num : int # number of channels; useful for filtering shuffles
+    condition_num : int # number of conditions; useful for when combining conditions and matching trials
     filter_reason : enum('original', 'shuffle', 'randomSubset', 'other') # the 'original' option is for the default FSS that refers to its parent
     filter_description = null : varchar(100) # reason for filter (if not shuffle, usually)
     """
