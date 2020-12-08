@@ -138,6 +138,25 @@ def computeMarkerCombos():
 
     return markerCombos
 
+def splitMetricVals(metricVal, colSplit, unLabForSplit, groupItemSplit):
+    metricVal = [np.array(m).squeeze() for m in metricVal]
+    metricValSplitInit = [list(np.array(metricVal)[colSplit==uLfS]) for uLfS in unLabForSplit]
+
+    groupSplitLens = np.array([len(mVSI) for mVSI in metricValSplitInit])
+    groupLargest = groupSplitLens.argmax()
+    metricValSplit = [[mVSplit[(gISplit == gI).nonzero()[0][0]] if np.any(gISplit == gI) else np.full_like(metricValSplitInit[groupLargest][(groupItemSplit[groupLargest]==gI).nonzero()[0][0]], np.nan, dtype=np.double) for gI in groupItemSplit[groupLargest]] for mVSplit, gISplit in zip(metricValSplitInit, groupItemSplit)]
+        
+    sortingOfGroups = groupLargest
+#    if len(metricValSplit1Init) > len(metricValSplit2Init):
+#        metricValSplit1 = metricValSplit1Init
+#        metricValSplit2 = [metricValSplit2Init[(pairItemSplit2 == pI1).nonzero()[0][0]] if np.any(pairItemSplit2 == pI1) else np.full_like(metricValSplit1[(pairItemSplit1==pI1).nonzero()[0][0]], np.nan, dtype=np.double) for pI1 in pairItemSplit1]
+#    else:
+#        metricValSplit2 = metricValSplit2Init
+#        metricValSplit1 = [metricValSplit1Init[(pairItemSplit1 == pI2).nonzero()[0][0]] if np.any(pairItemSplit1 == pI2) else np.full_like(metricValSplit2[(pairItemSplit2==pI2).nonzero()[0][0]], np.nan, dtype=np.double) for pI2 in pairItemSplit2]
+#
+    return metricValSplit, sortingOfGroups
+
+
 
 def plotTimeEvolution(descriptions, timeShiftMetricDict, labelForMarkers, labelForColors, supTitle = ''):
     colorsUse = BinnedSpikeSet.colorset
