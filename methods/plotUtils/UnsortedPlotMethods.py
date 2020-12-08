@@ -423,6 +423,145 @@ def plotMetricsBySeparation(metricDict, descriptions, separationName, labelForSe
 
 
 
-    pass
+def plotAllVsAllExtractionParamShift(descriptions, metricDict, splitNameDesc, labelForGrouping, labelForSplit, splitOrderByLabel, labelForCol, labelForMarker, supTitle=""):
+    # splitOrderByLabel has only as many elements as unique labels, and those
+    # elements are the unique elements in the order the arrow will point
+    colorsUse = BinnedSpikeSet.colorset
+
+    try:
+        splitNmPart, colSplitTemp = np.unique(labelForSplit, return_inverse=True, axis=0)
+        unLabForSplit, colSplit = np.unique(colSplitTemp, return_inverse=True, axis=0)
+        splitNames = [splitNameDesc + str(sNT) for sNT in splitNmPart]
+    except TypeError:
+        # allows us to use string objects for the label here... (note that the
+        # above allows us to use string *lists*... don't ask me why np.unique
+        # doesn't work well on object arrays of strings, it's dumb
+        splitNmPart, colSplitTemp = np.unique(labelForSplit, return_inverse=True)
+        unLabForSplit, colSplit = np.unique(colSplitTemp, return_inverse=True) # converts the strings in unLabForSplit to integers!
+        splitNames = [splitNameDesc + str(sNT) for sNT in splitNmPart]
+
+    orderForLabels = np.stack([(sNP == np.array(splitOrderByLabel)).nonzero()[0] for sNP in splitNmPart])
+
+    try:
+        unLabForGrouping, colGrouping, nmPerGrouping = np.unique(labelForGrouping, return_inverse=True, return_counts=True, axis=0)
+    except TypeError:
+        # allows us to use string objects for the label here... (note that the
+        # above allows us to use string *lists*... don't ask me why np.unique
+        # doesn't work well on object arrays of strings, it's dumb
+        pairNames, colGroupingTemp = np.unique(labelForGrouping, return_inverse=True)
+        unLabForGrouping, colGrouping, nmPerGrouping = np.unique(colGroupingTemp, return_inverse=True, return_counts=True) # converts the strings in unLabForSplit to integers!
+
+
+    groupItemSplits = [colGrouping[colSplit == uLfS] for uLfS in unLabForSplit]
+
+#    # here we're kind of assuming everything is organized in order... which...
+#    # may not be the most correct assumption, hmm...
+#    descriptions = list(np.array(descriptions)[colSplit==unLabForSplit[0]])
+#    labelForCol = labelForCol[colSplit==unLabForSplit[0]]
+#    labelForMarker = labelForMarker[colSplit==unLabForSplit[0]]
     
+    markerCombos = computeMarkerCombos()
+
+    splitName1 = splitNames[unLabForSplit[0]]
+    splitName2 = splitNames[unLabForSplit[1]]
+
+    for metric1Num, (metric1Name, metric1Val) in enumerate(metricDict.items()):
+        for metric2Num, (metric2Name, metric2Val) in enumerate(metricDict.items()):
+
+            if metric2Num > metric1Num:
+                metric1ValSplitUnsorted, grp1Sort = splitMetricVals(metric1Val, colSplit, unLabForSplit, groupItemSplits)
+                metric1ValSplit = np.array(metric1ValSplitUnsorted)[orderForLabels].squeeze()
+
+                metric2ValSplitUnsorted, grp2Sort = splitMetricVals(metric2Val, colSplit, unLabForSplit, groupItemSplits)
+                metric2ValSplit = np.array(metric2ValSplitUnsorted)[orderForLabels].squeeze()
+
+
+                if grp1Sort != grp2Sort:
+                    breakpoint() # erm...
+                labelForColSp = np.array(labelForCol)[colSplit == unLabForSplit[grp1Sort]]
+                labelForMarkerSp = np.array(labelForMarker)[colSplit == unLabForSplit[grp1Sort]]
+                descriptionsSp = np.array(descriptions)[colSplit == unLabForSplit[grp1Sort]]
+#            try:
+#                mVl1Conc = np.concatenate(metric1Val, axis=0)
+#            except ValueError:
+#                mVl1Conc = np.concatenate(metric1Val, axis=1)
+#
+#            try:
+#                mVl2Conc = np.concatenate(metric2Val, axis=0)
+#            except ValueError:
+#                mVl2Conc = np.concatenate(metric2Val, axis=1)
+#
+
+
+                xCoordsDiffSplits = metric1ValSplit
+                yCoordsDiffSplits = metric2ValSplit
+
+                xStarts = xCoordsDiffSplits[:-1,:]
+                yStarts = yCoordsDiffSplits[:-1,:]
+
+                xEnds = xCoordsDiffSplits[1:,:]
+                yEnds = yCoordsDiffSplits[1:,:]
+
+                try:
+                    xArrowLengths = np.diff(xCoordsDiffSplits, axis=0)
+                    yArrowLengths = np.diff(yCoordsDiffSplits, axis=0)
+                except ValueError:
+                    continue
+
+                plt.figure()
+                plt.title('%s vs %s' % ( metric1Name, metric2Name ))
+                plt.suptitle(supTitle)
+                ax=plt.subplot(1,1,1)
+
+
+                [plt.arrow(x, y, dx, dy) for x,y,dx,dy in zip(xStarts.flat, yStarts.flat, xArrowLengths.flat, yArrowLengths.flat)]
+#                [ax.annotate("", xy = (xE,yE), xytext = (xS, yS), arrowprops=dict(arrowstyle="->")) for xS,yS,xE,yE in zip(xStarts.flat, yStarts.flat, xEnds.flat, yEnds.flat)]
+            
+                unLabForCol, colNum = np.unique(labelForColSp, return_inverse=True, axis=0)
+                unLabForTup, mcNum = np.unique(labelForMarkerSp, return_inverse=True, axis=0)
+                for m1Val, m2Val in zip(metric1ValSplit, metric2ValSplit):
+
+#                    if mVl1Conc.size != mVl2Conc.size:
+#                        # some small cases have values broken down even more than just
+#                        # by-condition, so they don't line up well with the
+#                        # by-condition ones; I'm skipping these for now
+#                        continue
+                    scPts = [ax.scatter(m1, m2, label=desc, color=colorsUse[colN,:], marker=markerCombos[mcN]) for m1, m2, desc, colN, mcN in zip(m1Val, m2Val, descriptionsSp, colNum, mcNum)]
+
+                if metric1ValSplit.shape[1] > 2*unLabForCol.shape[0]:
+                    colLegElem = [Patch(facecolor=colorsUse[colN, :], label=unLC) for colN, unLC in enumerate(unLabForCol)]
+                else:
+                    colLegElem = []
+
+                if metric1ValSplit.shape[1] > 2*unLabForTup.shape[0]:
+                    colGray = [0.5,0.5,0.5]
+                    mrkLegElem = [Line2D([0], [0], marker=markerCombos[mcN], label=unLM, color='w', markerfacecolor=colGray, markersize=7) for mcN, unLM in enumerate(unLabForTup)]
+                else:
+                    mrkLegElem = []
+
+                if metric1Name.find('r_{sc}') != -1 or metric1Name.find('%sv') != -1 or metric1Name.find('sh pop') != -1:
+                    minMet1Val = np.nanmin(xCoordsDiffSplits)
+                    maxMet1Val = np.nanmax(xCoordsDiffSplits)
+
+                    if metric2Name.find('r_{sc}') != -1 or metric2Name.find('%sv') != -1 or metric2Name.find('sh pop') != -1:
+                        minMet2Val = np.nanmin(yCoordsDiffSplits)
+                        maxMet2Val = np.nanmax(yCoordsDiffSplits)
+                        min2Val = np.array([minMet2Val, 0]).min()
+
+                        minVal = np.array([minMet1Val, minMet2Val, 0]).min()
+                        maxVal = np.array([maxMet1Val, maxMet2Val]).max()
+                        breathingRoom = 0.1*(maxVal-minVal)
+                        ax.set_xlim(left=minVal - breathingRoom, right=maxVal + breathingRoom)
+                        ax.set_ylim(bottom=minVal - breathingRoom, top=maxVal + breathingRoom)
+                        ax.axhline(0, color='black', linestyle='--')
+                        ax.axvline(0, color='black', linestyle='--')
+
+                ax.set_xlabel(metric1Name)
+                ax.set_ylabel(metric2Name)
+                axBx = ax.get_position()
+                ax.set_position([axBx.x0, axBx.y0, axBx.width * 0.8, axBx.height])
+#                ax.legend(colLegElem + scPts, [elm.get_label() for elm in colLegElem+scPts],prop={'size':5},loc='center left', bbox_to_anchor=(1, 0.5))
+                lgGen = ax.legend(handles=colLegElem + mrkLegElem,prop={'size':5},loc='upper left', bbox_to_anchor=(1, 1))
+                ax.legend(handles=scPts,prop={'size':5},loc='lower left', bbox_to_anchor=(1, 0))
+                ax.add_artist(lgGen)
 
