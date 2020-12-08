@@ -27,6 +27,7 @@ defaultParams = loadDefaultParams(defParamBase = ".")
 dataPath = defaultParams['dataPath']
 
 data = []
+# M1
 data.append({'description': 'Earl 2019-03-18 M1 thresh - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/18/threshCrossings'),
@@ -35,6 +36,7 @@ data.append({'description': 'Earl 2019-03-18 M1 thresh - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
               'spikeIdMethod' : 'threshold'});
@@ -46,9 +48,12 @@ data.append({'description': 'Earl 2019-03-18 M1 nas - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
 data.append({'description': 'Earl 2019-03-20 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/20'),
@@ -57,9 +62,12 @@ data.append({'description': 'Earl 2019-03-20 M1 nas - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
 data.append({'description': 'Earl 2019-03-21 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/21'),
@@ -68,9 +76,12 @@ data.append({'description': 'Earl 2019-03-21 M1 nas - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
 data.append({'description': 'Earl 2019-03-22 M1 thresh - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/22/threshCrossings'),
@@ -79,6 +90,7 @@ data.append({'description': 'Earl 2019-03-22 M1 thresh - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
               'spikeIdMethod' : 'threshold'});
@@ -90,9 +102,12 @@ data.append({'description': 'Earl 2019-03-22 M1 nas - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
 data.append({'description': 'Earl 2019-03-23 M1 thresh - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/23/threshCrossings'),
@@ -101,6 +116,7 @@ data.append({'description': 'Earl 2019-03-23 M1 thresh - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
               'spikeIdMethod' : 'threshold'});
@@ -112,9 +128,172 @@ data.append({'description': 'Earl 2019-03-23 M1 nas - MGR',
                   'stimulus': 'Target Flash',
                   'action' : 'Target Reach'
               },
+              'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
               'processor': 'Erinn',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
+data.append({'description': 'Quincy 2020-10-20 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Quincy/2020/10/20/Array1_M1'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'Target Reach'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.2});
+data.append({'description': 'Quincy 2020-10-20 M1 nas g0.5 - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Quincy/2020/10/20/Array1_g05_M1'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'Target Reach'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
+data.append({'description': 'Quincy 2020-10-21 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Quincy/2020/10/21/Array1_M1'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'HC T1'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.2});
+data.append({'description': 'Quincy 2020-10-22 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Quincy/2020/10/22/Array1_M1'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'HC T1'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.2});
+data.append({'description': 'Quincy 2020-11-07 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Quincy/2020/11/07/Array1_M1'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'HC T1'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
+data.append({'description': 'Quincy 2020-11-24 M1 nas - MGR',
+              'area' : 'M1',
+              'path': Path('memoryGuidedReach/Quincy/2020/11/24/Array1_M1'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'HC T1'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.2});
+
+
+# PMd
+#data.append({'description': 'Quincy 2020-10-20 PMd nas - MGR',
+#              'area' : 'PMd',
+#              'path': Path('memoryGuidedReach/Quincy/2020/10/20/Array2_PMd'),
+#              'keyStates' : {
+#                  'delay': 'HC Delay Period 1',
+#                  'stimulus': 'HC Target Flash',
+#                  'action' : 'Target Reach'
+#              },
+#              'stateWithAngleName' : 'HC_T1',
+#              'alignmentStates': [],
+#              'processor': 'Erinn',
+#              'spikeIdMethod' : 'nas',
+#              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+#              'nasGamma' : 0.2});
+#data.append({'description': 'Quincy 2020-10-21 PMd nas - MGR',
+#              'area' : 'PMd',
+#              'path': Path('memoryGuidedReach/Quincy/2020/10/21/Array2_PMd'),
+#              'keyStates' : {
+#                  'delay': 'HC Delay Period 1',
+#                  'stimulus': 'HC Target Flash',
+#                  'action' : 'HC T1'
+#              },
+#              'stateWithAngleName' : 'HC_T1',
+#              'alignmentStates': [],
+#              'processor': 'Erinn',
+#              'spikeIdMethod' : 'nas',
+#              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+#              'nasGamma' : 0.2});
+#data.append({'description': 'Quincy 2020-10-22 PMd nas - MGR',
+#              'area' : 'PMd',
+#              'path': Path('memoryGuidedReach/Quincy/2020/10/22/Array2_PMd'),
+#              'keyStates' : {
+#                  'delay': 'HC Delay Period 1',
+#                  'stimulus': 'HC Target Flash',
+#                  'action' : 'HC T1'
+#              },
+#              'stateWithAngleName' : 'HC_T1',
+#              'alignmentStates': [],
+#              'processor': 'Erinn',
+#              'spikeIdMethod' : 'nas',
+#              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+#              'nasGamma' : 0.2});
+data.append({'description': 'Quincy 2020-11-07 PMd nas - MGR',
+              'area' : 'PMd',
+              'path': Path('memoryGuidedReach/Quincy/2020/11/07/Array2_PMd'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'HC T1'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
+data.append({'description': 'Quincy 2020-11-24 PMd nas - MGR',
+              'area' : 'PMd',
+              'path': Path('memoryGuidedReach/Quincy/2020/11/24/Array2_PMd'),
+              'keyStates' : {
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'action' : 'HC T1'
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.2});
+
+
+# PFC
 data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
@@ -125,7 +304,9 @@ data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
@@ -136,7 +317,9 @@ data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe A1 2018-07-14 PFC thresh - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/ArrayNoSort1_PFC/'),
@@ -169,7 +352,9 @@ data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
@@ -180,7 +365,9 @@ data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
@@ -213,7 +400,9 @@ data.append({'description': 'Pepe 2016-02-02 V4 NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-02 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort2_PFC/'),
@@ -224,7 +413,9 @@ data.append({'description': 'Pepe 2016-02-02 PFC NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-03 V4 - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/03/Array1_V4/'),
@@ -257,7 +448,9 @@ data.append({'description': 'Pepe 2016-02-03 V4 NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-03 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort2_PFC/'),
@@ -268,7 +461,9 @@ data.append({'description': 'Pepe 2016-02-03 PFC NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-04 V4 NAS - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort1_V4/'),
@@ -279,7 +474,9 @@ data.append({'description': 'Pepe 2016-02-04 V4 NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-04 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort2_PFC/'),
@@ -290,7 +487,9 @@ data.append({'description': 'Pepe 2016-02-04 PFC NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-05 V4 NAS - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort1_V4/'),
@@ -301,7 +500,9 @@ data.append({'description': 'Pepe 2016-02-05 V4 NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-05 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort2_PFC/'),
@@ -312,7 +513,9 @@ data.append({'description': 'Pepe 2016-02-05 PFC NAS - cuedAttn',
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
-              'spikeIdMethod' : 'nas'});
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
 
 
 data = np.asarray(data) # to allow fancy indexing
@@ -348,8 +551,10 @@ else:
     genParamId = list(set(newIds) - set(currIds))[0]
 
 datasetDill = 'dataset.dill'
-dsiLoadParamsJson = json.dumps(datasetGeneralLoadParams, sort_keys=True) # needed for consistency as dicts aren't ordered
-dsiLoadParamsHash = hashlib.md5(dsiLoadParamsJson.encode('ascii')).hexdigest()
+#dsiLoadParamsJson = json.dumps(datasetGeneralLoadParams, sort_keys=True) # needed for consistency as dicts aren't ordered
+#dsiLoadParamsHash = hashlib.md5(dsiLoadParamsJson.encode('ascii')).hexdigest()
+
+dsiLoadParamsHash = dsgl['ds_gen_params_id={}'.format(genParamId)].shorthash()
 
 for dataUse in data[dataUseLogical]:
 # for ind, dataUse in enumerate(data):
@@ -357,12 +562,14 @@ for dataUse in data[dataUseLogical]:
     # dataUse = data[ind]
     dataMatPath = dataPath / dataUse['path'] / processedDataMat
 
-    dataDillPath = dataPath / dataUse['path'] / ('dataset_%s' % dsiLoadParamsHash[:5]) / datasetDill
+    dataDillPath = dataPath / dataUse['path'] / ('dataset_%s' % dsiLoadParamsHash) / datasetDill
     
     if dataUse['processor'] == 'Erinn':
-        notChan = np.array([31, 0])
+        removeSort = np.array([31, 0])
+#    elif dataUse['processor']  == 'Emilio':
+#        breakpoint(); # we pause here until I know that my M1/PMd split is happening correctly
     else:
-        notChan = np.array([])
+        removeSort = np.array([])
 
     if dataDillPath.exists():
         print('loading dataset ' + dataUse['description'])
@@ -374,15 +581,15 @@ for dataUse in data[dataUseLogical]:
             
     else:
         print('processing dataset ' + dataUse['description'])
-        datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = notChan, checkNumTrls=checkNumTrls, metastates = dataUse['alignmentStates'], keyStates = dataUse['keyStates'])
+        datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = removeSort, checkNumTrls=checkNumTrls, metastates = dataUse['alignmentStates'], keyStates = dataUse['keyStates'], stateWithAngleName = dataUse['stateWithAngleName'] if 'stateWithAngleName' in dataUse else None)
 
         
         # first, removed explicitly ignored channels
-        if notChan is not None:
-            datasetHere.removeChannels(notChan)
+        if removeSort is not None:
+            datasetHere.removeChannelsWithSort(removeSort)
 
-        # now, initialize a logical with all the channels
-        chansKeepLog = datasetHere.maskAgainstChannels([])
+        # now, initialize a logical with all the channels/sorts (same thing when each channel is considered a neuron)
+        chansKeepLog = datasetHere.maskAgainstSort([])
 
         # remove non-coincident spikes
         if removeCoincidentChans:
@@ -390,6 +597,14 @@ for dataUse in data[dataUseLogical]:
 
         chansKeepNums = np.where(chansKeepLog)[0]
         datasetHere.keepChannels(chansKeepNums)
+
+        if dataUse['description'].find('Quincy') >= 0:
+            trialsRemoveLog = datasetHere.findInitialHighSpikeCountTrials()
+            breakpoint()
+            datasetHere, trialsKeepLog = datasetHere.filterTrials(~trialsRemoveLog)
+            trialsKeepNums = np.where(trialsKeepLog)[0]
+        else:
+            trialsKeepNums = np.arange(len(datasetHere.spikeDatTimestamps))
 
         dataDillPath.parent.mkdir(parents=True, exist_ok = True)
         with dataDillPath.open(mode='wb') as datasetDillFh:
@@ -408,6 +623,11 @@ for dataUse in data[dataUseLogical]:
         'date_acquired' : re.search('.*?(\d+-\d+-\d+).*', dataUse['description']).group(1),
         'spike_identification_method' : dataUse['spikeIdMethod'],
     }
+    if 'nasUsed' in dataUse:
+        datasetHereInfo.update({
+            'nas_used' : dataUse['nasUsed'], 
+            'nas_gamma' : dataUse['nasGamma']
+        }) 
 
     dsi = DatasetInfo()
     if len(dsi[datasetHereInfo]) > 1:
@@ -418,8 +638,9 @@ for dataUse in data[dataUseLogical]:
         dsId = len(dsi) # 0 indexed
         datasetHereInfo.update({
             'dataset_id' : dsId,
-            'explicit_ignore_channels' : notChan,
-            'channels_keep' : chansKeepNums
+            'explicit_ignore_sorts' : removeSort,
+            'channels_keep' : chansKeepNums,
+            'trials_keep' : trialsKeepNums
         })
         dsi.insert1(datasetHereInfo)
 
