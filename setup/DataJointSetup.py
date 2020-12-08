@@ -201,6 +201,10 @@ class DatasetInfo(dj.Manual):
             # Load data if it has been processed
             if saveBSSPath.exists():
                 bssiKey = bssi[('bss_relative_path = "%s"' % str(saveBSSRelativePath))].fetch("KEY", as_dict=True)
+
+                assert len(bssiKey) == 1, "More than one key came out for some reason even though only one should have been added"
+                bssiKey = bssiKey[0]
+
                 with saveBSSPath.open(mode='rb') as saveBSSFh:
                     binnedSpikesHere = pickle.load(saveBSSFh)
 
@@ -349,6 +353,9 @@ class DatasetInfo(dj.Manual):
                     _ = bssAdded.filterBSS(filterReason = 'original', filterDescription = 'unfiltered original', condLabel = 'stimulusMainLabel', trialFilter = trialsKeep, channelFilter = chansKeep )
 
                     bssiKey = bssAdded.fetch("KEY", as_dict=True)
+
+                    assert len(bssiKey) == 1, "More than one key came out for some reason even though only one should have been added"
+                    bssiKey = bssiKey[0]
 
             if units is not None:
                 binnedSpikesHere.convertUnitsTo(units=units)
@@ -550,6 +557,13 @@ class BinnedSpikeSetInfo(dj.Manual):
             # a nice way to distinguish the path for each filter based on extraction parameters...
             bSSFilteredProcParamsJson = json.dumps(str(bssFilterParams), sort_keys=True) # needed for consistency as dicts aren't ordered
             bSSFilteredProcParamsHash = hashlib.md5(bSSFilteredProcParamsJson.encode('ascii')).hexdigest()
+
+            # NOTE this is for the past's sake that I'm not changing
+            # bssFilterParams before it's hashed--I don't want to go through
+            # and change all the paths because the hash has changed ;_;
+            bssFilterParams.update(dict(
+                condition_num = condCnts.size # the size tells us how *many* unique conditions there were
+            ))
 
             fsp = FilterSpikeSetParams()
             bsi = BinnedSpikeSetInfo()
@@ -811,14 +825,14 @@ class BinnedSpikeSetInfo(dj.Manual):
         bsPDsFiltsInd = bsParamsDsFilts.split(';')
         for filtStr in bsPDsFiltsInd:
             lambdaFilt = eval(filtStr)
-            ds = lambdaFilt(ds)
+            ds, _ = lambdaFilt(ds)
 
         # filter trials by type
         trialType = bsp[self]['trial_type'][0]
         if trialType == 'successful':
-            ds = ds.successfulTrials()
+            ds, _ = ds.successfulTrials()
         elif trialType == 'failure':
-            ds = ds.failTrials()
+            ds, _ = ds.failTrials()
 
         # filter trials by length in state
         # NOTE this is special to expecting trials to be around a state...
@@ -830,7 +844,7 @@ class BinnedSpikeSetInfo(dj.Manual):
         timeInStateArr = endStateArr - startStateArr
 
         lenSmallestTrial = bsp[self].fetch('len_smallest_trial')
-        ds = ds.filterTrials(timeInStateArr>lenSmallestTrial)
+        ds, _ = ds.filterTrials(timeInStateArr>=lenSmallestTrial)
 
         bnSpTmBounds = self.fetch('start_time','end_time',as_dict=True)[0]
         bnSpTmAlign = self.fetch('start_time_alignment', 'end_time_alignment')
@@ -1353,7 +1367,10 @@ class GpfaAnalysisInfo(dj.Manual):
                 except IntegrityError as e:
                     if str(e).find("UNIQUE constraint failed") != -1 and forceNewGpfaRun:
                         print("Be careful using this... GPFA was forced to run again without changing recorded parameters--could result in data consistency issues!")
-                        gaiToUpdate = self[{k:v for k,v in newGaiRow.items() if k in self.fetch('KEY')[0].keys()}]
+                        # define it by its class to avoid the relation
+                        # disappearing as the database changes... this has
+                        # happened before >.>
+                        gaiToUpdate = self.__class__()[{k:v for k,v in newGaiRow.items() if k in self.fetch('KEY')[0].keys()}]
                         gaiValsOriginal = gaiToUpdate.fetch(as_dict=True)
                         newValChecks = [(ky,val==gaiValsOriginal[0][ky]) for ky,val in newGaiRow.items() if ky in gaiValsOriginal[0].keys() and ky not in self.fetch('KEY')[0].keys()]
                         for vl in newValChecks:
@@ -1416,7 +1433,7 @@ class GpfaAnalysisInfo(dj.Manual):
         gaiKeys = self.fetch('KEY') # always a dict
 
         if not quickDelete:
-            info = "About to delete %d entries" % len(gaiKeys)
+            info = "About to delete %d entries *and their associated GPFA files*" % len(gaiKeys)
             prompt = "Are you sure?"
             response = userChoice(prompt, info, choices=("yes", "no"), default="no")
             if response == "yes":
