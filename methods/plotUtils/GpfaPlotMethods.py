@@ -182,19 +182,19 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
             axesEnd = []
             axVals = np.empty((0,4))
             figSep = plt.figure()
-            figSep.suptitle(description + " cond " + str(condLabel.tolist()) + "")
+            figSep.suptitle(description + " cond " + str(idx) + "")
             if xDimBest>2:
                 figTraj = plt.figure()
                 axStartTraj = plt.subplot(1,3,1,projection='3d')
                 axEndTraj = plt.subplot(1,3,2,projection='3d')
                 axAllTraj = plt.subplot(1,3,3,projection='3d')
-                figTraj.suptitle(description + " cond " + str(condLabel.tolist()) + "")
+                figTraj.suptitle(description + " cond " + str(idx) + "")
             elif xDimBest>1:
                 figTraj = plt.figure()
                 axStartTraj = plt.subplot(1,3,1)
                 axEndTraj = plt.subplot(1,3,2)
                 axAllTraj = plt.subplot(1,3,3)
-                figTraj.suptitle(description + " cond " + str(condLabel.tolist()) + "")
+                figTraj.suptitle(description + " cond " + str(idx) + "")
         
             plt.figure()
             plt.imshow(np.abs(dimResult[xDimScoreBest]['allEstParams'][cValUse]['C']),aspect="auto")
@@ -436,7 +436,7 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
                     pltNum = 1
                     pltListNum = 0
                     plt.figure(figSep.number)
-                    plt.suptitle(description + " cond " + str(condLabel.tolist()) + "")
+                    plt.suptitle(description + " cond " + str(idx) + "")
                     for dimNum, dim in enumerate(sq['xorth']):
                         dimNum = dimNum+1 # first is 1-dimensional, not zero-dimensinoal
                         #we'll only plot the xDimBest dims...
