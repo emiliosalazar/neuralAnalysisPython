@@ -66,6 +66,51 @@ class DatasetGeneralLoadParams(dj.Manual):
     coincidence_fraction_trial_test : float # fraction of trials to check (0-1)
     """
 
+    def _update(self, attrname, value=None):
+        assert len(self)==1, "Can currently only update one DatasetGeneralLoadParams at a time"
+        oldValue = self.fetch(attrname)[0]
+        try:
+            super(DatasetGeneralLoadParams, self)._update(attrname, value)
+        except Exception as err:
+            raise
+        else:
+            dsi = DatasetInfo()
+            dsiForDsglKey = dsi[self].fetch('KEY')
+            dsetNewHash = self.shorthash()
+
+            for dsiHereKey in dsiForDsglKey:
+                breakpoint()
+                dsiHere = dsi[dsiHereKey]
+                dsetPath = dsiHere['dataset_relative_path'][0]
+                # this is the start of the hash in the pathname
+                dsetHashLocationStart = dsetPath.find('dataset') + len('dataset') + 1 
+                dsetHashLocationEnd = dsetHashLocationStart + len(dsetNewHash) # hash is five characters long
+                dsetHashOrig = dsetPath[dsetHashLocationStart:dsetHashLocationEnd] 
+
+                dsetPathNew = dsetPath[:dsetHashLocationStart] + dsetNewHash + dsetPath[dsetHashLocationEnd:]
+
+                dsiHere._update('dataset_relative_path', value=dsetPathNew, allowPkUpdate=True)
+
+
+
+    def hash(self):
+        assert len(self)==1, "Can currently only hash one DatasetGeneralLoadParams at a time"
+
+        dsglParams = self.fetch(as_dict=True)[0]
+        dsglParams.pop('ds_gen_params_id') # umm... the ID doesn't have to do with the parameters...
+        dsglParamsHashable =  {prm : vl.item() if hasattr(vl, 'item') else vl for prm,vl in dsglParams.items()}
+
+        dsglJson = json.dumps(dsglParamsHashable, sort_keys=True) # needed for consistency as dicts aren't ordered
+        dsglHash = hashlib.md5(dsglJson.encode('ascii')).hexdigest()
+
+        return dsglHash
+
+    def shorthash(self):
+        hsh = self.hash()
+
+        return hsh[:5]
+
+#    (dataset_relative_path, dataset_id, ds_gen_params_id, dataset_hash, dataset_name, processor_name, brain_area, task, date_acquired, explicit_ignore_sorts, channels_keep, trials_keep, spike_identification_method, nas_used, nas_gamma) 
 @schema
 class DatasetInfo(dj.Manual):
     definition = """
@@ -364,6 +409,51 @@ class DatasetInfo(dj.Manual):
             bssiKeys.append(bssiKey)
 
         return binnedSpikes, bssiKeys
+
+    def _update(self, attrname, value=None, allowPkUpdate=False):
+        selfKey = self.fetch('KEY')[0]
+        valOld = self.fetch(attrname)[0]
+        try:
+            super(DatasetInfo, self)._update(attrname, value, allowPkUpdate=allowPkUpdate)
+            if allowPkUpdate:
+                selfKey.update({attrname : value})
+        except Exception as err:
+            raise
+        else:
+            bsi = BinnedSpikeSetInfo()
+            if attrname == 'dataset_relative_path':
+                dataPath = Path(defaultParams['dataPath'])
+                dsetPath = Path(valOld).parent
+                dsetPathNew = Path(value).parent
+
+
+                # we do this outer exists() check because sometimes a parent
+                # folder moved everything below it so no attempt at a move is
+                # even necessary
+                if not (dataPath / dsetPathNew).exists():
+                    info = "Moving\n\n" + str(dataPath / dsetPath) + "\n\nto\n\n" + str(dataPath / dsetPathNew)
+                    print(info)
+                    from shutil import move
+                    try:
+                        move(dataPath / dsetPath, dataPath / dsetPathNew)
+                    except FileNotFoundError as e:
+                        print("Original path not found -- perhaps it has already been moved (though not to the new location, as that one didn't exist...)?")
+
+                # now move all those downstream BinnedSpikeSetInfos...
+                bsiForDsiKey = bsi[selfKey].fetch('KEY')
+
+                for bsiKey in bsiForDsiKey:
+                    bsiHere = bsi[bsiKey]
+                    if len(bsiHere)<1:
+                        # this might occur if an inner call already changed
+                        # this bsiKey before it was reached in this outer call
+                        continue
+                    bsiOrigPath = bsiHere['bss_relative_path'][0]
+                    if bsiOrigPath.find(str(dsetPath)) != 0:
+                        breakpoint() # somethig weird here
+                    bsiNewPath = dsetPathNew / bsiOrigPath[len(str(dsetPath))+1:]
+                    bsiHere._update('bss_relative_path', value=str(bsiNewPath), allowPkUpdate=True)
+
 
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):
@@ -888,6 +978,46 @@ class BinnedSpikeSetInfo(dj.Manual):
             for idx, (bnSp, dsName) in enumerate(zip(binnedSpikes, bSInfo['dataset_names'])):
                 bnSp.lda(bnSp.labels['stimulusMainLabel'], plot=True)
                 plt.suptitle('LDA - %s' % (dsName))
+
+    def _update(self, attrname, value=None, allowPkUpdate=False):
+        valOld = self.fetch(attrname)[0]
+        try:
+            super(BinnedSpikeSetInfo, self)._update(attrname, value, allowPkUpdate=allowPkUpdate)
+        except Exception as err:
+            raise
+        else:
+            bsi = BinnedSpikeSetInfo()
+            if attrname == 'bss_relative_path':
+                dataPath = Path(defaultParams['dataPath'])
+                bssPathOrig = Path(valOld).parent
+                bssPathNew = Path(value).parent
+
+                # we do this outer exists() check because sometimes a parent
+                # folder moved everything below it so no attempt at a move is
+                # even necessary
+                if not (dataPath / bssPathNew).exists():
+                    info = "Moving\n\n" + str(dataPath / bssPathOrig) + "\n\nto\n\n" + str(dataPath / bssPathNew)
+                    print(info)
+                    from shutil import move
+                    try:
+                        move(dataPath / bssPathOrig, dataPath / bssPathNew)
+                    except FileNotFoundError as e:
+                        print("Original path not found -- perhaps it has already been moved (though not to the new location, as that one didn't exist...)?")
+
+                # now move all those downstream BinnedSpikeSetInfos...
+                bsiChildBsiKey = bsi['bss_relative_path LIKE "%{}%"'.format(bssPathOrig)].fetch('KEY')
+
+                for bsiKey in bsiChildBsiKey:
+                    bsiHere = bsi[bsiKey]
+                    if len(bsiHere)<1:
+                        # this might occur if an inner call already changed
+                        # this bsiKey before it was reached in this outer call
+                        continue
+                    bsiOrigPath = bsiHere['bss_relative_path'][0]
+                    if bsiOrigPath.find(str(bssPathOrig)) != 0:
+                        breakpoint() # somethig weird here
+                    bsiNewPath = bssPathNew / bsiOrigPath[len(str(bssPathOrig))+1:]
+                    bsiHere._update('bss_relative_path', value=str(bsiNewPath), allowPkUpdate=True)
 
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):
