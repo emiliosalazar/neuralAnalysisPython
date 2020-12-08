@@ -1159,10 +1159,10 @@ class GpfaAnalysisInfo(dj.Manual):
                 tolType = unconvergedGpfa['tolerance_type'][0] # remember to unpack the string
                 ratioFinal = unconvergedGpfa['ratio_final']
                 diffFinal = unconvergedGpfa['diff_final']
-                # we'll up the iteration number to 2000 (double the now-default
-                # of 1000) to give another chance at convergence...
                 # I... don't really want to be doing this...
-                if False: # redo it all ... expMaxIterationMaxNum < 2000:
+                if False: #expMaxIterationMaxNum < 2000:
+                    # we'll up the iteration number to 2000 (double the now-default
+                    # of 1000) to give another chance at convergence...
                     expMaxIterationMaxNum = 2000
                     tolerance = 1e-8
 #                    expMaxIterationMaxNum = expMaxIterationMaxNum*4 # make sure to make it a float, not an int
