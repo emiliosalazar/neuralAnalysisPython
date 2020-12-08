@@ -224,29 +224,29 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
         dimAll = np.array(list(gpfaResultsDict.keys()))
         dimSort = list(np.sort(dimAll))
         dimResultsHere = {}
-        normalGpfaScore = np.empty((0,0))
+        gpfaScore = np.empty((0,0))
         for idxDim, dim in enumerate(dimSort):
             gpfaResult = gpfaResultsDict[dim]
             dimResultsHere[dim] = gpfaResult['dimOutput'][()]
 
 
             # NOTE 'normalGpfaScore' field was changed to 'score'
-            if normalGpfaScore.size == 0:
-                normalGpfaScoreInit = gpfaResult['score' if 'score' in gpfaResult else 'normalGpfaScore']
-                normalGpfaScore = np.empty((len(dimSort),normalGpfaScoreInit.shape[0]))
-                normalGpfaScore[idxDim,:] = normalGpfaScoreInit
+            if gpfaScore.size == 0:
+                gpfaScoreInit = gpfaResult['score' if 'score' in gpfaResult else 'normalGpfaScore']
+                gpfaScore = np.empty((len(dimSort),gpfaScoreInit.shape[0]))
+                gpfaScore[idxDim,:] = gpfaScoreInit
             else:
-                normalGpfaScore[idxDim,:] = gpfaResult['score' if 'score' in gpfaResult else 'normalGpfaScore']
+                gpfaScore[idxDim,:] = gpfaResult['score' if 'score' in gpfaResult else 'normalGpfaScore']
 
-        normalGpfaScoreMn = normalGpfaScore.mean(axis=1)
+        gpfaScoreSum = gpfaScore.sum(axis=1)
         # NOTE: come back to this: rerun GPFA on this dataset and see if something weird happens again; unfortunately GPFA is stochastic, so it might not... which is what's worrisome about this particular situation...
         # Btw, for future me: what I mean by weird is that for some reason it initially computed that dimensionality 12 was the maximum log likelihood dimensionality, and then it computed that it was actually 8. Not really sure why, as the same numbers should have been loaded up both times...
 #        if relPathAndCond == ('memoryGuidedSaccade/Pepe/2018/07/14/ArrayNoSort2_PFC/dataset_449d9/binnedSpikeSet_096e2/filteredSpikes_01062_4d9a9/filteredSpikeSet.dill', '4', '[3]'):
 #            breakpoint()
         if cvApproach is "logLikelihood":
-            xDimScoreBest = dimSort[np.argmax(normalGpfaScoreMn)]
+            xDimScoreBest = dimSort[np.argmax(gpfaScoreSum)]
         elif cvApproach is "squaredError":
-            xDimScoreBest = dimSort[np.argmin(normalGpfaScoreMn)]
+            xDimScoreBest = dimSort[np.argmin(gpfaScoreSum)]
 
 
         
@@ -276,7 +276,7 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
                     dimResults = [dimResultsHere],
                     xDimBestAll = [xDimBest],
                     xDimScoreBestAll = [xDimScoreBest],
-                    normalGpfaScoreAll = [normalGpfaScore],
+                    normalGpfaScoreAll = [gpfaScore],
                     testInds = [testInds],
                     trainInds = [trainInds],
                     alignmentBins = [alignmentBins],
@@ -289,7 +289,7 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
             groupedResults[gpfaParamsKey]['dimResults'].append(dimResultsHere)
             groupedResults[gpfaParamsKey]['xDimBestAll'].append(xDimBest)
             groupedResults[gpfaParamsKey]['xDimScoreBestAll'].append(xDimScoreBest)
-            groupedResults[gpfaParamsKey]['normalGpfaScoreAll'].append(normalGpfaScore)
+            groupedResults[gpfaParamsKey]['normalGpfaScoreAll'].append(gpfaScore)
             groupedResults[gpfaParamsKey]['testInds'].append(testInds)
             groupedResults[gpfaParamsKey]['trainInds'].append(trainInds)
             groupedResults[gpfaParamsKey]['alignmentBins'].append(alignmentBins)
@@ -299,6 +299,42 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
         
     return groupedResults
 
+def computeBestDimensionality(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCovThresh = 0.95):
+
+    outBestDims = []
+
+    for relPathAndCond, gpfaResultsDict in gpfaResultsDictOfDicts.items():
+
+        # we sort things by extraction dimensionality
+        allKeys = list(gpfaResultsDict.keys())
+        dimAll = np.array([aK for aK in allKeys if isinstance(aK, np.integer)])
+        dimSort = list(np.sort(dimAll))
+        dimResultsHere = {}
+        gpfaScore = np.empty((0,0))
+        for idxDim, dim in enumerate(dimSort):
+            gpfaResult = gpfaResultsDict[dim]
+
+            # NOTE 'normalGpfaScore' field was changed to 'score'--but I've
+            # gotten rid of the reference to normalGpfaScore because I don't
+            # think (I hope) it won't matter anymore because these GPFA runs
+            # are new enough...
+            if gpfaScore.size == 0:
+                gpfaScoreInit = gpfaResult['score']# if 'score' in gpfaResult]
+                gpfaScore = np.empty((len(dimSort),gpfaScoreInit.shape[0]))
+                gpfaScore[idxDim,:] = gpfaScoreInit
+            else:
+                gpfaScore[idxDim,:] = gpfaResult['score']# if 'score' in gpfaResult]
+
+        gpfaScoreSum = gpfaScore.sum(axis=1)
+
+        if cvApproach is "logLikelihood":
+            xDimScoreBest = dimSort[np.argmax(gpfaScoreSum)]
+        elif cvApproach is "squaredError":
+            xDimScoreBest = dimSort[np.argmin(gpfaScoreSum)]
+
+        outBestDims.append(xDimScoreBest)
+
+    return outBestDims
 # note that faResultsDictOfDicts is lists of spike sets of a specific set of
 # FA results grouped by some key which has results from various
 # dimensionality tests within (those results are in a dict keyed by
@@ -314,24 +350,24 @@ def crunchFaResults(faResultsDictOfDicts, cvApproach = "logLikelihood", shCovThr
         dimAll = np.array(list(gpfaResultsDict.keys()))
         dimSort = list(np.sort(dimAll))
         dimResultsHere = {}
-        normalGpfaScore = np.empty((0,0))
+        gpfaScore = np.empty((0,0))
         for idxDim, dim in enumerate(dimSort):
             gpfaResult = gpfaResultsDict[dim]
             dimResultsHere[dim] = gpfaResult['dimOutput'][()]
 
 
-            if normalGpfaScore.size == 0:
-                normalGpfaScoreInit = gpfaResult['normalGpfaScore']
-                normalGpfaScore = np.empty((len(dimSort),normalGpfaScoreInit.shape[0]))
-                normalGpfaScore[idxDim,:] = normalGpfaScoreInit
+            if gpfaScore.size == 0:
+                gpfaScoreInit = gpfaResult['normalGpfaScore']
+                gpfaScore = np.empty((len(dimSort),gpfaScoreInit.shape[0]))
+                gpfaScore[idxDim,:] = gpfaScoreInit
             else:
-                normalGpfaScore[idxDim,:] = gpfaResult['normalGpfaScore']
+                gpfaScore[idxDim,:] = gpfaResult['normalGpfaScore']
 
-        normalGpfaScoreMn = normalGpfaScore.mean(axis=1)
+        gpfaScoreSum = gpfaScore.sum(axis=1)
         if cvApproach is "logLikelihood":
-            xDimScoreBest = dimSort[np.argmax(normalGpfaScoreMn)]
+            xDimScoreBest = dimSort[np.argmax(gpfaScoreSum)]
         elif cvApproach is "squaredError":
-            xDimScoreBest = dimSort[np.argmin(normalGpfaScoreMn)]
+            xDimScoreBest = dimSort[np.argmin(gpfaScoreSum)]
 
 
         
@@ -359,7 +395,7 @@ def crunchFaResults(faResultsDictOfDicts, cvApproach = "logLikelihood", shCovThr
                     dimResults = [dimResultsHere],
                     xDimBestAll = [xDimBest],
                     xDimScoreBestAll = [xDimScoreBest],
-                    normalGpfaScoreAll = [normalGpfaScore],
+                    normalGpfaScoreAll = [gpfaScore],
                     testInds = [testInds],
                     trainInds = [trainInds],
                     alignmentBins = [alignmentBins],
@@ -372,7 +408,7 @@ def crunchFaResults(faResultsDictOfDicts, cvApproach = "logLikelihood", shCovThr
             groupedResults[gpfaParamsKey]['dimResults'].append(dimResultsHere)
             groupedResults[gpfaParamsKey]['xDimBestAll'].append(xDimBest)
             groupedResults[gpfaParamsKey]['xDimScoreBestAll'].append(xDimScoreBest)
-            groupedResults[gpfaParamsKey]['normalGpfaScoreAll'].append(normalGpfaScore)
+            groupedResults[gpfaParamsKey]['normalGpfaScoreAll'].append(gpfaScore)
             groupedResults[gpfaParamsKey]['testInds'].append(testInds)
             groupedResults[gpfaParamsKey]['trainInds'].append(trainInds)
             groupedResults[gpfaParamsKey]['alignmentBins'].append(alignmentBins)
