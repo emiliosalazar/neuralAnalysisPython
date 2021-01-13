@@ -68,7 +68,30 @@ def BlueWhiteRedColormap(figs=None, lowPt = None, midPt = 0, highPt = None):
                     
                     img.set_cmap(cmapVals)
                     img.set_clim(lowPt, highPt)
-                        
-                        
+    
+# this function more speicifcally moves the *axes* of the original figure to
+# the subplot--I'm actually not sure whether titles and legends and labels move
+# alongside, but I hope they do?       
+# 
+# note that newSubplotToCopyInto should be provided as a list or tuple of
+# [newLeft, newBot, newWidth, newHeight] as gets returned from get_position()
+# on the subplot             
+def MoveFigureToSubplot(origFig, newFig, newSubplotToCopyInto):
+    
+    oldFigAx = origFig.axes
+    newFigPos = newSubplotToCopyInto.get_position().bounds
+    
+    for ax in oldFigAx:
+        ax.remove() # remove axis from the old figure
+        ax.figure = newFig # add new figure to the axis
+        #newFig.axes.append(ax) # add new axis to the figure also has to be done
+        newFig.add_axes(ax) # either or both? Not sure
+        
+        origPos = ax.get_position().bounds # this is still saved even though the axis was deleted from the old figure...
+        newAxPos = [newFigPos[0]+origPos[0]*newFigPos[2], newFigPos[1]+origPos[1]*newFigPos[3], origPos[2]*newFigPos[2], origPos[3]*newFigPos[3]]
+        ax.set_position(newAxPos)
+        
+    newSubplotToCopyInto.remove()
+    plt.close(origFig)
                     
                     
