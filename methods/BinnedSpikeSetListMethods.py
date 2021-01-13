@@ -20,7 +20,7 @@ import hashlib
 import json
 import dill as pickle
 
-from methods.GpfaMethods import crunchGpfaResults
+from methods.GpfaMethods import crunchGpfaResults, computeBestDimensionality
 from methods.plotUtils.GpfaPlotMethods import visualizeGpfaResults
 
 def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToStateEnd = False, setEndToStateStart = False, returnResiduals = False,  firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
@@ -63,186 +63,24 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
 
     
     return binnedSpikes, bssiKeys
-#
-#    if len(bsspp & bSSProcParams)>1:
-#        raise Exception('multiple copies of binned spike set process params in here hm...')
-#    elif len(bsspp & bSSProcParams)>0:
-#        procParamId = (bsspp & bSSProcParams).fetch1('bss_params_id')
-#    else:
-#        # tacky, but it doesn't return the new id, syoo...
-#        currIds = bsspp.fetch('bss_params_id')
-#        bsspp.insert1(bSSProcParams)
-#        newIds = bsspp.fetch('bss_params_id')
-#        procParamId = list(set(newIds) - set(currIds))[0]
-#
-#    # return binned spikes
-#    startDelaysList = []
-#    endDelaysFromStartList = []
-#    binnedSpikes = []
-#    bssiKeys = []
-#    chFanos = []
-#    for dt, stateNameStateStart in zip(data, stateNamesStateStart):#dataset:#datasetSuccessNoCatch:
-#        try:
-#            dt = dt['dataset']
-#        except TypeError:
-#            pass
-#        
-#        dsId = dt.id
-#
-#        if trialType is 'successful':
-#            dataStInit = dt.successfulTrials().filterOutCatch()
-#        elif trialType is 'failure':
-#            dataStInit = dt.failTrials().filterOutCatch()
-#        else:
-#            dataStInit = dt.filterOutCatch()
-#        
-#        alignmentStates = dt.metastates
-#            
-#        startDelay, endDelay, stateNameAfter = dataStInit.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
-#        startDelayArr = np.asarray(startDelay)
-#        endTimeArr = np.asarray(endDelay)
-#        delayTimeArr = endTimeArr - startDelayArr
-#        
-#        
-#       
-#        dataSt = dataStInit.filterTrials(delayTimeArr>lenSmallestTrl)
-#        # dataSt.computeCosTuningCurves()
-#        startDelay, endDelay, stateNameAfter = dataSt.computeStateStartAndEnd(stateName = stateNameStateStart, ignoreStates=alignmentStates)
-#        startDelayArr = np.asarray(startDelay)
-#        startDelaysList.append(startDelayArr)
-#        endDelayArr = np.asarray(endDelay)
-#        endDelaysFromStartList.append(endDelayArr-startDelayArr)
-#        
-#        if setStartToDelayEnd:
-#            startTimeArr = endDelayArr
-#        else:
-#            startTimeArr = startDelayArr
-#        
-#        if setEndToDelayStart:
-#            endTimeArr = startDelayArr
-#        else:
-#            endTimeArr = endDelayArr
-#
-#        # here we want to check if we're going to load new data or if it already exists...
-#        bssi = BinnedSpikeSetInfo()
-#        dsi = DatasetInfo()
-#
-#        dsiPks = (dsi & ('dataset_id = %d' % dsId)).fetch('dataset_id', 'dataset_relative_path', 'ds_gen_params_id', as_dict=True)
-#
-#        if len(dsiPks) != 1:
-#            raise Exception('There should be exactly one dataset record per binned spike set')
-#        else:
-#            dsiPks = dsiPks[0]
-#        binnedSpikeSetDill = 'binnedSpikeSet.dill'
-#        # a nice way to distinguish the path for each BSS based on extraction parameters...
-#        bSSProcParamsJson = json.dumps(bSSProcParams, sort_keys=True) # needed for consistency as dicts aren't ordered
-#        # encode('ascii') needed for json to be hashable...
-#        bSSProcParamsHash = hashlib.md5(bSSProcParamsJson.encode('ascii')).hexdigest()
-#        saveBSSRelativePath = Path(dsiPks['dataset_relative_path']).parent / ('binnedSpikeSet_%s' % bSSProcParamsHash[:5]) / binnedSpikeSetDill
-#
-#
-#        saveBSSPath = dataPath / saveBSSRelativePath
-#
-#        if saveBSSPath.exists():
-#            with saveBSSPath.open(mode='rb') as saveBSSFh:
-#                binnedSpikesHere = pickle.load(saveBSSFh)
-#        else:
-#            # add binSizeMs/20 to endMs to allow for that timepoint to be included when using arange
-#            binnedSpikesHere = dataSt.binSpikeData(startMs = list(startTimeArr-furthestTimeBeforeState), endMs = list(endTimeArr+furthestTimeAfterState+binSizeMs/20), binSizeMs=binSizeMs, alignmentPoints = list(zip(startTimeArr, endTimeArr)))
-#            # first the firing rate thresh
-#            binnedSpikesHere = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)[0]
-#
-#            # then we're doing fano factor, but for counts *over the trial*
-#            if binnedSpikesHere.dtype == 'object':
-#                trialLengthMs = binSizeMs*np.array([bnSpTrl[0].shape[0] for bnSpTrl in binnedSpikesHere])
-#            else:
-#                trialLengthMs = np.array([binnedSpikesHere.shape[2]*binSizeMs])
-#            binnedCountsPerTrial = binnedSpikesHere.convertUnitsTo('count').increaseBinSize(trialLengthMs)
-#
-#            # NOTE: I believe this is okay because it's as if we were taking just a similarly sized window for each trial (under the assumption of uniform firing), but the std and mean is taken *afterwards*
-#            if trialLengthMs.size > 1:
-#                binnedCountsPerTrial = binnedCountsPerTrial * trialLengthMs[:,None,None]/trialLengthMs.max()
-#            _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh)
-#            chFano = binnedCountsPerTrial[:,chansGood].fanoFactorByChannel()
-#            chFanos.append(chFano)
-#            binnedSpikesHere = binnedSpikesHere[:,chansGood]
-#
-#            
-#
-#
-#            try:
-#                binnedSpikesHere.labels['stimulusMainLabel'] = dataSt.markerTargAngles
-#            except AttributeError:
-#                for bnSp, lab in zip(binnedSpikesHere, dataSt.markerTargAngles):
-#                    bnSp.labels['stimulusMainLabel'] = lab
-#                
-#            if returnResiduals:
-##                if binnedSpikesHere.dtype == 'object':
-##                    raise Exception("Residuals can only be computed if all trials are the same length!")
-##                else:
-#                labels = binnedSpikesHere.labels['stimulusMainLabel']
-#                binnedSpikesHere, labelBaseline = binnedSpikesHere.baselineSubtract(labels=labels)
-#                
-#
-#            if not saveBSSPath.exists():
-#                saveBSSPath.parent.mkdir(parents=True, exist_ok = True)
-#                with saveBSSPath.open(mode='wb') as saveBSSFh:
-#                    pickle.dump(binnedSpikesHere, saveBSSFh)
-#            else:
-#                raise Exception('Uh oh our BSS save paths are on a collision course!')
-#            
-#        binnedSpikeSetHereInfo = dict(
-#            bss_params_id = procParamId,
-#            bss_relative_path = str(saveBSSRelativePath),
-#            start_alignment_state = stateNameStateStart,
-#            end_alignment_state = stateNameStateStart, # in this function it's always from the start, either the end or the beginning of the start, but from the start
-#        )
-#
-#        bssiKeys.append(binnedSpikeSetHereInfo.copy())
-#        if len(bssi & binnedSpikeSetHereInfo) > 1:
-#            raise Exception("we've saved this processing more than once...")
-#        elif len(bssi & binnedSpikeSetHereInfo) == 0:
-#            bssHash = hashlib.md5(str(binnedSpikesHere).encode('ascii')).hexdigest()
-#
-#
-#            addlBssInfo = dict(
-#                bss_hash = bssHash,
-#                start_time_alignment = np.array(startTimeArr),
-#                start_time = np.array(startTimeArr + furthestTimeBeforeState),
-#                end_time_alignment = np.array(endTimeArr),
-#                end_time = np.array(endTimeArr + furthestTimeAfterState)
-#            )
-#            binnedSpikeSetHereInfo.update(addlBssInfo)
-#                
-#            binnedSpikeSetHereInfo.update(dsiPks)
-#
-#
-#            bssi.insert1(binnedSpikeSetHereInfo)
-#            
-#        if unitsOut is not None:
-#            binnedSpikesHere.convertUnitsTo(units=unitsOut)
-#        
-#        binnedSpikes.append(binnedSpikesHere)
-#    
-#    return binnedSpikes, bssiKeys
-
 
 # This function lets you match the number of neurons and trials for different
 # sets of data you're comparing, to be fairer in the comparison. Note that what
 # is referred to as 'neuron' in the method name could well be a thresholded
 # channel with multineuron activity... but this nomencalture reminds us what
 # the purpose is...
-def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssExp, maxNumTrlPerCond, maxNumNeuron, labelName, numSubsamples = 1,  extraOpts = None, order=True):
+def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssKeys, maxNumTrlPerCond, maxNumNeuron, labelName, numSubsamples = 1,  extraOpts = None, order=True):
     # I do, unfortunately, have to load them twice here--once up here to
     # compute the neuron/trial nums, and again below to make sure they're well
     # aligned
 
     dsi = DatasetInfo()
+    bsi = BinnedSpikeSetInfo()
 
-    if order:
-        bssKeys = bssExp.fetch('KEY', order_by='dataset_id')
-    else:
-        bssKeys = bssExp.fetch('KEY')
+#    if order:
+#        bssKeys = (bssExp * dsi).fetch('KEY', order_by='brain_area')
+#    else:
+#        bssKeys = bssExp.fetch('KEY')
 
     subsmpKeys = []
 #    initRandSt = np.random.get_state()
@@ -254,17 +92,17 @@ def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssExp, maxNumTr
     subsampleExpressions = []
     fsp = FilterSpikeSetParams()
     bsi = BinnedSpikeSetInfo()
-    for bssKeyForOne in bssKeys:
+    for bssInd, bssKeyForOne in enumerate(bssKeys):
         # reset the seed for every binned spike so we know that whenever a set
         # of data comes through here it gets split up identically... well...
         # assuming the same minima up there...
-        bnSpOrigInfo = bssExp[bssKeyForOne]
+        bnSpOrigInfo = bsi[bssKeyForOne]
         if extraOpts:
             extraFilt = []
             extraDescription = []
             anyMatch = False
             for extraOptExp, filterParams in extraOpts.items():
-                match = bssExp[extraOptExp][bssKeyForOne]
+                match = bsi[extraOptExp][bssKeyForOne]
                 filterLambda = filterParams['filter']
                 filterDescription = filterParams['description']
                 if len(match):
@@ -279,31 +117,10 @@ def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssExp, maxNumTr
                 bnSpOrigInfo = bsi[filtBssKeys]
 
 
-        bnSpHereSubsample, trlNeurHereSubsamples, datasetName, subsampleKeyHere = bnSpOrigInfo.computeRandomSubsets("match for comparisons", numTrialsPerCond = maxNumTrlPerCond, numChannels = maxNumNeuron, labelName = labelName, numSubsets = numSubsamples, returnInfo = True)
+        bnSpHereSubsample, trlNeurHereSubsamples, datasetName, subsampleKeyHere = bnSpOrigInfo.computeRandomSubsets("match for comparisons", numTrialsPerCond = maxNumTrlPerCond[bssInd] if type(maxNumTrlPerCond) is list else maxNumTrlPerCond, numChannels = maxNumNeuron, labelName = labelName, numSubsets = numSubsamples, returnInfo = True)
 
         brainArea = dsi[bnSpOrigInfo].fetch('brain_area')[0] # returns array, grab the value (string)
         task = dsi[bnSpOrigInfo].fetch('task')[0]
-#        bnSpOrig = bnSpOrigInfo.grabBinnedSpikes()
-#        assert len(bnSpOrig) == 1, "Should only have one BSS to filter each time!"
-#        bnSpOrig = bnSpOrig[0]
-#        np.random.seed(0)
-#        trlInds = range(bnSpOrig.shape[0])
-#        neuronInds = range(bnSpOrig.shape[1])
-#        bnSpHereSubsample = []
-#        trlNeurHereSubsamples = []
-#        for newSubset in range(numSubsamples):
-#            # note that the trials are randomly chosen, but returned in sorted
-#            # order (balancedTriaInds does this) from first to last... I think
-#            # this'll make things easier to compare in downstream analyses that
-#            # care about changes over time... neurons being sorted on the other
-#            # hand... still for ease of comparison, maybe not for any specific
-#            # analysis I can think of
-#            trlsUse = bnSpOrig.balancedTrialInds(bnSpOrig.labels[labelName], minCnt = maxNumTrlPerCond)
-#            neuronsUse = np.sort(np.random.permutation(neuronInds)[:maxNumNeur])
-#
-#            bnSpHereSubsample.append(bnSpOrigInfo.filterBSS("shuffle", "match for area comparisons", binnedSpikeSet=bnSpOrig, trialFilter = nonChoiceTrials, channelFilter = channelsUse, returnExisting=True))
-#            trlNeurHereSubsamples.append((trlsUse, neuronsUse))
-
 
         bnSpSubsamples.append(bnSpHereSubsample)
         trlNeurSubsamples.append(trlNeurHereSubsamples)
@@ -525,12 +342,52 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         figErr = plt.figure()
         figErr.suptitle('dimensionality vs. GPFA log likelihood')
         # might have to go back on these lines for how to define ncols...
-        gpPathPer = [[Path(gpH).parent for gpH in gp.keys()] for gp in gpfaRes]
+        gpPathPer = [[Path(gpH[0]).parent for gpH in gp.keys()] for gp in gpfaRes]
         gpUnPathNum = [len(np.unique(gpP)) for gpP in gpPathPer]
         ncols = np.max(gpUnPathNum) # len(bssExp)
         axs = figErr.subplots(nrows=2, ncols=ncols, squeeze=False)
 
     crossValsUse = [0]
+
+    for gpfaInfoHere, gpfaResHere in zip(gpfaInfo, gpfaRes):
+        bestDims = computeBestDimensionality(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
+        bssPth = np.unique([pthCvCnd[0] for pthCvCnd in gpfaResHere.keys()])
+        assert bssPth.size == 1, "Not sure why there are multiple (or no O.o) paths for one GPFA run..."
+        bssNewDimExp = bsi[{'bss_relative_path' : str(bssPth[0])}]
+
+        # Can't say I reeeally like eval here, but I think I gotta do it...
+        condNumsTested = [eval(pthAndCond[2]) for pthAndCond in gpfaResHere.keys()]
+
+        xDimRangeAroundTest = [0] + xDimTest + [(xDimTest[-1]+3)]
+        testDimIndInRange = [int(np.nonzero(xDimRangeAroundTest==dm)[0]) for dm in bestDims]
+        newDimsToTestPerCond = [np.arange(xDimRangeAroundTest[dmInd-1]+1, xDimRangeAroundTest[dmInd+1]) for dmInd in testDimIndInRange]
+        newDimsToTestPerCond = [nD[nD!=cD] for nD, cD in zip(newDimsToTestPerCond, bestDims)]
+
+        for newDimTestCond, condNum in zip(newDimsToTestPerCond, condNumsTested):
+
+            for newDimTest in newDimTestCond:
+                gpfaParams.update(dict(
+                    dimensionality = newDimTest,
+                    ))
+                if len(gap[gpfaParams]) == 0:
+                    gap.insert1(gpfaParams)
+
+                gaiCompleted = gai[bssNewDimExp][gap[gpfaParams]]['gpfa_rel_path_from_bss LIKE "%cond{}{}{}%"'.format('s' if len(condNum)>1 else '', '-'.join([str(cN) for cN in condNum]), 'Grpd' if gpfaParams['combine_conditions'] != 'no' else '')]
+
+                if len(gaiCompleted) == 0:
+                    gai.computeGpfaResults(gap[gpfaParams], bssNewDimExp, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParams['combine_conditions'] == 'all' else condNum, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
+
+                gpfaResH, gpfaInfoH = gaiCompleted.grabGpfaResults(returnInfo=True, useFa=useFa)
+
+                keyRes = list(gpfaResH.keys())
+                assert len(keyRes)==1, "Should have one (and only one) key from the new dim runs..."
+                keyRes = keyRes[0]
+                gpfaResHere[keyRes].update(gpfaResH[keyRes])
+                gpfaInfoHereNew = {k:gih1 + gih2 for  (k, gih1), (_, gih2) in zip(gpfaInfoHere.items(), gpfaInfoH.items())}
+                gpfaInfoHere.update(gpfaInfoHereNew)
+
+
+
 
     dimExp = []
     dimMoreLL = []
@@ -562,18 +419,22 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             gpfaParams.update(dict(dimensionality=dimHere))
             gpfaAnalysisInfoConds = gai['bss_relative_path="%s"' % bssPath]
             bssExpWithGpfa = bsi['bss_relative_path="%s"' % bssPath]
-#            gpfaAnalysisInfoConds = gai['bss_relative_path="%s"' % (relPath/'filteredSpikeSet.dill')]
-#            bssExpWithGpfa = bsi['bss_relative_path="%s"' % (relPath/'filteredSpikeSet.dill')]
-#            if len(gpfaAnalysisInfoConds) == 0:
-#                gpfaAnalysisInfoConds = gai['bss_relative_path="%s"' % (relPath/'binnedSpikeSet.dill')]
-#                bssExpWithGpfa = bsi['bss_relative_path="%s"' % (relPath/'binnedSpikeSet.dill')]
 
-#            gpfaAnalysisInfoConds = gpfaAnalysisInfoConds[gap[dict(dimensionality=dimHere)]]
             gpfaAnalysisInfoConds = gpfaAnalysisInfoConds[gap[gpfaParams]]
 #            hsh, condNumsAllDb = gpfaAnalysisInfoConds.fetch('gpfa_hash', 'condition_nums')
             hsh, condNumsAllDb = gpfaAnalysisInfoConds.fetch('gpfa_hash', 'condition_nums')
-            assert len(hsh[condNumsAllDb == cond]) == 1, "Too many analysis infos fit these parameters"
-            hshThisCond = hsh[condNumsAllDb == cond][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
+            if len(cond)>1:
+                # Mmk, I think this'll work; basically here we're checking
+                # about combined conditions, which makes cond have more than
+                # one value; to do so, we need to loop through the returned
+                # cnodNumsAllDb and check each array individually (well, all
+                # values in the array)
+                assert np.sum([np.all(cnd == cond) for cnd in condNumsAllDb]) == 1, "Too many GPFA analysis infos fit these parameters"
+                hshUseLog = np.array([np.all(cnd == cond) for cnd in condNumsAllDb])
+                hshThisCond = hsh[hshUseLog][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
+            else:
+                assert len(hsh[condNumsAllDb == cond]) == 1, "Too many GPFA analysis infos fit these parameters"
+                hshThisCond = hsh[condNumsAllDb == cond][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
             gpfaAnalysisInfoThisCondDim = gpfaAnalysisInfoConds[dict(gpfa_hash = hshThisCond)]
             gpParams = gap[gpfaAnalysisInfoThisCondDim]
 
@@ -589,7 +450,16 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
 #            if not useFa:
             gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
             gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
-            gpHashComp = gpHash[condsComputed==cond]
+            if len(cond)>1:
+                # need to dtype to Bool in case there *are* no computed
+                # gpHashes so gpHshUseLog ends up empty--if that happens
+                # it has no Bool to inherit from the list, it remains a
+                # float64, and using it to index gpHash errors
+                gpHshUseLog = np.array([np.all(cnd == cond) for cnd in condsComputed], dtype='Bool')
+                gpHashComp = gpHash[gpHshUseLog]
+            else:
+                gpHashComp = gpHash[condsComputed==cond]
+
             if len(gpHashComp):
                 gpHashComp = gpHashComp[0]
 
@@ -604,14 +474,19 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             labelUse = gpfaAnalysisInfoConds['label_use'][0]
             # NOTE: we set useFa to FALSE here because EVEN IF we're extracting
             # the FA parameters, GPFA still needs to be run (the way that this
-            # is contructed...)
-            gai.computeGpfaResults(gap[gpfaParamsNoCval], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = cond, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=False)
+            # is constructed...)
+            gai.computeGpfaResults(gap[gpfaParamsNoCval], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParamsNoCval['combine_conditions'] == 'all' else cond, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=False)
 
             # Not the prettiest, but we rerun this to account for the fact
             # that the correct gpfaHash is now different...
             gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
             gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
-            gpHashComp = gpHash[condsComputed==cond]
+            if len(cond)>1:
+                gpHshUseLog = np.array([np.all(cnd == cond) for cnd in condsComputed])
+                gpHashComp = gpHash[gpHshUseLog]
+            else:
+                gpHashComp = gpHash[condsComputed==cond]
+
             if len(gpHashComp):
                 gpHashComp = gpHashComp[0]
 
@@ -818,7 +693,10 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
             # All these metrics are taken on spike counts!
             bSC = bSC.convertUnitsTo('count')
 
-            grpSpkCnt, uniqueLabel = bSC.groupByLabel(bSC.labels[labelUse])
+            if separateNoiseCorrForLabels:
+                grpSpkCnt, uniqueLabel = bSC.groupByLabel(bSC.labels[labelUse])
+            else:
+                grpSpkCnt = [bSC]
             fRChMnByAreaHere.append([np.mean(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
             fRChStdMnByAreaHere.append([np.std(gSC.avgFiringRateByChannel()) for gSC in grpSpkCnt])
             fRChMnStdByAreaHere.append([np.mean(gSC.stdFiringRateByChannel()) for gSC in grpSpkCnt])
@@ -852,6 +730,14 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
         fanoFactorChOBTStdByArea.append(np.stack(fanoFactorChOBTStdByAreaHere))
     
     resultsDict = {
+        'mean(r_{sc})' : mnCorrPerCond,
+        'std(r_{sc})' : stdCorrPerCond,
+        'mean(r_{sc} 1 bn/tr)' : mnCorrPerCondOBPT,
+        'std(r_{sc} 1 bn/tr)' : stdCorrPerCondOBPT,
+        'mean channel fano factor' : fanoFactorChMnByArea,
+        'std channel fano factor' : fanoFactorChStdByArea,
+        'mean channel fano factor (1 bn/tr)' : fanoFactorChOBTMnByArea,
+        'std channel fano factor (1 bn/tr)' : fanoFactorChOBTStdByArea,
         'mean of mean(firing rate (Hz) of channels per trial)' : fRChMnByArea,
         'std of mean(firing rate (Hz) of channels per trial)' : fRChStdMnByArea,
         'mean of std(firing rate (Hz) of channels per trial)' : fRChMnStdByArea,
@@ -860,14 +746,6 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
         'std of mean(firing rate (Hz) of channels per bin)' : fRChPrBinStdMnByArea,
         'mean of std(firing rate (Hz) of channels per bin)' : fRChPrBinMnStdByArea,
         'std of std(firing rate (Hz) of channels per bin)' : fRChPrBinStdStdByArea,
-        'mean(r_{sc})' : mnCorrPerCond,
-        'std(r_{sc})' : stdCorrPerCond,
-        'mean(r_{sc} 1 bn/tr)' : mnCorrPerCondOBPT,
-        'std(r_{sc} 1 bn/tr)' : stdCorrPerCondOBPT,
-        'mean channel fano factor' : fanoFactorChMnByArea,
-        'std channel fano factor' : fanoFactorChStdByArea,
-        'mean channel fano factor (1 bn/tr)' : fanoFactorChOBTMnByArea,
-        'std channel fano factor (1 bn/tr)' : fanoFactorChOBTStdByArea
     }
 
     return resultsDict

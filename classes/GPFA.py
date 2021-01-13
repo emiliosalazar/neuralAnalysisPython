@@ -29,19 +29,7 @@ from decorators.ParallelProcessingDecorators import multiprocessNumpy
 
 class GPFA:
     def __init__(self, binnedSpikes):
-#        if type(binnedSpikes) is list or binnedSpikes.dtype=='object':
-#            # I'm honestly not really sure why this works, given that with the
-#            # axis=1 in the else statement, axis 1 stays the same size, but in
-#            # this statement with axis=2, axis 2 *changes size*...
-#            allTrlTogether = np.concatenate(binnedSpikes, axis=2)
-#        else:
-#            allTrlTogether = np.concatenate(binnedSpikes, axis=1)[None,:,:]
-#        
-#        allTrlTogether.timeAverage().trialAverage()
-#        allTrlTogether.units = binnedSpikes.units
-#        _, chansKeep = allTrlTogether.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh)
-        # chansKeepCoinc = allTrlTogether.removeCoincidentSpikes()
-        # chansKeep = np.logical_and(chansKeepThresh, chansKeepCoinc)
+
         if type(binnedSpikes) is list:
             # the 0 index squeezes out that dimension--and it should be what happens,
             # as in this structuring you should have only one trial in here...
@@ -137,7 +125,7 @@ class GPFA:
         
     
     @multiprocessNumpy
-    def runGpfaInMatlab(self, fname,   crossvalidateNum = 0, xDim = 8, eng=None, segLength = None, forceNewGpfaRun = False):
+    def runGpfaInMatlab(self, fname,   crossvalidateNum = 0, xDim = 8, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio', eng=None, segLength = None, forceNewGpfaRun = False):
         
         # if eng is None:
         #     from matlab import engine 
@@ -159,7 +147,7 @@ class GPFA:
         if segLength is None:
             segLength = min([sq['T'] for sq in self.gpfaSeqDict])
             
-        binWidth = self.binSize
+        binWidth = int(self.binSize) # rather annoying to have to play these type games... >.>
         
         seqsTrainNew = []
         seqsTestNew = []
@@ -167,13 +155,6 @@ class GPFA:
         
         
         
-        # In order to ensure numpy processes work well in a multiprocess
-        # environment, we set these environment variables (they need to exist
-        # both when numpy gets loaded for the first time *AND* whenever the
-        # processes are running
-#        os.environ['OPENBLAS_NUM_THREADS'] = '1'
-#        os.environ['GOTO_NUM_THREADS'] = '1'
-#        os.environ['OMP_NUM_THREADS'] = '1'
         with Pool() as poolHere:
             res = []
             fullRank = []
@@ -182,12 +163,8 @@ class GPFA:
                 datTest = np.concatenate(datTest, axis=1)
                 fullRank.append(np.linalg.matrix_rank(datTest) >= datTest.shape[0])
 
-                res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr)))
+                res.append(poolHere.apply_async(parallelGpfa, (fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, expMaxIterationMaxNum, tolerance, tolType)))
             
-            # from time import sleep
-            # print('blah')
-            # sleep(20)
-            # print('bleh')
             resultsByCrossVal = [[]] * len(res) # empty set of lists
             badCrossVals = []
             for cvNum, (rs, fR) in enumerate(zip(res, fullRank)):
@@ -216,7 +193,7 @@ class GPFA:
                         # now we're doing it as a pool because if we do it on
                         # the main process Matlab won't run again until we
                         # restart Python >.>
-                        resNew = poolHere.apply_async(parallelGpfa, (fname, bCVNum, xDim, seqsTrain[bCVNum], seqsTest[bCVNum], forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr))
+                        resNew = poolHere.apply_async(parallelGpfa, (fname, bCVNum, xDim, seqsTrain[bCVNum], seqsTest[bCVNum], forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, expMaxIterationMaxNum, tolerance, tolType))
                         try:
                             resultsByCrossVal[bCVNum] = resNew.get() + (fRNew, )
                         except MatlabExecutionError as e:
@@ -228,10 +205,6 @@ class GPFA:
                         print("Something went wrong with crossval #%d... this GPFA will now have one less crossvalidation!" % bCVNum)
 
 
-            
-#            poolHere.close()
-#            poolHere.join()
-#            breakpoint()
             
             resultsByVar = list(zip(*resultsByCrossVal))
             allEstParams = resultsByVar[0]
@@ -250,14 +223,6 @@ class GPFA:
                 breakpoint()
                 raise Exception('not saving what you used!')
             
-        # To prevent these variables from causing other methods/classes to load
-        # numpy in a non-'optimized' (parallel) state, we delete (effectively
-        # unset) the variables after our multiprocessing has finished
-#        del os.environ['OPENBLAS_NUM_THREADS']
-#        del os.environ['GOTO_NUM_THREADS']
-#        del os.environ['OMP_NUM_THREADS']
-        
-        # print('whowhat?')
         self.dimOutput[xDim] = {}
         self.dimOutput[xDim]['crossvalidateNum'] = crossvalidateNum
         self.dimOutput[xDim]['allEstParams'] = allEstParams
@@ -285,13 +250,6 @@ class GPFA:
             
             
             
-            # In order to ensure numpy processes work well in a multiprocess
-            # environment, we set these environment variables (they need to exist
-            # both when numpy gets loaded for the first time *AND* whenever the
-            # processes are running
-#            os.environ['OPENBLAS_NUM_THREADS'] = '1'
-#            os.environ['GOTO_NUM_THREADS'] = '1'
-#            os.environ['OMP_NUM_THREADS'] = '1'
             with Pool() as plWrap:
                 res = []
                 dimUsed = []
@@ -323,33 +281,14 @@ class GPFA:
 
                         
 
-#                resultsByDim = [rs.get() for rs in res]
-                # resultsByVar = list(zip(*resultsByDim))
-                
                 if dimsCrossvalidate is None:
                     ll = {dim : np.stack(llDim) for dim, llDim in zip(self.dimOutput.keys(), resultsByDim)}        
                 else:
                     ll = {dim : np.stack(llDim) for dim, llDim in zip(dimsCrossvalidate, resultsByDim)}        
-                    # llTemp = np.stack(llTemp)
-                    # llTemp = llTemp - np.min(llTemp)
-                    # llTemp = llTemp/np.max(llTemp)
-                    # ll[dimMax] = np.stack(llTemp)#np.mean(np.stack(llTemp))
-                # llErr[dimMax] = np.std(np.stack(llTemp))
-                    
-                
-            # To prevent these variables from causing other methods/classes to load
-            # numpy in a non-'optimized' (parallel) state, we delete (effectively
-            # unset) the variables after our multiprocessing has finished
-#            del os.environ['OPENBLAS_NUM_THREADS']
-#            del os.environ['GOTO_NUM_THREADS']
-#            del os.environ['OMP_NUM_THREADS']
 
             reducedGpfaScore = np.stack([np.nan])
             gpfaScore = np.stack([llH for _, llH in ll.items()])
             gpfaScoreErr = np.stack([np.nan])
-#            normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
-#            normalGpfaScore = np.mean(normalizedGpfaScore, axis=1)
-#            normalGpfaScoreErr = np.std(normalizedGpfaScore,axis=1)
             
             
             
@@ -549,7 +488,14 @@ def makeKBig(params, T, covType = 'rbf', eng=None):
     
     for dim in range(xDim):
         if covType is 'rbf':
-            K = (1 - params['eps'][0,dim]) * np.exp(-params["gamma"][0,dim] / 2 * np.power(timeDiff, 2)) + params["eps"][0,dim] * np.eye(T);
+            if xDim == 1:
+                eps = params['eps']
+                gamma = params['gamma']
+            else:
+                eps = params['eps'][0,dim]
+                gamma = params['gamma'][0,dim]
+
+            K = (1 - eps) * np.exp(-gamma / 2 * np.power(timeDiff, 2)) + eps * np.eye(T);
             
         else:
             raise Exception("GPFA:CovType", "unknown or unprogrammed covariance type")
@@ -563,7 +509,7 @@ def makeKBig(params, T, covType = 'rbf', eng=None):
     
     return KAll, KAllInv, logdetKAll
     
-def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr):
+def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, segLength, seqTrainStr, seqTestStr, expMaxIterationMaxNum, tolerance, tolType):
 
     print('Running GPFA crossvalidation #%d' % (cvNum+1))
     
@@ -579,10 +525,13 @@ def parallelGpfa(fname, cvNum, xDim, sqTrn, sqTst, forceNewGpfaRun, binWidth, se
         eng.workspace['xDim'] = xDim*1.0
         eng.workspace['fname'] = str(fnameOutput)
         eng.workspace['segLength'] = np.inf #segLength*1.0
+        eng.workspace['emMaxIters'] = float(expMaxIterationMaxNum)
+        eng.workspace['tol'] = float(tolerance)
+        eng.workspace['tolType'] = tolType
         
         
         
-        eng.eval("gpfaEngine(" + seqTrainStr + ", " + seqTestStr + ", fname, 'xDim', xDim, 'binWidth', binWidth, 'segLength', segLength)", nargout=0)
+        eng.eval("gpfaEngine(" + seqTrainStr + ", " + seqTestStr + ", fname, 'xDim', xDim, 'binWidth', binWidth, 'segLength', segLength, 'emMaxIters', emMaxIters)", nargout=0)
 
     eng.evalc("results = load('"+str(fnameOutput)+"')")
     eng.evalc("results.method='gpfa'") # this is needed for the next step...

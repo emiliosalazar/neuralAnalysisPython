@@ -54,6 +54,7 @@ function [estParams, seq, LL, iterTime] = em(currentParams, seq, varargin)
 
   emMaxIters   = 500;
   tol          = 1e-8;
+  tolType      = 'ratio';
   minVarFrac   = 0.01;
   verbose      = false;
   freqLL       = 10;
@@ -180,22 +181,35 @@ function [estParams, seq, LL, iterTime] = em(currentParams, seq, varargin)
       else
           fprintf('\nThe decrease is identical to eps');
       end
+      if strcmp(tolType, 'ratio')
         if ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
             fprintf('\nYet, the change is small so we''re bumpin'' outta here')
             break
         end
-      keyboard;
-    elseif ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
+      elseif strcmp(tolType, 'diff')
+        if (LLi-LLold) < tol
+            fprintf('\nYet, the change is small so we''re bumpin'' outta here')
+            break
+        end
+      end
+    elseif strcmp(tolType, 'ratio') && ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
+      break;
+    elseif strcmp(tolType, 'diff') && (LLi-LLold) < tol
       break;
     end
   end
   fprintf('\n');
 
-  if ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
+  if strcmp(tolType, 'ratio') && ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
+    currentParams.converge=true;
+  elseif strcmp(tolType, 'diff') && (LLi-LLold) < tol
     currentParams.converge=true;
   else
 	currentParams.converge=false;
   end
+
+  currentParams.finalRatioChange = (LLi-LLbase)/(LLold-LLbase) - 1;
+  currentParams.finalDiffChange = (LLi-LLold);
 
   if length(LL) < emMaxIters
     fprintf('Fitting has converged after %d EM iterations.\n', length(LL)); 

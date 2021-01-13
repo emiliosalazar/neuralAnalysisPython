@@ -66,9 +66,53 @@ class DatasetGeneralLoadParams(dj.Manual):
     coincidence_fraction_trial_test : float # fraction of trials to check (0-1)
     """
 
+    def _update(self, attrname, value=None):
+        assert len(self)==1, "Can currently only update one DatasetGeneralLoadParams at a time"
+        oldValue = self.fetch(attrname)[0]
+        try:
+            super(DatasetGeneralLoadParams, self)._update(attrname, value)
+        except Exception as err:
+            raise
+        else:
+            dsi = DatasetInfo()
+            dsiForDsglKey = dsi[self].fetch('KEY')
+            dsetNewHash = self.shorthash()
+
+            for dsiHereKey in dsiForDsglKey:
+                breakpoint()
+                dsiHere = dsi[dsiHereKey]
+                dsetPath = dsiHere['dataset_relative_path'][0]
+                # this is the start of the hash in the pathname
+                dsetHashLocationStart = dsetPath.find('dataset') + len('dataset') + 1 
+                dsetHashLocationEnd = dsetHashLocationStart + len(dsetNewHash) # hash is five characters long
+                dsetHashOrig = dsetPath[dsetHashLocationStart:dsetHashLocationEnd] 
+
+                dsetPathNew = dsetPath[:dsetHashLocationStart] + dsetNewHash + dsetPath[dsetHashLocationEnd:]
+
+                dsiHere._update('dataset_relative_path', value=dsetPathNew, allowPkUpdate=True)
+
+
+
+    def hash(self):
+        assert len(self)==1, "Can currently only hash one DatasetGeneralLoadParams at a time"
+
+        dsglParams = self.fetch(as_dict=True)[0]
+        dsglParams.pop('ds_gen_params_id') # umm... the ID doesn't have to do with the parameters...
+        dsglParamsHashable =  {prm : vl.item() if hasattr(vl, 'item') else vl for prm,vl in dsglParams.items()}
+
+        dsglJson = json.dumps(dsglParamsHashable, sort_keys=True) # needed for consistency as dicts aren't ordered
+        dsglHash = hashlib.md5(dsglJson.encode('ascii')).hexdigest()
+
+        return dsglHash
+
+    def shorthash(self):
+        hsh = self.hash()
+
+        return hsh[:5]
+
+#    (dataset_relative_path, dataset_id, ds_gen_params_id, dataset_hash, dataset_name, processor_name, brain_area, task, date_acquired, explicit_ignore_sorts, channels_keep, trials_keep, spike_identification_method, nas_used, nas_gamma) 
 @schema
 class DatasetInfo(dj.Manual):
-
     definition = """
     # dataset
     dataset_relative_path : varchar(500) # relative path to dataset
@@ -81,9 +125,12 @@ class DatasetInfo(dj.Manual):
     brain_area : varchar(100) # brain area
     task : varchar(100) # task the monkey was doing in this dataset
     date_acquired : date # date data was acquired
-    explicit_ignore_channels : blob # channels explicitly removed (for spike sorting goodness)
-    channels_keep : blob # channels kept from overall dataset (*after* explicit_ignore_channels are removed--useful for finding channels not removed from coincidence detection)
+    explicit_ignore_sorts : blob # channels explicitly removed (for spike sorting goodness)
+    channels_keep : blob # channels kept from overall dataset (*after* explicit_ignore_sorts are removed--useful for finding channels not removed from coincidence detection)
+    trials_keep : blob # trials kept from overall dataset (useful to keep track if some trials have to be explicitly removed for whatever reason)
     spike_identification_method : enum('threshold','nas','handSort','other') # to store how waveforms are identified as spikes
+    nas_used = null : varchar(100) # if nas is selected for spike id, this will hold the NAS used
+    nas_gamma = null : float # if nas is selected for spike id, this is the gamma threshold on the nas_used
     """
     
     # I don't want to use the external storage paradigm they have, as I'm not
@@ -98,10 +145,6 @@ class DatasetInfo(dj.Manual):
         dataPath = Path(defaultParams['dataPath'])
 
         datasets = []
-#        if expression is None:
-#            dsExp = self
-#        else:
-#            dsExp = (self & expression)
 
         # give some ordering here
         dsPaths, dsIds = self.fetch('dataset_relative_path', 'dataset_id', order_by='dataset_id')
@@ -203,6 +246,10 @@ class DatasetInfo(dj.Manual):
             # Load data if it has been processed
             if saveBSSPath.exists():
                 bssiKey = bssi[('bss_relative_path = "%s"' % str(saveBSSRelativePath))].fetch("KEY", as_dict=True)
+
+                assert len(bssiKey) == 1, "More than one key came out for some reason even though only one should have been added"
+                bssiKey = bssiKey[0]
+
                 with saveBSSPath.open(mode='rb') as saveBSSFh:
                     binnedSpikesHere = pickle.load(saveBSSFh)
 
@@ -352,6 +399,9 @@ class DatasetInfo(dj.Manual):
 
                     bssiKey = bssAdded.fetch("KEY", as_dict=True)
 
+                    assert len(bssiKey) == 1, "More than one key came out for some reason even though only one should have been added"
+                    bssiKey = bssiKey[0]
+
             if units is not None:
                 binnedSpikesHere.convertUnitsTo(units=units)
             
@@ -359,6 +409,51 @@ class DatasetInfo(dj.Manual):
             bssiKeys.append(bssiKey)
 
         return binnedSpikes, bssiKeys
+
+    def _update(self, attrname, value=None, allowPkUpdate=False):
+        selfKey = self.fetch('KEY')[0]
+        valOld = self.fetch(attrname)[0]
+        try:
+            super(DatasetInfo, self)._update(attrname, value, allowPkUpdate=allowPkUpdate)
+            if allowPkUpdate:
+                selfKey.update({attrname : value})
+        except Exception as err:
+            raise
+        else:
+            bsi = BinnedSpikeSetInfo()
+            if attrname == 'dataset_relative_path':
+                dataPath = Path(defaultParams['dataPath'])
+                dsetPath = Path(valOld).parent
+                dsetPathNew = Path(value).parent
+
+
+                # we do this outer exists() check because sometimes a parent
+                # folder moved everything below it so no attempt at a move is
+                # even necessary
+                if not (dataPath / dsetPathNew).exists():
+                    info = "Moving\n\n" + str(dataPath / dsetPath) + "\n\nto\n\n" + str(dataPath / dsetPathNew)
+                    print(info)
+                    from shutil import move
+                    try:
+                        move(dataPath / dsetPath, dataPath / dsetPathNew)
+                    except FileNotFoundError as e:
+                        print("Original path not found -- perhaps it has already been moved (though not to the new location, as that one didn't exist...)?")
+
+                # now move all those downstream BinnedSpikeSetInfos...
+                bsiForDsiKey = bsi[selfKey].fetch('KEY')
+
+                for bsiKey in bsiForDsiKey:
+                    bsiHere = bsi[bsiKey]
+                    if len(bsiHere)<1:
+                        # this might occur if an inner call already changed
+                        # this bsiKey before it was reached in this outer call
+                        continue
+                    bsiOrigPath = bsiHere['bss_relative_path'][0]
+                    if bsiOrigPath.find(str(dsetPath)) != 0:
+                        breakpoint() # somethig weird here
+                    bsiNewPath = dsetPathNew / bsiOrigPath[len(str(dsetPath))+1:]
+                    bsiHere._update('bss_relative_path', value=str(bsiNewPath), allowPkUpdate=True)
+
 
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):
@@ -553,6 +648,13 @@ class BinnedSpikeSetInfo(dj.Manual):
             bSSFilteredProcParamsJson = json.dumps(str(bssFilterParams), sort_keys=True) # needed for consistency as dicts aren't ordered
             bSSFilteredProcParamsHash = hashlib.md5(bSSFilteredProcParamsJson.encode('ascii')).hexdigest()
 
+            # NOTE this is for the past's sake that I'm not changing
+            # bssFilterParams before it's hashed--I don't want to go through
+            # and change all the paths because the hash has changed ;_;
+            bssFilterParams.update(dict(
+                condition_num = condCnts.size # the size tells us how *many* unique conditions there were
+            ))
+
             fsp = FilterSpikeSetParams()
             bsi = BinnedSpikeSetInfo()
             parentPath = fsp[key]['bss_relative_path']
@@ -591,14 +693,9 @@ class BinnedSpikeSetInfo(dj.Manual):
             
             # I could have checked this with the fss_param_hash if statement
             # above, but I wanted to be more explicit here
-#            try:
-#            except AttributeError:
-#                fsi = self.__class__()
-
-#            bssFilterParamsCheck = bssFilterParams.copy()
-#            bssFilterParamsCheck.update(key)
             existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key + ['parent_bss_relative_path']}] 
             existingSS = existingSS[self.fetch('bss_params_id', as_dict=True)[0]]
+
             # this is important for not grabbing repeats when looking for the
             # originally filtered binned spike set
             if 'parent_bss_relative_path' not in bssFilterParams:
@@ -607,16 +704,12 @@ class BinnedSpikeSetInfo(dj.Manual):
             if len(existingSS) > 1:
                 raise Exception('Multiple filtered spike sessions have been saved with these parameters')
             elif len(existingSS) > 0:
-#                breakpoint()
-#                print("LA")
                 prmPk = bsi[('bss_relative_path = "%s"' % str(pathRelativeToBase))].fetch("KEY",as_dict=True)[0]
                 if not fullPath.exists():
                     print('Db record existed for FilterSpikeSetParams but not file... saving file now')
                     fullPath.parent.mkdir(parents=True, exist_ok = True)
                     with fullPath.open(mode='wb') as filteredSpikeSetDillFh:
                         pickle.dump(bssFiltered, filteredSpikeSetDillFh)
-#                with fullPath.open(mode='rb') as filteredSpikeSetDillFh:
-#                    bssFiltered = pickle.load(filteredSpikeSetDillFh)
             else:
                 # this check is really here in case we're dropping in the
                 # 'original' FSS, whose path is the parent, so there's not need
@@ -649,7 +742,6 @@ class BinnedSpikeSetInfo(dj.Manual):
 
             if returnKey:
                 bssKey = dict(**prmPk)
-#                bssKey.update(dict(fss_rel_path_from_parent = bssFilterParams['fss_rel_path_from_parent']))
                 return bssFiltered, bssKey
             return bssFiltered
 
@@ -698,17 +790,6 @@ class BinnedSpikeSetInfo(dj.Manual):
             fsp = FilterSpikeSetParams()
             bsi = BinnedSpikeSetInfo()
             existingSS = fsp[bssFilterParams][{'parent_bss_relative_path' : self.fetch1('bss_relative_path')}]
-#            existingSS = fsp[{k : v for k,v in bssFilterParams.items() if k in fsp.primary_key}] 
-#            try: # this does double duty checking if self is a FilteredSpikeSet already or not
-#                fsi = self.FilteredSpikeSetInfo()
-#                existingSS = fsi[bssFilterParams][self] 
-#            except AttributeError:
-#                # this is a nonrestricted version...
-#                fsi = self.__class__()
-#                # Explanation: find FilteredSpikeSets with those params, and
-#                # then of those find the ones with the matching parent
-#                # BinnedSpikeSet
-#                existingSS = fsi[bssFilterParams][{'parent_fss_rel_path_from_parent' : self.fetch('fss_rel_path_from_parent')[0]}]
 
 
             if list(existingSS['filter_description']).count(filterDescription) != len(existingSS['filter_description']):
@@ -834,14 +915,14 @@ class BinnedSpikeSetInfo(dj.Manual):
         bsPDsFiltsInd = bsParamsDsFilts.split(';')
         for filtStr in bsPDsFiltsInd:
             lambdaFilt = eval(filtStr)
-            ds = lambdaFilt(ds)
+            ds, _ = lambdaFilt(ds)
 
         # filter trials by type
         trialType = bsp[self]['trial_type'][0]
         if trialType == 'successful':
-            ds = ds.successfulTrials()
+            ds, _ = ds.successfulTrials()
         elif trialType == 'failure':
-            ds = ds.failTrials()
+            ds, _ = ds.failTrials()
 
         # filter trials by length in state
         # NOTE this is special to expecting trials to be around a state...
@@ -853,7 +934,7 @@ class BinnedSpikeSetInfo(dj.Manual):
         timeInStateArr = endStateArr - startStateArr
 
         lenSmallestTrial = bsp[self].fetch('len_smallest_trial')
-        ds = ds.filterTrials(timeInStateArr>lenSmallestTrial)
+        ds, _ = ds.filterTrials(timeInStateArr>=lenSmallestTrial)
 
         bnSpTmBounds = self.fetch('start_time','end_time',as_dict=True)[0]
         bnSpTmAlign = self.fetch('start_time_alignment', 'end_time_alignment')
@@ -897,6 +978,46 @@ class BinnedSpikeSetInfo(dj.Manual):
             for idx, (bnSp, dsName) in enumerate(zip(binnedSpikes, bSInfo['dataset_names'])):
                 bnSp.lda(bnSp.labels['stimulusMainLabel'], plot=True)
                 plt.suptitle('LDA - %s' % (dsName))
+
+    def _update(self, attrname, value=None, allowPkUpdate=False):
+        valOld = self.fetch(attrname)[0]
+        try:
+            super(BinnedSpikeSetInfo, self)._update(attrname, value, allowPkUpdate=allowPkUpdate)
+        except Exception as err:
+            raise
+        else:
+            bsi = BinnedSpikeSetInfo()
+            if attrname == 'bss_relative_path':
+                dataPath = Path(defaultParams['dataPath'])
+                bssPathOrig = Path(valOld).parent
+                bssPathNew = Path(value).parent
+
+                # we do this outer exists() check because sometimes a parent
+                # folder moved everything below it so no attempt at a move is
+                # even necessary
+                if not (dataPath / bssPathNew).exists():
+                    info = "Moving\n\n" + str(dataPath / bssPathOrig) + "\n\nto\n\n" + str(dataPath / bssPathNew)
+                    print(info)
+                    from shutil import move
+                    try:
+                        move(dataPath / bssPathOrig, dataPath / bssPathNew)
+                    except FileNotFoundError as e:
+                        print("Original path not found -- perhaps it has already been moved (though not to the new location, as that one didn't exist...)?")
+
+                # now move all those downstream BinnedSpikeSetInfos...
+                bsiChildBsiKey = bsi['bss_relative_path LIKE "%{}%"'.format(bssPathOrig)].fetch('KEY')
+
+                for bsiKey in bsiChildBsiKey:
+                    bsiHere = bsi[bsiKey]
+                    if len(bsiHere)<1:
+                        # this might occur if an inner call already changed
+                        # this bsiKey before it was reached in this outer call
+                        continue
+                    bsiOrigPath = bsiHere['bss_relative_path'][0]
+                    if bsiOrigPath.find(str(bssPathOrig)) != 0:
+                        breakpoint() # somethig weird here
+                    bsiNewPath = bssPathNew / bsiOrigPath[len(str(bssPathOrig))+1:]
+                    bsiHere._update('bss_relative_path', value=str(bsiNewPath), allowPkUpdate=True)
 
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):
@@ -992,6 +1113,7 @@ class FilterSpikeSetParams(dj.Manual):
     condition_label : varchar(50) # label used to identify conditions for trial_num_per_cond_min
     ch_filter = null : blob # filter of the channels on the binned spike set info
     ch_num : int # number of channels; useful for filtering shuffles
+    condition_num : int # number of conditions; useful for when combining conditions and matching trials
     filter_reason : enum('original', 'shuffle', 'randomSubset', 'other') # the 'original' option is for the default FSS that refers to its parent
     filter_description = null : varchar(100) # reason for filter (if not shuffle, usually)
     """
@@ -1091,6 +1213,11 @@ class GpfaAnalysisInfo(dj.Manual):
     label_use = "stimulusMainLabel" : varchar(50) # label to use for conditions
     cval_train_converged : blob # array with 1 or 0 for each crossvalidation indicating if GPFA converged
     cval_train_full_rank : blob # array with 1 or 0 for each cval indicating whether train set was full rank or not
+    max_iterations = 500 : int # max number of iterations, the default of 500 is what was in the code
+    tolerance = 1e-8 : float # tolerance for GPFA convergence--the default of 1e-8 was the default in code; what it means is defined in tolerance_type
+    tolerance_type = 'ratio' : enum('ratio', 'diff') # type of tolerance used for convergence--see below
+    ratio_final = null : blob # this represents the ratio tolerance value (change_curr/change_prev) - 1 which is < (ratio_tolerance) per crossvalidation
+    diff_final = null : blob # this represents the diff tolerance value (ll_curr-ll_prev) per crossvalidation
     """
     
     def grabGpfaResults(self, order=True, returnInfo = False, useFa = False):
@@ -1109,17 +1236,10 @@ class GpfaAnalysisInfo(dj.Manual):
         dsi = DatasetInfo()
         bsi = BinnedSpikeSetInfo()
 
-        # give some ordering here
-#        if self.fetch('fss_rel_path_from_parent').size: # not sure how to check if null...
-#            if order:
-#                gpfaPaths = (self * gap * dsi).fetch( 'gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums','dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
-#            else:
-#                gpfaPaths = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path', 'fss_rel_path_from_parent','condition_nums', 'dimensionality', 'dataset_name', as_dict=True)
-#        else:
         if order:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', order_by='dataset_id,dimensionality', as_dict=True)
         else:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', as_dict=True)
+            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', as_dict=True)
 
         for info in gpfaInfo:
             bssPath = Path(info['bss_relative_path'])
@@ -1139,13 +1259,61 @@ class GpfaAnalysisInfo(dj.Manual):
 
             conditionNum = info['condition_nums']
             numCrossvals = info['num_folds_crossvalidate']
-            relPathAndCond = (str(bssPath), str(numCrossvals), str(conditionNum))
+            import re
+            # gotta string to make it hashable, but string-ing np.array's make
+            # lists that have ' ' instead of ',', which makes them un-evalable
+            # back to a list >.> So this fixes that.
+            condNumStr = re.sub(' ', ',',str(conditionNum))
+            relPathAndCond = (str(bssPath), str(numCrossvals), condNumStr)
             if relPathAndCond not in gpfaResults:
                 # set the first element to information about this run...
                 gpfaResults[relPathAndCond] = {'condition': conditionNum}
             
             dimensionality = info['dimensionality']
             # note we're using numpy to load here
+
+            cValConv = info['cval_train_converged']
+            if np.any(cValConv == False):
+                # we're gonna rerun GPFA with a higher iteration number and
+                # also a lowered threshold so it will converge...
+                unconvergedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
+                condNums = unconvergedGpfa['condition_nums'][0]
+                gpfaRunArgsMap = dict(
+                    labelUse = unconvergedGpfa['label_use'][0],
+                    conditionNumbersGpfa = condNums,
+                    perCondGroupFiringRateThresh = unconvergedGpfa['condition_grp_fr_thresh'][0]
+                )
+                
+                expMaxIterationMaxNum = unconvergedGpfa['max_iterations']
+                tolerance = unconvergedGpfa['tolerance']
+                tolType = unconvergedGpfa['tolerance_type'][0] # remember to unpack the string
+                ratioFinal = unconvergedGpfa['ratio_final']
+                diffFinal = unconvergedGpfa['diff_final']
+                # I... don't really want to be doing this...
+                if False: #expMaxIterationMaxNum < 2000:
+                    # we'll up the iteration number to 2000 (double the now-default
+                    # of 1000) to give another chance at convergence...
+                    expMaxIterationMaxNum = 2000
+                    tolerance = 1e-8
+#                    expMaxIterationMaxNum = expMaxIterationMaxNum*4 # make sure to make it a float, not an int
+#                else:
+#                    if tolerance < 1e-6:
+#                        tolerance = tolerance*10
+#                    else:
+#                        # I'm gonna hate myself when overnight code gets stuck here, buuut...
+#                        breakpoint() # do not hate thyself
+#                if tolerance < 1e-6:
+#                    tolerance = tolerance*10
+#                else:
+#                    if expMaxIterationMaxNum < 2000:
+#                        expMaxIterationMaxNum = expMaxIterationMaxNum*4 # make sure to make it a float, not an int
+#                    else:
+#                        # I'm gonna hate myself when overnight code gets stuck here, buuut...
+#                        breakpoint() # do not hate thyself
+
+                    # for the moment we're only running if it hasn't been done at 2000 yet
+                    unconvergedGpfa.computeGpfaResults(gap[unconvergedGpfa],bsi[unconvergedGpfa], expMaxIterationMaxNum = expMaxIterationMaxNum, tolerance = tolerance, tolType = tolType, forceNewGpfaRun=True, **gpfaRunArgsMap)
+
             if not useFa:
                 print('Loading %s' % fullPath)
                 try:
@@ -1206,21 +1374,6 @@ class GpfaAnalysisInfo(dj.Manual):
                     else:
                         gpfaResLoaded = []
 
-#                faResLoadedInit = faResLoadedInit[0]
-#                faRes = faResLoadedInit['faRes']
-#                grpSpk = faResLoadedInit['groupedBalancedSpikes']
-#                assert len(grpSpk)==1, "should have only grabbed one FA condition run here..."
-#                grpSpk = grpSpk[0]
-#                gpfaResLoaded = dict(
-#                        dimOutput = faRes[0],
-#                        testInds = faRes[1],
-#                        trainInds = faRes[2],
-#                        score = faRes[3][0,:],
-#                        alignmentBins = grpSpk.alignmentBins[0],
-#                        condLabel = grpSpk.labels[labelUse][0],
-#                        binSize = grpSpk.binSize
-#                    )
-#
 
             gpfaResults[relPathAndCond].update({dimensionality : gpfaResLoaded})
 
@@ -1230,7 +1383,7 @@ class GpfaAnalysisInfo(dj.Manual):
             return gpfaResults, dict(gpfaOutPaths = gpfaOutPaths, bssPaths = bssPaths, datasetNames = datasetNames)
         return gpfaResults
 
-    def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, forceNewGpfaRun = False, useFa = False):
+    def computeGpfaResults(self, gap, bsiOrFsi, labelUse = "stimulusMainLabel", conditionNumbersGpfa = None, perCondGroupFiringRateThresh = 0.5, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio', forceNewGpfaRun = False, useFa = False):
         defaultParams = loadDefaultParams()
         dataPath = Path(defaultParams['dataPath'])
 
@@ -1271,10 +1424,21 @@ class GpfaAnalysisInfo(dj.Manual):
         # is now changed to.  Note that numConds=None actually means *all*
         # conditions, but it's unclear how many conditions each bS will have
         # (which is actually why this is not stored in the GpfaAnalysisParams
-        # table
+        # table)
         numberOfConditions = gpfaParams['num_conds']
-        if cc != 'no' and ((conditionNumbersGpfa is None and numberOfConditions != 0) or (len(conditionNumbersGpfa) != numberOfConditions)):
+        # this if statement deals with what happens when you start combining conditions
+        if cc != 'no' and ((conditionNumbersGpfa is None and numberOfConditions != 0) or ((conditionNumbersGpfa is not None) and len(conditionNumbersGpfa) != numberOfConditions)):
             breakpoint()
+            # the first parenthetical asks that if you want to use all
+            # conditions, the numberOfConditions should equal zero you want to
+            # use all the conditions (conditionNumbersGpfa is
+            # None) then your numberOfConditions should be set to 0
+            #
+            # the second statement checks that if you *don't* want all the
+            # conditions, then the number of conditions provided
+            # len(conditionNumbersGpfa) should be equal to the numberOfConditions
+            # variable. Note that len() doesn't work on None variables, so I've
+            # gotta check that it's not none again
             raise Exception("Incorrect number of conditions provided")
         gpfaPrepParamsForCall['condNums'] = conditionNumbersGpfa # if cc == 'no' else nc
         gpfaPrepParamsForCall['perConditionGroupFiringRateThresh'] = perCondGroupFiringRateThresh
@@ -1287,12 +1451,13 @@ class GpfaAnalysisInfo(dj.Manual):
         )
         gpfaCallParams = {gpfaCallParamsMap[k] : v for k,v in gpfaParams.items() if k in gpfaCallParamsMap}
         gpfaCallParams['labelUse'] = labelUse
-
+        gpfaCallParams['expMaxIterationMaxNum'] = expMaxIterationMaxNum
+        gpfaCallParams['tolerance'] = tolerance
+        gpfaCallParams['tolType'] = tolType
 
         retValsAll = []
         for key in bssKeys:
             relPath = Path(key['bss_relative_path']).parent 
-#            relPath /= Path(key['fss_rel_path_from_parent']).parent if 'fss_rel_path_from_parent' in key else ""
             gpfaRelPathFromBss = Path('gpfa') / ('params_%s' % gpfaParamsHash[:5] ) 
             fullPathToConditions = dataPath / relPath / gpfaRelPathFromBss
             binnedSpikeSet = bsiOrFsi[key].grabBinnedSpikes()
@@ -1313,20 +1478,22 @@ class GpfaAnalysisInfo(dj.Manual):
                 retValsAll.append(retVals)
 
             condPaths = retVals[-1]
-            rankConvDat = retVals[-2]
+            gpfaRunFinalDets = retVals[-2]
             condInfo = list(zip(condsUse, condPaths))
             gpfaPrepComp = retVals[0]
 
 
-            for cI, gPC, rcD in zip(condInfo, gpfaPrepComp, rankConvDat):
-                conditionNumsUsed = np.array([cI[0]]) # so it can be saved in DataJoint
+            for cI, gPC, rgfD in zip(condInfo, gpfaPrepComp, gpfaRunFinalDets):
+                conditionNumsUsed = np.array(cI[0]) # so it can be saved in DataJoint
                 conditionSavePaths = str(cI[1]) # so it can be saved in DataJoint
-                crossvalFullRankStat = np.array(rcD[0])
-                crossvalConvergeStat = np.array(rcD[1])
+                crossvalFullRankStat = np.array(rgfD[0])
+                crossvalConvergeStat = np.array(rgfD[1])
+                crossvalFinalRatio = np.array(rgfD[2])
+                crossvalFinalDiff = np.array(rgfD[3])
 
                 gpfaHash = hashlib.md5(str(gPC).encode('ascii')).hexdigest()
                 try:
-                    self.insert1(dict(
+                    newGaiRow = dict(
                         **key,
                         **gapKey,
                         gpfa_rel_path_from_bss = str(Path(conditionSavePaths).relative_to(dataPath / relPath)), 
@@ -1335,12 +1502,31 @@ class GpfaAnalysisInfo(dj.Manual):
                         condition_grp_fr_thresh = perCondGroupFiringRateThresh,
                         label_use = labelUse,
                         cval_train_converged = crossvalConvergeStat,
-                        cval_train_full_rank = crossvalFullRankStat
-                    ))
+                        cval_train_full_rank = crossvalFullRankStat,
+                        max_iterations = int(expMaxIterationMaxNum),
+                        tolerance = float(tolerance),
+                        tolerance_type = tolType,
+                        ratio_final = crossvalFinalRatio,
+                        diff_final = crossvalFinalDiff,
+                    )
+                    self.insert1(newGaiRow)
                 except IntegrityError as e:
                     if str(e).find("UNIQUE constraint failed") != -1 and forceNewGpfaRun:
-                        print("Be careful using this... GPFA was forced to run again without changing recorded parameters--could result in data inconsistency issues!")
+                        print("Be careful using this... GPFA was forced to run again without changing recorded parameters--could result in data consistency issues!")
+                        # define it by its class to avoid the relation
+                        # disappearing as the database changes... this has
+                        # happened before >.>
+                        gaiToUpdate = self.__class__()[{k:v for k,v in newGaiRow.items() if k in self.fetch('KEY')[0].keys()}]
+                        gaiValsOriginal = gaiToUpdate.fetch(as_dict=True)
+                        newValChecks = [(ky,val==gaiValsOriginal[0][ky]) for ky,val in newGaiRow.items() if ky in gaiValsOriginal[0].keys() and ky not in self.fetch('KEY')[0].keys()]
+                        for vl in newValChecks:
+                            if not np.all(vl[1]):
+                                gaiToUpdate._update(vl[0], value = newGaiRow[vl[0]])
                     else:
+                        # check if this could happen because you're trying to
+                        # insert something that's there with no changes to
+                        # uniqueness...
+                        breakpoint()
                         pass
 #                        raise e
         return retValsAll
@@ -1393,7 +1579,7 @@ class GpfaAnalysisInfo(dj.Manual):
         gaiKeys = self.fetch('KEY') # always a dict
 
         if not quickDelete:
-            info = "About to delete %d entries" % len(gaiKeys)
+            info = "About to delete %d entries *and their associated GPFA files*" % len(gaiKeys)
             prompt = "Are you sure?"
             response = userChoice(prompt, info, choices=("yes", "no"), default="no")
             if response == "yes":

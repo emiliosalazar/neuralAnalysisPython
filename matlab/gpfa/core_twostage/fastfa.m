@@ -108,7 +108,7 @@ function [estParams, LL] = fastfa(X, zDim, varargin)
       LLbase = LLi;
     elseif (LLi < LLold)
       disp('VIOLATION');
-    elseif ((LLi-LLbase) < (1+tol)*(LLold-LLbase))
+    elseif ((LLi-LLbase) <= (1+tol)*(LLold-LLbase))
       break;
     end
   end
