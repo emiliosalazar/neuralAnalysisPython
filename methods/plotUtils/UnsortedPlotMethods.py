@@ -174,8 +174,9 @@ def plotMetricVsExtractionParams(descriptions, metricDict, splitNameDesc, labelF
         metricValSplit2 = grpSplits[1]
         
         plt.figure()
-        plt.title('%s: %s vs %s' % ( metricName, splitNames[0], splitNames[1] ))
-        plt.suptitle(supTitle)
+        plt.title('{}'.format( metricName))
+        supTitleAll = supTitle + ' {} vs {}'.format( splitNames[0], splitNames[1] )
+        plt.suptitle(supTitleAll)
         ax=plt.subplot(1,1,1)
         unLabForCol, colNum = np.unique(labelForColSp, return_inverse=True, axis=0)
         unLabForTup, mcNum = np.unique(labelForMarkerSp, return_inverse=True, axis=0)
@@ -469,18 +470,26 @@ def plotAllVsAllExtractionParamShift(descriptions, metricDict, splitNameDesc, la
         for metric2Num, (metric2Name, metric2Val) in enumerate(metricDict.items()):
 
             if metric2Num > metric1Num:
-                metric1ValSplitUnsorted, grp1Sort = splitMetricVals(metric1Val, colSplit, unLabForSplit, groupItemSplits)
+                metric1ValSplitUnsorted, grpSort = splitMetricVals(metric1Val, colSplit, unLabForSplit, groupItemSplits)
                 metric1ValSplit = np.array(metric1ValSplitUnsorted)[orderForLabels].squeeze()
 
                 metric2ValSplitUnsorted, grp2Sort = splitMetricVals(metric2Val, colSplit, unLabForSplit, groupItemSplits)
                 metric2ValSplit = np.array(metric2ValSplitUnsorted)[orderForLabels].squeeze()
 
 
-                if grp1Sort != grp2Sort:
+                if grpSort != grp2Sort:
                     breakpoint() # erm...
-                labelForColSp = np.array(labelForCol)[colSplit == unLabForSplit[grp1Sort]]
-                labelForMarkerSp = np.array(labelForMarker)[colSplit == unLabForSplit[grp1Sort]]
-                descriptionsSp = np.array(descriptions)[colSplit == unLabForSplit[grp1Sort]]
+#                labelForColSp = np.array(labelForCol)[colSplit == unLabForSplit[grpSort]]
+#                labelForMarkerSp = np.array(labelForMarker)[colSplit == unLabForSplit[grpSort]]
+                descriptionsSp = np.array(descriptions)[colSplit == unLabForSplit[grpSort]]
+#
+
+                labelForColSpUnsort, _ = splitMetricVals(labelForCol, colSplit, unLabForSplit, groupItemSplits)
+                labelForColsSp = np.array(labelForColSpUnsort)[orderForLabels].squeeze()
+
+                labelForMarkerSpUnsort, _ = splitMetricVals(labelForMarker, colSplit, unLabForSplit, groupItemSplits)
+                labelForMarkersSp = np.array(labelForMarkerSpUnsort)[orderForLabels].squeeze()
+
 #            try:
 #                mVl1Conc = np.concatenate(metric1Val, axis=0)
 #            except ValueError:
@@ -514,25 +523,63 @@ def plotAllVsAllExtractionParamShift(descriptions, metricDict, splitNameDesc, la
                 ax=plt.subplot(1,1,1)
 
 
-                [plt.arrow(x, y, dx, dy) for x,y,dx,dy in zip(xStarts.flat, yStarts.flat, xArrowLengths.flat, yArrowLengths.flat)]
-#                [ax.annotate("", xy = (xE,yE), xytext = (xS, yS), arrowprops=dict(arrowstyle="->")) for xS,yS,xE,yE in zip(xStarts.flat, yStarts.flat, xEnds.flat, yEnds.flat)]
+#                [plt.arrow(x, y, dx, dy) for x,y,dx,dy in zip(xStarts.flat, yStarts.flat, xArrowLengths.flat, yArrowLengths.flat)]
+                [ax.annotate("", xy = (xE,yE), xytext = (xS, yS), arrowprops=dict(arrowstyle="->")) for xS,yS,xE,yE in zip(xStarts.flat, yStarts.flat, xEnds.flat, yEnds.flat)]
             
-                unLabForCol, colNum = np.unique(labelForColSp, return_inverse=True, axis=0)
-                unLabForTup, mcNum = np.unique(labelForMarkerSp, return_inverse=True, axis=0)
-                for m1Val, m2Val in zip(metric1ValSplit, metric2ValSplit):
+                # mmk a trick little way to make sure colors and markers stay
+                # the same depending on the label, while also allowing colors
+                # and markers from each split to be split-specific
+                # 1) we first concatenate all the labels together
+                labelForMarkerConc = np.concatenate(labelForMarkersSp)
+                labelForColorConc = np.concatenate(labelForColsSp)
+                # 2) we then find the unique values that exist for each
+                labelForMarkerUnique = np.unique(labelForMarkerConc)
+                labelForColorUnique = np.unique(labelForColorConc)
+                # 3) below, we'll now concatenate these unique values to any
+                # unique search, to make sure each unique value retains its
+                # position/order, even if its not present in a particular
+                # split, and then make sure to boot the first [length unique]
+                # from the inverse search so the sizes are correct
+
+                scPts = []
+                for m1Val, m2Val, labColors, labMrkrs in zip(metric1ValSplit, metric2ValSplit, labelForColsSp, labelForMarkersSp):
+
+                    # look at above comment 3) to understand this concatenation
+                    # before unique and why we ignore the beginning of colNum
+                    # and mcNum
+                    unLabForCol, colNum = np.unique(np.concatenate([labelForColorUnique, labColors]), return_inverse=True, axis=0)
+                    unLabForTup, mcNum = np.unique(np.concatenate([labelForMarkerUnique, labMrkrs]), return_inverse=True, axis=0)
+                    colNum = colNum[len(labelForColorUnique):]
+                    mcNum = mcNum[len(labelForMarkerUnique):]
 
 #                    if mVl1Conc.size != mVl2Conc.size:
 #                        # some small cases have values broken down even more than just
 #                        # by-condition, so they don't line up well with the
 #                        # by-condition ones; I'm skipping these for now
 #                        continue
-                    scPts = [ax.scatter(m1, m2, label=desc, color=colorsUse[colN,:], marker=markerCombos[mcN]) for m1, m2, desc, colN, mcN in zip(m1Val, m2Val, descriptionsSp, colNum, mcNum)]
+                    scPts.append([ax.scatter(m1, m2, label=desc, color=colorsUse[colN,:], marker=markerCombos[mcN]) for m1, m2, desc, colN, mcN in zip(m1Val, m2Val, descriptionsSp, colNum, mcNum)])
 
+                # this is a little opaque--basically, scPts is a list of lists,
+                # where each sublist is a handle to the plots of a certain
+                # grouping; we want the handles to the plotswhere *all* the
+                # datasets are present--i.e. to the largest grouping; that's
+                # what's in grpSort. But grpSort has been shuffled around
+                # based on the orderForLabels, so this serves to find where it
+                # has ended up
+                scPts = list(np.array(scPts)[(orderForLabels==grpSort).squeeze()].squeeze())
+
+                # apparently running np.array() on a list that has a mix of
+                # strings and np.array(nan) types results in the nan being cast
+                # to the string 'nan', so this is what I search for here to
+                # remove the nans...
+                unLabForCol = unLabForCol[unLabForCol != 'nan']
                 if metric1ValSplit.shape[1] > 2*unLabForCol.shape[0]:
                     colLegElem = [Patch(facecolor=colorsUse[colN, :], label=unLC) for colN, unLC in enumerate(unLabForCol)]
                 else:
                     colLegElem = []
 
+                # see above comment on unLabForCol
+                unLabForTup = unLabForTup[unLabForTup != 'nan']
                 if metric1ValSplit.shape[1] > 2*unLabForTup.shape[0]:
                     colGray = [0.5,0.5,0.5]
                     mrkLegElem = [Line2D([0], [0], marker=markerCombos[mcN], label=unLM, color='w', markerfacecolor=colGray, markersize=7) for mcN, unLM in enumerate(unLabForTup)]
