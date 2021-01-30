@@ -132,7 +132,7 @@ class Dataset():
             self.stateNames = stateNames[None, :]
             
             self.kinematics = None
-        elif preprocessor is 'Emilio':
+        elif preprocessor == 'Emilio':
             spikesArrayTrlChanTm = [spks for spks in annots['S']['spikes'][0]]
             
             # note that the [:,None].T part is to make the shape the same as Erinn's preprocessing above...
@@ -170,6 +170,174 @@ class Dataset():
             
             self.stateNames = annots['S']['stateNames'][0,0]
             self.kinematics = None
+
+        elif preprocessor == "EmilioJoystick":
+            from methods.GeneralMethods import loadDefaultParams
+            from methods.MatFileMethods import LoadMatFile
+            params = loadDefaultParams()
+            trlCodes = LoadMatFile(params['smithLabTrialCodes'])
+
+            # here we check if I accidentally subtracted 10000 from the
+            # position values instead subtracting the positions from 10000 in
+            # my code... thus sending a negative value... to uint16... which
+            # then is represented by adding UINT16_MAX+1 (or potentially +2?)
+            if np.any([np.any(evt[evt[:,1]>50000,1:]) for evt in annots['dat']['event'][0]]):
+                cursorPosXandY = [evt[evt[:,1]>50000,1:] for evt in annots['dat']['event'][0]]
+            else:
+                # well let's hope nothing happens within 9000-11000 besides
+                # these... (also that there's never a >1000 cursor movement...
+                # but... I don't think there can be...?
+                cursorPosXandY = [evt[(evt[:,1]>9000) & (evt[:,1]<11000),1:] for evt in annots['dat']['event'][0]]
+            # for datasets that have the CURSOR_ON code, we don't have to do
+            # anything else to encode the trial has started
+            sToMsConv = 1000;
+            recHz = 30000 # recording frequency in Matt's rig
+            cursorOnCode = trlCodes['codesStruct']['CURSOR_ON']
+            if np.any([np.any(evt[:,1]==cursorOnCode) for evt in annots['dat']['event'][0]]):
+                statesPresentedOrig = [cds[:,1:].T for cds in annots['dat']['trialcodes'][0]]
+                statesPresentedWithMs = [cds*np.array([1,sToMsConv])[:,None] for cds in statesPresentedOrig]
+                trlStMs = [cds[1,0] for cds in statesPresentedWithMs]
+                statesPresentedWithMsTmInTrial = [(cds - np.array([0,cds[1,0]])[:,None]) for cds in statesPresentedWithMs]
+            else:
+                stOfMove = [crsPos[0,1]/recHz if crsPos.size>0 else None for crsPos in cursorPosXandY]
+                statesPresentedNoMove = [cds[:,1:].T for cds in annots['dat']['trialcodes'][0]]
+                statesPresentedWithMove = [np.insert(cds, (cds[1,:]>tm).nonzero()[0][0], [cursorOnCode,tm], 1) if tm is not None else cds for cds, tm in zip(statesPresentedNoMove, stOfMove)]
+                statesPresentedWithMoveMs = [cds*np.array([1,sToMsConv])[:,None] for cds in statesPresentedNoMove]
+                trlStMs = [cds[1,0] for cds in statesPresentedWithMoveMs]
+                statesPresentedWithMsTmInTrial = [(cds - np.array([0,cds[1,0]])[:,None]) for cds in statesPresentedWithMoveMs]
+
+
+            self.statesPresented = statesPresentedWithMsTmInTrial
+
+            numChans = annots['dat']['channels'][0,0].shape[0]
+            weirdIntermediate = np.stack([[ (np.hstack((trl['firstspike'][0], trl['spiketimesdiff'][:,0])).cumsum()[np.all(trl['spikeinfo'] == chan, axis=1)][:, None]/recHz*sToMsConv - trlSt).astype('uint32') for chan in trl['channels']] for trl, trlSt in zip(annots['dat'][0], trlStMs)])
+
+            with np.nditer(weirdIntermediate, ['refs_ok'], ['readwrite']) as iterRef:
+                for valIn in iterRef:
+                    valIn[()] = valIn[()].T
+                    
+            self.spikeDatTimestamps = weirdIntermediate
+            self.isi = np.empty(self.spikeDatTimestamps.shape, dtype=object) # initialize to right size
+            
+            with np.nditer([self.isi, self.spikeDatTimestamps], ['refs_ok'], [['writeonly'], ['readonly']]) as iterRef:
+                for valOut, valIn in iterRef:
+                    if valIn[()].size != 0:
+                        valOut[()] = 1/np.diff(valIn[()])
+            
+            
+            self.spikeDatSort = np.stack([ch[:,1] for ch in annots['dat']['channels'][0]])
+            
+            # NOTE the targetAgle misspelling is unfortunately necessary
+            # because the code for 'n' kept not passing through to the nev for
+            # some reason...
+            trlDat = [trl['trial'][0,0] for trl in annots['dat']['params'][0]]
+            mrkAngle = np.vstack([trl['targetAngle'][0,0] if 'targetAngle' in trl.dtype.names else trl['targetAgle'][0,0] for trl in trlDat])
+            for ind, ang in enumerate(mrkAngle):
+                try:
+                    newAngInt = int(ang)
+                    mrkAngle[ind] = newAngInt
+                except ValueError:
+                    for indAngStr in range(1,len(ang[0])):
+                        try:
+                            int(ang[0][:indAngStr])
+                            newAngInt = int(ang[0][:indAngStr])
+                        except ValueError:
+                            break
+                    mrkAngle[ind] = newAngInt
+
+            self.markerTargAngles = mrkAngle
+
+            self.trialStatuses = np.stack([np.any(res==150) for res in annots['dat']['result'][0]]).astype('int8')
+            
+            self.spikeDatChannels = np.stack(annots['dat']['channels'].squeeze())[:,:,0]
+            
+            
+            self.stateNames = trlCodes['codesArray']
+
+            kinematicsTemp = [np.vstack((cPXY[0:-1:2, 0], cPXY[1::2, 0], cPXY[0:-1:2, 1]/recHz*sToMsConv-trlSt)).T for cPXY, trlSt in zip(cursorPosXandY, trlStMs)]
+            kinematicsCont = np.empty((len(kinematicsTemp),), dtype='object')
+            for ind,kin in enumerate(kinematicsTemp):
+                kinematicsCont[ind] = kin
+
+            # NOTE the following is meant to correct or missing codes
+            behMatPath = dataMatPath.parent.parent / 'allCodes.mat'
+            try:
+                behDatForKin = LoadDataset(behMatPath)['allCodes'].squeeze()
+                # since these aren't uint32, the equivalent of checking for >50000
+                # is actually checking for the negative value...
+                self.kinematicsCenter = [0, 0]
+                if np.any([np.any(cds['codes'][0,0][:,0]<-9000) for cds in behDatForKin]):
+                    cursorPosXandYFromBeh = [cds['codes'][0,0][cds['codes'][0,0][:,0]<-9000,:] for cds in behDatForKin]
+                else:
+                    # well let's hope nothing happens within 9000-11000 besides
+                    # these... (also that there's never a >1000 cursor movement...
+                    # but... I don't think there can be...?
+                    #
+                    # Also note the inversion of the coordinates, which will
+                    # allow us to just subtract the offshift later to get the
+                    # right coordinates
+                    cursorPosXandYFromBeh = [(cds['codes'][0,0][(cds['codes'][0,0][:,0]>9000) & (cds['codes'][0,0][:,0]<11000),:])*np.array([-1, 1]) for cds in behDatForKin]
+
+                cursPosXandYNevTimesInMs = [cPXY[:, 1]/recHz*sToMsConv - trlSt for cPXY, trlSt in zip(cursorPosXandY, trlStMs)]
+                cursPosXandYBehTimesInMs = [cPXY[:, 1]*sToMsConv for cPXY in cursorPosXandYFromBeh]
+
+                # NOTE aaaactually... I think I determined that the timings here are
+                # actually pretty nicely aligned... syooo... I'm just going to
+                # replace the NEV cursor movements with the ones in the
+                # behavioral file. Kthx hopefully nothing breaks.
+                #
+                # BUT! Sometimes I'll record some trials before/after I was
+                # neural recording I guess, so I need to use the timings to
+                # check which ones to keep...
+                cursPosXandYUse = []
+                indStBeh = 0
+                for nevTrl in cursPosXandYNevTimesInMs:
+                    if nevTrl.size == 0:
+                        # I can see a corner case bug here where there was only
+                        # a brief cursor motion, which the NEV missed, but the
+                        # behavior didn't--here I'm just gonna throw that away.
+                        # But with a case like that I think I wouldn't care
+                        # much for the trial anyway, syo...
+                        cursPosXandYUse.append(nevTrl)
+                    else:
+                        trialFound = False
+                        for indBeh in list(range(indStBeh, len(cursPosXandYBehTimesInMs))) + list(range(indStBeh)):
+                            behTrl = cursPosXandYBehTimesInMs[indBeh]
+                            if behTrl.size == 0:
+                                continue
+                            # all times must be within 3ms... which given the 100Hz frame rate
+                            # hopefully means we won't accidentally pick some overlapping
+                            # frames or stuff...
+                            if np.all([np.abs(nvTm-behTrl).min() < 3 for nvTm in nevTrl]):
+                                cursPosXandYUse.append(cursorPosXandYFromBeh[indBeh])
+                                trialFound = True
+                                break
+                        if not trialFound:
+                            # probably an indication that the 3ms similarity
+                            # is too conservative...
+                            breakpoint()
+                        else:
+                            # when behavior and NEV are in order, this speeds
+                            # up finding the correct trial by assuming that a
+                            # correct trial in the behavior data for an NEV
+                            # data will not occur before a previous correct
+                            # trial. But at the same time if something weird
+                            # happens it also loops back around from the start
+                            # as well... but since that's weird I'm breakpointing
+                            if indBeh < indStBeh:
+                                breakpoint()
+                            indStBeh = indBeh
+
+                reqShift = np.array([-10000, -10000])
+                kinematicsTemp = [np.vstack((cPXY[0:-1:2, 0]-reqShift[0], cPXY[1::2, 0]-reqShift[1], cPXY[0:-1:2, 1]*sToMsConv)).T if cPXY.size>0 else np.array([]) for cPXY in cursPosXandYUse]
+                kinematicsCont = np.empty((len(kinematicsTemp),), dtype='object')
+                for ind,kin in enumerate(kinematicsTemp):
+                    kinematicsCont[ind] = kin
+            except OSError:
+                raise Exception('Remember to upload the relevate allCodes behavior file!')
+
+            self.kinematics = kinematicsCont
+
             
         allComboTimestamps = np.concatenate(self.spikeDatTimestamps.flatten(), axis=1)
         if np.any(allComboTimestamps < 0):
