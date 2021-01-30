@@ -368,17 +368,6 @@ data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
               'spikeIdMethod' : 'nas',
               'nasUsed' : 'UberNet_N50_L1',
               'nasGamma' : 0.2});
-data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
-              'area' : 'V4',
-              'path': Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
-              'keyStates' : {
-                  'delay': 'Blank Before',
-                  'stimulus': 'Target',
-                  'action' : 'Success'
-              },
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio',
-              'spikeIdMethod' : 'handSort'});
 data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
@@ -390,19 +379,6 @@ data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
               'spikeIdMethod' : 'handSort'});
-data.append({'description': 'Pepe 2016-02-02 V4 NAS - cuedAttn',
-              'area' : 'V4',
-              'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort1_V4/'),
-              'keyStates' : {
-                  'delay': 'Blank Before',
-                  'stimulus': 'Target',
-                  'action' : 'Success'
-              },
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio',
-              'spikeIdMethod' : 'nas',
-              'nasUsed' : 'UberNet_N50_L1',
-              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-02 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort2_PFC/'),
@@ -416,17 +392,6 @@ data.append({'description': 'Pepe 2016-02-02 PFC NAS - cuedAttn',
               'spikeIdMethod' : 'nas',
               'nasUsed' : 'UberNet_N50_L1',
               'nasGamma' : 0.2});
-data.append({'description': 'Pepe 2016-02-03 V4 - cuedAttn',
-              'area' : 'V4',
-              'path': Path('cuedAttention/Pepe/2016/02/03/Array1_V4/'),
-              'keyStates' : {
-                  'delay': 'Blank Before',
-                  'stimulus': 'Target',
-                  'action' : 'Success'
-              },
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio',
-              'spikeIdMethod' : 'handSort'});
 data.append({'description': 'Pepe 2016-02-03 PFC - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/03/Array2_PFC/'),
@@ -438,35 +403,9 @@ data.append({'description': 'Pepe 2016-02-03 PFC - cuedAttn',
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
               'processor': 'Emilio',
               'spikeIdMethod' : 'handSort'});
-data.append({'description': 'Pepe 2016-02-03 V4 NAS - cuedAttn',
-              'area' : 'V4',
-              'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort1_V4/'),
-              'keyStates' : {
-                  'delay': 'Blank Before',
-                  'stimulus': 'Target',
-                  'action' : 'Success'
-              },
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio',
-              'spikeIdMethod' : 'nas',
-              'nasUsed' : 'UberNet_N50_L1',
-              'nasGamma' : 0.2});
 data.append({'description': 'Pepe 2016-02-03 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort2_PFC/'),
-              'keyStates' : {
-                  'delay': 'Blank Before',
-                  'stimulus': 'Target',
-                  'action' : 'Success'
-              },
-              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
-              'processor': 'Emilio',
-              'spikeIdMethod' : 'nas',
-              'nasUsed' : 'UberNet_N50_L1',
-              'nasGamma' : 0.2});
-data.append({'description': 'Pepe 2016-02-04 V4 NAS - cuedAttn',
-              'area' : 'V4',
-              'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort1_V4/'),
               'keyStates' : {
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
@@ -490,9 +429,9 @@ data.append({'description': 'Pepe 2016-02-04 PFC NAS - cuedAttn',
               'spikeIdMethod' : 'nas',
               'nasUsed' : 'UberNet_N50_L1',
               'nasGamma' : 0.2});
-data.append({'description': 'Pepe 2016-02-05 V4 NAS - cuedAttn',
-              'area' : 'V4',
-              'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort1_V4/'),
+data.append({'description': 'Pepe 2016-02-05 PFC NAS - cuedAttn',
+              'area' : 'PFC',
+              'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort2_PFC/'),
               'keyStates' : {
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
@@ -503,9 +442,155 @@ data.append({'description': 'Pepe 2016-02-05 V4 NAS - cuedAttn',
               'spikeIdMethod' : 'nas',
               'nasUsed' : 'UberNet_N50_L1',
               'nasGamma' : 0.2});
-data.append({'description': 'Pepe 2016-02-05 PFC NAS - cuedAttn',
+data.append({'description': 'Satchel A1 2020-12-10 PFC NAS - cursorMove',
               'area' : 'PFC',
-              'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort2_PFC/'),
+              'path': Path('cursorMove/Satchel/2020/12/10/Array1_PFC/'),
+              'keyStates' : {
+                  'delay': 'FIX_MOVE',
+                  'stimulus': 'STIM_ON',
+                  'action' : 'CURSOR_POS'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'EmilioJoystick',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Satchel A2 2020-12-10 PFC NAS - cursorMove',
+              'area' : 'PFC',
+              'path': Path('cursorMove/Satchel/2020/12/10/Array2_PFC/'),
+              'keyStates' : {
+                  'delay': 'FIX_MOVE',
+                  'stimulus': 'STIM_ON',
+                  'action' : 'CURSOR_POS'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'EmilioJoystick',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Satchel A1 2020-12-22 PFC NAS - cursorMove',
+              'area' : 'PFC',
+              'path': Path('cursorMove/Satchel/2020/12/22/Array1_PFC/'),
+              'keyStates' : {
+                  'delay': 'TARG_OFF',
+                  'stimulus': 'TARG_ON',
+                  'action' : 'CURSOR_ON'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'EmilioJoystick',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Satchel A2 2020-12-22 PFC NAS - cursorMove',
+              'area' : 'PFC',
+              'path': Path('cursorMove/Satchel/2020/12/22/Array2_PFC/'),
+              'keyStates' : {
+                  'delay': 'TARG_OFF',
+                  'stimulus': 'TARG_ON',
+                  'action' : 'CURSOR_ON'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'EmilioJoystick',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Satchel A1 2021-01-15 PFC NAS - cursorMove no help',
+              'area' : 'PFC',
+              'path': Path('cursorMove/Satchel/2021/01/15/Array1_PFC/'),
+              'keyStates' : {
+                  'delay': 'TARG_OFF',
+                  'stimulus': 'TARG_ON',
+                  'action' : 'CURSOR_ON'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN','CURSOR_POS'],
+              'processor': 'EmilioJoystick',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Satchel A2 2021-01-15 PFC NAS - cursorMove no help',
+              'area' : 'PFC',
+              'path': Path('cursorMove/Satchel/2021/01/15/Array2_PFC/'),
+              'keyStates' : {
+                  'delay': 'TARG_OFF',
+                  'stimulus': 'TARG_ON',
+                  'action' : 'CURSOR_ON'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN','CURSOR_POS'],
+              'processor': 'EmilioJoystick',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+
+
+
+
+
+
+# V4
+data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'handSort'});
+data.append({'description': 'Pepe 2016-02-02 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Pepe 2016-02-03 V4 - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/03/Array1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'handSort'});
+data.append({'description': 'Pepe 2016-02-03 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Pepe 2016-02-04 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort1_V4/'),
+              'keyStates' : {
+                  'delay': 'Blank Before',
+                  'stimulus': 'Target',
+                  'action' : 'Success'
+              },
+              'alignmentStates': ['SOUND_CHANGE','ALIGN'],
+              'processor': 'Emilio',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'UberNet_N50_L1',
+              'nasGamma' : 0.2});
+data.append({'description': 'Pepe 2016-02-05 V4 NAS - cuedAttn',
+              'area' : 'V4',
+              'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort1_V4/'),
               'keyStates' : {
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
@@ -566,22 +651,26 @@ for dataUse in data[dataUseLogical]:
     
     if dataUse['processor'] == 'Erinn':
         removeSort = np.array([31, 0])
-#    elif dataUse['processor']  == 'Emilio':
-#        breakpoint(); # we pause here until I know that my M1/PMd split is happening correctly
+    elif dataUse['processor']  == 'EmilioJoystick':
+        removeSort = np.array([255])
     else:
         removeSort = np.array([])
 
     if dataDillPath.exists():
-        print('loading dataset ' + dataUse['description'])
-        with dataDillPath.open(mode='rb') as datasetDillFh:
-            datasetHere = pickle.load(datasetDillFh)
-#        setattr(datasetHere, 'keyStates', dataUse['keyStates'])
+        continue
+#        print('loading dataset ' + dataUse['description'])
+#        with dataDillPath.open(mode='rb') as datasetDillFh:
+#            datasetHere = pickle.load(datasetDillFh)
+##        if 'stateWithAngleName' in dataUse:
+##            setattr(datasetHere, 'stateWithAngleName', dataUse['stateWithAngleName'])
+##        else:
+##            setattr(datasetHere, 'stateWithAngleName', None)
 #        with dataDillPath.open(mode='wb') as datasetDillFh:
 #            pickle.dump(datasetHere, datasetDillFh)
-            
+#        continue 
     else:
         print('processing dataset ' + dataUse['description'])
-        datasetHere = Dataset(dataMatPath, dataUse['processor'], notChan = removeSort, checkNumTrls=checkNumTrls, metastates = dataUse['alignmentStates'], keyStates = dataUse['keyStates'], stateWithAngleName = dataUse['stateWithAngleName'] if 'stateWithAngleName' in dataUse else None)
+        datasetHere = Dataset(dataMatPath, dataUse['processor'], metastates = dataUse['alignmentStates'], keyStates = dataUse['keyStates'], stateWithAngleName = dataUse['stateWithAngleName'] if 'stateWithAngleName' in dataUse else None)
 
         
         # first, removed explicitly ignored channels
@@ -609,6 +698,7 @@ for dataUse in data[dataUseLogical]:
         dataDillPath.parent.mkdir(parents=True, exist_ok = True)
         with dataDillPath.open(mode='wb') as datasetDillFh:
             pickle.dump(datasetHere, datasetDillFh)
+        breakpoint()
 
     datasetHash = datasetHere.hash().hexdigest()
     # do some database insertions here
