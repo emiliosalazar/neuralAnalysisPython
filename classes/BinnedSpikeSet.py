@@ -917,6 +917,35 @@ class BinnedSpikeSet(np.ndarray):
         
         return ldaModel
     
+    def decode(self, labels=None, trainFrac = 0.75, plot=True):
+        # this is going to use a Gaussian naive Bayes classifier to try and
+        # predict the labels of a held out set...
+        from sklearn.naive_bayes import GaussianNB
+
+        if labels is None:
+            labels = self.labels['stimulusMainLabel']
+
+#        for lbNum, lab in enumerate(labels):
+#            lbMn.append(1)
+
+        idxUse = np.arange(self.shape[0])
+        tmAvgBins = self.timeAverage()
+        trls, chans = tmAvgBins.shape # trials are samples, channels are features
+
+        randomizedIndOrder = np.random.permutation(idxUse)
+        trainInds = randomizedIndOrder[:round(trainFrac*trls)]
+        testInds = randomizedIndOrder[round(trainFrac*trls):]
+
+        bayesClassifier = GaussianNB()
+        bayesClassifier.fit(tmAvgBins[trainInds], labels[trainInds])
+
+        testLabels = labels[testInds]
+
+        predVals = bayesClassifier.predict(tmAvgBins[testInds])
+        accuracy = (predVals == testLabels.squeeze()).sum()/predVals.shape[0]
+
+        return accuracy
+
     def numberOfDimensions(self, labels=None, title='', maxDims = None, baselineSubtract = False, plot=True):
         if labels is not None:
             idxUse = self.balancedTrialInds(labels)
