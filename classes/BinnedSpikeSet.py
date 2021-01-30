@@ -706,7 +706,68 @@ class BinnedSpikeSet(np.ndarray):
         return newBinnedSpikeSet
         
 #%% Analysis methods
-    def pca(self, baselineSubtract = False, labels = None, crossvalid=True, n_components = None, plot = False):
+    def computeCosTuningCurves(self, label='stimulusMainLabel', plot=False):
+        labels = self.labels['stimulusMainLabel']
+        groupedSpikes, uniqueTargAngle = self.groupByLabel(labels)
+        if any(np.abs(uniqueTargAngle>7)): # dumb way to check if radians by seeing if anything > 2*pi...
+            uniqueTargAngle = uniqueTargAngle/180*np.pi
+
+        targTmAvgList = [grpSp.convertUnitsTo('Hz').timeAverage().trialAverage() for grpSp in groupedSpikes]
+        targTmAndTrlSpkAvgArr = np.stack(targTmAvgList).view(BinnedSpikeSet)
+        
+        targAvgNumSpks = targTmAndTrlSpkAvgArr
+        cosTuningCurveParams = {}
+        cosTuningCurveParams['targAvgNumSpks'] = targAvgNumSpks
+
+        predictors = np.concatenate((np.ones_like(uniqueTargAngle), np.sin(uniqueTargAngle), np.cos(uniqueTargAngle)), axis=1)
+        out = [np.linalg.lstsq(predictors, targAvgNumSpks[:, chan, None], rcond=None)[0] for chan in range(targAvgNumSpks.shape[1])]
+        
+        paramsPerChan = np.stack(out).squeeze()
+        thBestPerChan = np.arctan2(paramsPerChan[:, 1], paramsPerChan[:, 2])
+        modPerChan = np.sqrt(pow(paramsPerChan[:,2], 2) + pow(paramsPerChan[:,1], 2))
+        bslnPerChan = paramsPerChan[:, 0]
+        
+        cosTuningCurveParams['thBestPerChan'] = thBestPerChan
+        cosTuningCurveParams['modPerChan'] = modPerChan
+        cosTuningCurveParams['bslnPerChan'] = bslnPerChan
+
+        if plot:
+            from methods.plotUtils.ScatterBar import scatterBar
+
+            fig, ax = plt.subplots(1,3)
+
+            # in the following we grab the 0th third index because those are
+            # meant to be bars per group, but there's only one bar per group
+            # here!
+            scatterXY, _ = scatterBar(thBestPerChan)
+
+            ax[0].scatter(*(scatterXY[:, :, 0].T))
+            ax[0].set_title('$\\theta$ pref')
+            ax[0].set_ylabel('$\\theta$')
+
+            scatterXY, _ = scatterBar(modPerChan)
+
+            ax[1].scatter(*(scatterXY[:, :, 0].T))
+            ax[1].set_title('modulations')
+            ax[1].set_ylabel('FR')
+
+            scatterXY, _ = scatterBar(bslnPerChan)
+
+            ax[2].scatter(*(scatterXY[:, :, 0].T))
+            ax[2].set_title('baselines')
+            ax[2].set_ylabel('FR')
+
+            fig.tight_layout()
+
+
+        
+        angs = np.linspace(np.min(uniqueTargAngle), np.min(uniqueTargAngle)+2*np.pi)
+        cosTuningCurves = np.stack([chBs + chMod*np.cos(chTh-angs) for chBs, chMod, chTh in zip(bslnPerChan, modPerChan, thBestPerChan)])
+        
+        cosTuningCurveParams['tuningCurves'] = cosTuningCurves
+        
+        return cosTuningCurveParams
+
         if n_components is None:
             if self.shape[0] < self.shape[1]:
                 print("PCA not doable with so few trials")
