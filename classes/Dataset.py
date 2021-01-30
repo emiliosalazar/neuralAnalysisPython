@@ -19,7 +19,7 @@ class Dataset():
                          [56,108,176],[240,2,127],[191,91,23],[102,102,102]])/255
     colorsetMayavi = [tuple(col) for col in colorset]
     
-    def __init__(self, dataMatPath, preprocessor, notChan=None, checkNumTrls=0.1, metastates = [], keyStates = [], stateWithAngleName = 'ReachTargetAppear'):
+    def __init__(self, dataMatPath, preprocessor, metastates = [], keyStates = [], stateWithAngleName = None):
         print("loading data")
         annots = LoadDataset(dataMatPath)
         print("data loaded")
@@ -349,6 +349,7 @@ class Dataset():
         
 
         self.id = None
+        self.stateWithAngleName = stateWithAngleName # this is the state for some preprocessing that will let us extract the angle name
         self.metastates = metastates # these are states that don't refer to what the monkey is seeing, but rather some state of the session itself (for alignment purposes, say)
         self.keyStates = keyStates # I'm trying to allow some semblance of consistency for states o 'interest' among different stimuli -- i.e. 'delay period', 'stim period', etc.
 
