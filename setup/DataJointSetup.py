@@ -1032,6 +1032,63 @@ class BinnedSpikeSetInfo(dj.Manual):
         return reBinnedSpikeSet
 
     def generateDescriptivePlots(self, plotTypes = ['all']):
+    def grabAlignedKinematics(self, kinBinning = None):
+#    start_alignment_state : varchar(100) # name of alignment state from whose beginning start_time is offset
+#    end_alignment_state : varchar(100) # name of alignment state from whose beginning end_time is offset
+#    ---
+#    bss_hash : char(32) # mostly important to check data consistency if we want...
+#    start_time_alignment : blob # start time in ms of the alignment_state
+#    start_time : blob # true start_time in ms of each trial -- start_time_alignment + start_offset
+#    end_time_alignment : blob # end time in ms from where each bss trial end was offset
+#    end_time : blob # true end_time in ms of each trial -- end_time_alignment + end_offset
+        def forwardFillNans(arr, arrPad=None):
+            if arrPad is None:
+                arrPad = arr
+            valCurr = arrPad[0]
+            for ind in range(len(arr)):
+                if np.isnan(arr[ind]):
+                    arr[ind] = valCurr
+                else:
+                    valCurr = arrPad[ind]
+            return arr
+
+        dsi = DatasetInfo()
+        bsp = BinnedSpikeSetProcessParams()
+        binnedSpikes, bSInfo = self.grabBinnedSpikes(returnInfo=True)
+
+        for bnSp, bSPath in zip(binnedSpikes, bSInfo['paths']):
+            bsPk = dict(bss_relative_path = bSPath)
+
+            bss = self[bsPk].grabBinnedSpikes()[0]
+                
+            bssStartTimesInTrial = self[bsPk]['start_time'][0]
+            bssEndTimesInTrial = self[bsPk]['end_time'][0]
+
+            ds = self[bsPk].grabFilteredDataset()
+            trialKinematics = ds.kinematics
+            kinsForBss = [kin[(kin[:, 2]>stTr) & (kin[:,2]<endTr), :] for kin, stTr, endTr in zip(trialKinematics, bssStartTimesInTrial, bssEndTimesInTrial)]
+
+            if kinBinning == 'binToMatch':
+                binSize = bss.binSize
+                from scipy.stats import binned_statistic
+
+                # adding binSize/20 reflects how spikes are binned with the end
+                # point, to allow its inclusion...
+                lastValPerBin = np.array([binned_statistic(kin[:,2], kin[:,:2].T, statistic=lambda x:x[-1], bins=np.arange(st, et+binSize/20, binSize))[0].T if kin.size else np.array([]) for kin, st, et in zip(kinsForBss, bssStartTimesInTrial, bssEndTimesInTrial)])
+                kinsForBss = np.array([binned_statistic(kin[:,2], kin[:,:2].T, statistic='mean', bins=np.arange(st, et+binSize/20, binSize))[0].T if kin.size else np.array([]) for kin, st, et in zip(kinsForBss, bssStartTimesInTrial, bssEndTimesInTrial)])
+                # note that forwardFillNans works in place syoo... it's
+                # changing the values in place... heh; no need to assign an
+                # output
+                #
+                # anyway... this part replaces points where the cursor didn't
+                # move (and thus there were no codes and its nan here) into the
+                # actual location...which was its previous location!
+                [[forwardFillNans(kin[:,0],lstValKin[:,0]), forwardFillNans(kin[:,1],lstValKin[:,1])] for kin,lstValKin in zip(kinsForBss, lastValPerBin)]
+
+
+
+        return kinsForBss
+
         from methods.plotUtils.BinnedSpikeSetPlotMethods import plotResponseOverTime
         binnedSpikes, bSInfo = self.grabBinnedSpikes(returnInfo=True)
         if 'raster' in plotTypes or 'all' in plotTypes:
