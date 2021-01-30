@@ -415,11 +415,12 @@ class Dataset():
 
     def trialsWithState(self, stateName, asLogical=True):
         stNm = self.stateNames
-        if len(stNm)==1: # otherwise there's already a unique name per trial
+        if len(stNm)==1: # otherwise there's already a unique set of state names per trial
             stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
         stPres = self.statesPresented
         stPres = [stPr[0, stPr[0]!=-1] for stPr in stPres]
         stPresTrl = zip(stPres, stNm, range(0, len(self.statesPresented)))
+        # NOTE the -1 in stPres-1 serves to conver *MATLAB* 1-indexing to *PYTHON* 0-indexing
         trialsWithState = np.stack([np.any(np.core.defchararray.find(np.stack(stNames[np.int32(stPres-1)]),stateName)!=-1) for stPres, stNames, trialNum in stPresTrl])
 
         if not asLogical:
@@ -489,7 +490,7 @@ class Dataset():
             
         return spikeDatBinned
     
-    # coincidenceTime is how close spikes need to be, in ms, to be considered coincicdent, 
+    # coincidenceTime is how close spikes need to be, in ms, to be considered coincident, 
     # coincidenceThresh in percent/100 (i.e. 20% = 0.2)
     # checkNumTrls is the percentage of trials to go through
     def findCoincidentSpikeChannels(self, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1):
@@ -765,6 +766,13 @@ class Dataset():
                 stateNamesStatesEnd.append('End of trial')
         else:
             for stNames, statesPres in zip(stNm, self.statesPresented):
+                # NOTE: a future warning comes up here if not all elements of
+                # your state are strings! probably should fix this when you
+                # first read in the dataset, or you could change this by first
+                # running stNames = np.array([st[0].astype(str) for st in
+                # stNames])... but I can't promise that'll behave correctly for
+                # all formats of stNames since they're not... you know...
+                # necessarily equivalent given where the dataset came from ;_;
                 indStatePres = np.nonzero(stNames == stateName)[0][0] # this is a horizontal vector...
                 locStateLog = statesPres[0,:]==(indStatePres+1) # remember Matlab is 1-indexed
                 if np.any(locStateLog):
