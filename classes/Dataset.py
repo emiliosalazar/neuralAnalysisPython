@@ -493,7 +493,7 @@ class Dataset():
     # coincidenceTime is how close spikes need to be, in ms, to be considered coincident, 
     # coincidenceThresh in percent/100 (i.e. 20% = 0.2)
     # checkNumTrls is the percentage of trials to go through
-    def findCoincidentSpikeChannels(self, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1):
+    def findCoincidentSpikeChannels(self, coincidenceTime=1, coincidenceThresh=0.2, checkNumTrls=0.1, plotResults = False):
         
         
         # spikeCountOverallPerChan = [len(trlStmps)]
@@ -571,19 +571,54 @@ class Dataset():
 
         badChansLog = ~chansKeepLog
 
-        if badChansLog.nonzero()[0].size > 0:
-            print("Removed channels " + str(list(badChansLog.nonzero()[0])))
-        else:
-            print("No coincident channels to remove")
-        print('Worth a manual review here, methinks')
-        print('Perhaps look at variables:')
-        print('    timesOtherChannelsCoincidentToThisChannelOrig')
-        print('    timesThisChannelCoincidentToOtherChannelsOrig')
-        print('    coincProp')
-        breakpoint()
+        if not plotResults:
+            # normal case; plotting for now is only being done once we've done this round
+            if badChansLog.nonzero()[0].size > 0:
+                print("Removed channels " + str(list(badChansLog.nonzero()[0])))
+            else:
+                print("No coincident channels to remove")
+            print('Worth a manual review here, methinks')
+            print('Perhaps look at variables:')
+            print('    timesOtherChannelsCoincidentToThisChannelOrig')
+            print('    timesThisChannelCoincidentToOtherChannelsOrig')
+            print('    coincProp')
+
+            breakpoint()
+
         
         # reset random state
         np.random.set_state(initSt)
+
+        if plotResults:
+            import matplotlib.gridspec as gridspec
+
+            fig = plt.figure(constrained_layout=True)
+
+            axSpec = gridspec.GridSpec(ncols=2, nrows=2, figure=fig)
+
+            ax = []
+            ax.append(fig.add_subplot(axSpec[0,0]))
+            ax.append(fig.add_subplot(axSpec[0,1]))
+            ax.append(fig.add_subplot(axSpec[1,:]))
+
+            im = ax[0].imshow(coincProp)
+            im.set_clim(0, 1)
+            ax[0].set_title('coinc between channels')
+            ax[0].set_xlabel('channel coincident to')
+            ax[0].set_ylabel('channel checked')
+
+            im = ax[1].imshow(coincProp[chansKeepLog][:, chansKeepLog])
+            im.set_clim(0, 1)
+            fig.colorbar(im, ax=ax[1])
+
+            ax[1].set_title('remove high coincidence channels')
+            ax[1].set_xlabel('channel coincident to')
+
+            ax[2].hist(coincProp.flatten(), bins=np.arange(0, 1, 0.01))
+            ax[2].set_title('coinc. % across channels')
+            ax[2].set_xlabel('coincidence %')
+            ax[2].set_ylabel('count')
+            
         
         return chansKeepLog, badChansLog
 
