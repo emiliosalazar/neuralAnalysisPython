@@ -157,6 +157,37 @@ class DatasetInfo(dj.Manual):
 
         return datasets
 
+    # alright... this guy is to create the raw dataset with *nothing*
+    # removed--generally not saved, but nice to be able to go back to the
+    # earliest format
+    #
+    # NOTE: this is not a direct replacement for how DatabaseInsertion.py loads
+    # up the dataset at the start... because... I didn't actually save some of
+    # that metadata >.> (but also because for the path it relies on existing
+    # paths in the database, syoo...)
+    def createRawDataset(self, removeExplicitIgnore = True):
+        if len(self)>1:
+            raise Exception("Currently only taking one dataset at a time thank you")
+
+        defaultParams = loadDefaultParams()
+        dataPath = Path(defaultParams['dataPath'])
+
+        dataMatPath = dataPath / Path(self.fetch('dataset_relative_path')[0]).parent.parent / 'processedData.mat'
+        processor = self.fetch('processor_name')[0]
+        selfDs = self.grabDatasets()[0]
+        metastates = selfDs.metastates
+        keyStates = selfDs.keyStates
+        stateWithAngleName = selfDs.stateWithAngleName
+
+        from classes.Dataset import Dataset
+        datasetHere = Dataset(dataMatPath, processor, metastates = metastates, keyStates = keyStates, stateWithAngleName=stateWithAngleName)
+
+        if removeExplicitIgnore:
+            removeSort = self.fetch('explicit_ignore_sorts')
+            datasetHere.removeChannelsWithSort(removeSort[0])
+
+        return datasetHere
+
     def computeBinnedSpikesAroundState(self, bssProcParams, keyStateName, trialFilterLambdaDict=None, units=None):
 
         bssi = BinnedSpikeSetInfo()
