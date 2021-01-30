@@ -23,7 +23,7 @@ import dill as pickle
 from methods.GpfaMethods import crunchGpfaResults, computeBestDimensionality
 from methods.plotUtils.GpfaPlotMethods import visualizeGpfaResults
 
-def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToStateEnd = False, setEndToStateStart = False, returnResiduals = False,  firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None):
+def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToStateEnd = False, setEndToStateStart = False, returnResiduals = False,  firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None, trialFilterLambda = None):
 
 #    if type(data) == DatasetInfo:
 #    data = data.grabDatasets()
@@ -58,7 +58,10 @@ def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'success
     )
     bsspp = BinnedSpikeSetProcessParams()
 
-    trialFilterLambda = {'remove trials with catch state' : "lambda ds : ds.filterOutState('Catch')"}
+    if trialFilterLambda is None:
+        trialFilterLambda = {}
+    
+    trialFilterLambda.update({'remove trials with catch state' : "lambda ds : ds.filterOutState('Catch')"})
     binnedSpikes, bssiKeys = data.computeBinnedSpikesAroundState(bSSProcParams, keyStateName, trialFilterLambda, units = unitsOut)
 
     
