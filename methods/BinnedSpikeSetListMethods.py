@@ -758,6 +758,10 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
     
     frFig = plt.figure()
 
+    if type(listBSS) is not list:
+        # we kind of assume that a single instance was passed here...
+        listBSS = [listBSS]
+
     
     if cumulative:
         typeStr = " CDF"
@@ -781,7 +785,8 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
                 elif units == 'Hz':
                     histDat = bS.avgFiringRateByChannel()
 
-                bins = np.arange(0, histDat.max(), binWidth)
+                binWidthUse = np.min([binWidth, histDat.max()/10])
+                bins = np.arange(0, histDat.max(), binWidthUse)
                 ax.hist(histDat.view(np.ndarray), bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
                 desc = None # only label first shuffle
         else:
@@ -791,7 +796,8 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
             elif units == 'Hz':
                 histDat = bnSp.avgFiringRateByChannel()
 
-            bins = np.arange(0, histDat.max(), binWidth)
+            binWidthUse = np.min([binWidth, histDat.max()/10])
+            bins = np.arange(0, histDat.max(), binWidthUse)
             ax.hist(histDat.view(np.ndarray), bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
             units = bnSp.units
 
@@ -813,21 +819,24 @@ def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
             for bS in bnSp:
                 units = bS.units
                 if units == 'count':
-                    histDat = bS.timeSum().trialStd().view(np.ndarray)
+                    histDat = bS.stdSumTrialCountByChannel()
                 elif units == 'Hz':
                     histDat = bS.timeAverage().trialStd().view(np.ndarray)
 
-                bins = np.arange(0, histDat.max(), binWidth)
+                binWidthUse = np.min([binWidth, histDat.max()/10])
+                bins = np.arange(0, histDat.max(), binWidthUse)
                 ax.hist(histDat, bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
                 desc = None # only label the first shuffle
             units = bS.units # replace every time, but should be the same for all...
         else:
             units = bnSp.units
             if units == 'count':
-                histDat = bnSp.timeSum().trialStd()
+                histDat = bnSp.stdSumTrialCountByChannel()
             elif units == 'Hz':
                 histDat = bnSp.timeAverage().trialStd()
-            bins = np.arange(0, histDat.max(), binWidth)
+
+            binWidthUse = np.min([binWidth, histDat.max()/10])
+            bins = np.arange(0, histDat.max(), binWidthUse)
             ax.hist(histDat.view(np.ndarray), bins=bins, density=True, cumulative=cumulative, alpha = 0.8, label = desc, color = 'C%d' % colInd)
             units = bnSp.units # replace every time, but should be the same for all...
             
