@@ -768,6 +768,7 @@ class BinnedSpikeSet(np.ndarray):
         
         return cosTuningCurveParams
 
+    def pca(self, baselineSubtract = False, labels = None, n_components = None, plot = False):
         if n_components is None:
             if self.shape[0] < self.shape[1]:
                 print("PCA not doable with so few trials")
@@ -797,13 +798,20 @@ class BinnedSpikeSet(np.ndarray):
                 trialsPresented = np.ones(self.shape[0]) # ones array the size of number of trials--will repeat later
                 
             # mlab.figure()
-            plt.figure()
+            fig = plt.figure()
+            supTitle = plot['supTitle'] if 'supTitle' in plot else ''
+            fig.suptitle(supTitle)
+
             ax01 = plt.subplot(221)
             ax02 = plt.subplot(222)
             ax12 = plt.subplot(223)
             ax3D = plt.subplot(224,projection='3d')
             trialNumbersAll = np.arange(trialsPresented.shape[0])
-            trialNumbersAllExp = np.repeat(trialNumbersAll, self.shape[2])
+            if self.ndim == 3:
+                trialNumbersAllExp = np.repeat(trialNumbersAll, self.shape[2])
+            else:
+                trialNumbersAllExp = trialNumbersAll
+
             for idx, ang in enumerate(uniqueTargAngle):
                 trlsUseAll = trialsPresented == idx
                 trlNums = np.where(trlsUseAll)[0]
@@ -816,14 +824,38 @@ class BinnedSpikeSet(np.ndarray):
                     # mlab.points3d(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], color = colorUse, scale_factor=10)
                     if np.sum(trlsUse)>1:
                         ax01.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1], '-', color = colorUse)
+                        ax01.set_xlabel('PC1')
+                        ax01.set_ylabel('PC2')
+
                         ax02.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 2], '-', color = colorUse)
+                        ax02.set_xlabel('PC1')
+                        ax02.set_ylabel('PC3')
+
                         ax12.plot(xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '-', color = colorUse)
+                        ax12.set_xlabel('PC2')
+                        ax12.set_ylabel('PC3')
+
                         ax3D.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '-', color = colorUse)
+                        ax3D.set_xlabel('PC1')
+                        ax3D.set_ylabel('PC2')
+                        ax3D.set_zlabel('PC3')
                     else:
                         ax01.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1], '.', color = colorUse)
+                        ax01.set_xlabel('PC1')
+                        ax01.set_ylabel('PC2')
+
                         ax02.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 2], '.', color = colorUse)
+                        ax02.set_xlabel('PC1')
+                        ax02.set_ylabel('PC3')
+
                         ax12.plot(xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '.', color = colorUse)
+                        ax12.set_xlabel('PC2')
+                        ax12.set_ylabel('PC3')
+
                         ax3D.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '.', color = colorUse)
+                        ax3D.set_xlabel('PC1')
+                        ax3D.set_ylabel('PC2')
+                        ax3D.set_zlabel('PC3')
         
         return pcaModel
     
