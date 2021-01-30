@@ -171,10 +171,9 @@ def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMa
             
             
 
-        uniqueTargAngle = np.unique(binnedSpikes.labels[labelUse], axis=0)
+#        uniqueTargAngle = np.unique(binnedSpikes.labels[labelUse].astype('float64'), axis=0)
     
-        groupedSpikes, uniqueLabel = binnedSpikes.groupByLabel(binnedSpikes.labels[labelUse])
-        
+        groupedSpikes, uniqueLabel = binnedSpikes.groupByLabel(binnedSpikes.labels[labelUse].astype('float64'))
         
         # groupedSpikesEnd = dataSt.groupSpikes(trialsPresented, uniqueTargAngle, binnedSpikes = binnedSpikesHereEnd)
         # groupedSpikesShortStart = dataSt.groupSpikes(trialsPresented, uniqueTargAngle, binnedSpikes = binnedSpikesHereShortStart)
@@ -197,7 +196,7 @@ def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMa
         groupedSpikesAll.append(groupedSpikes)
         groupedSpikesTrialAvg.append([targTmTrcAvgArr, targTmTrcSemArr])
         # groupedSpikesEndTrialAvg.append([targTmTrcAvgEndArr, targTmTrcStdEndArr])
-        grpLabels.append(uniqueTargAngle)
+        grpLabels.append(uniqueLabel)
     
     return groupedSpikesTrialAvg, groupedSpikesAll, grpLabels
     
