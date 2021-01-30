@@ -1171,6 +1171,13 @@ class BinnedSpikeSetInfo(dj.Manual):
                     bsiNewPath = bssPathNew / bsiOrigPath[len(str(bssPathOrig))+1:]
                     bsiHere._update('bss_relative_path', value=str(bsiNewPath), allowPkUpdate=True)
 
+    def trialAndChannelFilterFromParent(self, parent):
+        fsp = FilterSpikeSetParams()
+        trlFilter, chFilter = fsp[self].trialAndChannelFilterFromParent(parent)
+
+        return trlFilter, chFilter
+
+
     @staticmethod
     def rmFilesByKey(key, quickDelete=False):
         defaultParams = loadDefaultParams()
@@ -1269,6 +1276,51 @@ class FilterSpikeSetParams(dj.Manual):
     filter_reason : enum('original', 'shuffle', 'randomSubset', 'other') # the 'original' option is for the default FSS that refers to its parent
     filter_description = null : varchar(100) # reason for filter (if not shuffle, usually)
     """
+    def trialAndChannelFilterFromParent(self, parent):
+        fsp = FilterSpikeSetParams()
+        bsi = BinnedSpikeSetInfo()
+        if type(parent) == BinnedSpikeSetInfo:
+            parent = fsp[parent]
+
+        inverseOrderTrialFilter = [self['trial_filter'][0]]
+        inverseOrderChannelFilter = [self['ch_filter'][0]]
+        directParent = fsp['bss_relative_path="{}"'.format(self['parent_bss_relative_path'][0])]
+        while (len(directParent) > 0) and (directParent['bss_relative_path'][0] != parent['bss_relative_path']):
+            parTrlFilt = directParent['trial_filter'][0]
+            parChFilt = directParent['ch_filter'][0]
+
+            if parTrlFilt is None:
+                parTrlFilt = np.arange(directParent['trial_num'])
+            if parChFilt is None:
+                parChFilt = np.arange(directParent['ch_num'])
+
+            inverseOrderTrialFilter.append(parTrlFilt)
+            inverseOrderChannelFilter.append(parChFilt)
+
+            directParent = fsp['bss_relative_path="{}"'.format(directParent['parent_bss_relative_path'][0])]
+
+        trlFiltOverall = None
+        chFiltOverall = None
+        for trlFilt, chFilt in zip(inverseOrderTrialFilter[::-1], inverseOrderChannelFilter[::-1]):
+            if trlFilt.dtype == 'bool':
+                trlFilt = trlFilt.nonzero()[0]
+            if chFilt.dtype == 'bool':
+                chFilt = chFilt.nonzero()[0]
+
+            if trlFiltOverall is None:
+                trlFiltOverall = trlFilt
+            else:
+                trlFiltOverall = trlFiltOverall[trlFilt]
+
+            if chFiltOverall is None:
+                chFiltOverall = chFilt
+            else:
+                chFiltOverall = chFiltOverall[chFilt]
+
+        return trlFiltOverall, chFiltOverall
+
+
+
     # if a parent BSS induces an entry in this table to be deleted, then all
     # the children should be deleted as well...
     def delete(self, quickDelete = False):
