@@ -8,7 +8,7 @@ import numpy as np
 from pathlib import Path
 from methods.GeneralMethods import loadDefaultParams
 
-defaultParams = loadDefaultParams(defParamBase = ".")
+defaultParams = loadDefaultParams()
 dataPath = Path(defaultParams['dataPath'])
 
 dsgl = DatasetGeneralLoadParams()
@@ -21,6 +21,5 @@ gai = GpfaAnalysisInfo()
 ari = AnalysisRunInfo()
 
 if __name__ == "__main__":
-#    dsgl._update('remove_coincident_chans', False)
     breakpoint()
 
