@@ -5,10 +5,13 @@ from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as ge
 from matplotlib import pyplot as plt
 import numpy as np
 
-def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo):
+def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None):
     plotSegments = plotTypeInfo['plotSegments'] if 'plotSegments' in plotTypeInfo else True
     binsAroundAlign = plotTypeInfo['ptsAroundAlBin'] if 'ptsAroundAlBin' in plotTypeInfo else 4
     plotMethod = plotTypeInfo['plotMethod'] if 'plotMethod' in plotTypeInfo else 'plot'
+    
+    if chPlot is not None and len(chPlot) != len(binnedSpikes):
+        raise Exception("One channel list per binned spike set must be provided if specifying channels to plot")
 
     for idx, (bnSp, dsName) in enumerate(zip(binnedSpikes, datasetNames)):
         numAlignmentBins = bnSp.alignmentBins[0].shape[0]
@@ -26,6 +29,14 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo):
                     tpTots = np.stack([bnT[0].shape[0] for bnT in bnSp])
                     segStarts = np.maximum(alBins-binsAroundAlign, 0)
                     segEnds = np.minimum(alBins+binsAroundAlign, tpTots)
+                    segLen = segEnds-segStarts
+                    if not np.all(segLen==segLen[0]):
+                        minSegLen = segLen.min()
+                        maxSegLen = segLen.max()
+                        if (maxSegLen-minSegLen) > 1:
+                            breakpoint() # not sure why there's more than an off-by-one difference
+                        else:
+                            segEnds = segStarts + minSegLen
                     # NOTE that the enumerate approach is needed in
                     # order to keep labels and the like along...
                     bnSpSeg = np.stack([bnSp[trl,:,sS:sE] for trl, (sS, sE) in enumerate(zip(segStarts, segEnds))])
@@ -57,7 +68,11 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo):
                 grpSpkTrlAvgSemHere, groupedSpikesHere, grpLabels = genBSLLabGrp([bnSpSeg], labelUse='stimulusMainLabel')
                 grpSpkTrlAvgSem.append(grpSpkTrlAvgSemHere[0])
                 groupedSpikes.append(groupedSpikesHere[0])
-                zeroBins.append(binsAroundAlign)
+#                zeroBins.append(binsAroundAlign)
+                if seg==0:
+                    zeroBins.append(alBins[0])
+                else:
+                    zeroBins.append(binsAroundAlign)
 
                 grpSpkTrlAvgSemAll, _, _ = genBSLLabGrp([bnSpSegB4Avg], labelUse='stimulusMainLabel')
                 chanTmAvgs.append(grpSpkTrlAvgSemAll[0][0])
@@ -78,7 +93,10 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo):
             grpSpkTrlAvgSem, groupedSpikes, grpLabels = genBSLLabGrp([bnSp], labelUse='stimulusMainLabel')
 
         grpLabels = grpLabels[0]
-        chans = np.arange(bnSp.shape[1])
+        if chPlot is not None:
+            chans = chPlot[idx]
+        else:
+            chans = np.arange(bnSp.shape[1])
         binSizeMs = bnSp.binSize
         for chan in chans:
             # Prep figure
