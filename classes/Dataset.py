@@ -890,14 +890,14 @@ class Dataset():
         # for that final plot
         plt.xlabel('angle (rad)')
     
-    def plotKinematics(self, groupByTarget=True):
+    def plotKinematics(self, groupByTarget=True, statesStartEnd = ['Target Reach', 'Target Hold']):
         
         # startTmsPres, endTmsPres = self.computeDelayStartAndEnd()
         
         # tmMin = endTmsPres
         
-        tmMin = self.timeOfState('Target Reach')
-        tmMax = self.timeOfState('Target Hold')
+        tmMin = self.timeOfState(statesStartEnd[0])
+        tmMax = self.timeOfState(statesStartEnd[1])
         
         if self.kinematics is not None:
             if groupByTarget is True:
@@ -912,13 +912,22 @@ class Dataset():
             kinematPlot = plt.subplot(111)
             for idx, ang in enumerate(angs):
                 for trlAng in np.where(trlsPres==idx)[0]:
-                    kinsHere = self.kinematics[trlAng]['position'][0,0]
-                    kinsHere = kinsHere-self.kinematicCenter
-                    tmsHere = self.kinematics[trlAng]['time'][0,0].squeeze()
-                    tmMinHere = tmMin[trlAng]
-                    tmMaxHere = tmMax[trlAng]
-                    ptsUse = np.logical_and(tmsHere>tmMinHere, tmsHere<tmMaxHere)
-                    # mlab.plot3d(kinsHere[ptsUse,0], kinsHere[ptsUse,1], kinsHere[ptsUse,2], color = self.colorsetMayavi[idx])
+                    if 'position' in self.kinematics[trlAng]:
+                        kinsHere = self.kinematics[trlAng]['position'][0,0]
+                        kinsHere = kinsHere-self.kinematicCenter
+                        tmsHere = self.kinematics[trlAng]['time'][0,0].squeeze()
+                        tmMinHere = tmMin[trlAng]
+                        tmMaxHere = tmMax[trlAng]
+                        ptsUse = np.logical_and(tmsHere>tmMinHere, tmsHere<tmMaxHere)
+                        # mlab.plot3d(kinsHere[ptsUse,0], kinsHere[ptsUse,1], kinsHere[ptsUse,2], color = self.colorsetMayavi[idx])
+                    else:
+                        kinsHere = self.kinematics[trlAng][:, :2]
+                        tmsHere = self.kinematics[trlAng][:, 2]
+                        tmMinHere = tmMin[trlAng]
+                        tmMaxHere = tmMax[trlAng]
+                        ptsUse = np.logical_and(tmsHere>tmMinHere, tmsHere<tmMaxHere)
+                        # mlab.plot3d(kinsHere[ptsUse,0], kinsHere[ptsUse,1], kinsHere[ptsUse,2], color = self.colorsetMayavi[idx])
+
                     kinematPlot.plot(kinsHere[ptsUse,0], kinsHere[ptsUse,1], color = self.colorset[idx])
                     
         else:
