@@ -1124,6 +1124,13 @@ class BinnedSpikeSetInfo(dj.Manual):
                 bnSp.lda(bnSp.labels['stimulusMainLabel'], plot=True)
                 plt.suptitle('LDA - %s' % (dsName))
 
+        #%% decodability
+        if ('decode' in plotTypes and plotTypes['decode']) or 'all' in plotTypes:
+            for idx, (bnSp, dsName) in enumerate(zip(binnedSpikes, bSInfo['dataset_names'])):
+                bnSp.decode(bnSp.labels['stimulusMainLabel'], plot=True)
+                plt.suptitle('Decode - %s' % (dsName))
+
+
     def _update(self, attrname, value=None, allowPkUpdate=False):
         valOld = self.fetch(attrname)[0]
         try:
