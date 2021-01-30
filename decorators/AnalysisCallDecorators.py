@@ -56,9 +56,15 @@ def saveCallsToDatabase(func):
             asiInsertInfo.update(dict(output_files = funcRet['outputFiles'])) if 'outputFiles' in funcRet else None
             asiInsertInfo.update(dict(output_files = funcRet['metadata'])) if 'metadata' in funcRet else None
 
-        ari.insert1(dict(
-            **asiInsertInfo
-        ))
+        try:
+            ari.insert1(dict(
+                **asiInsertInfo
+            ))
+        except Exception as err:
+            hah = err
+            breakpoint()
+            # handle unique exceptions here...
+
         return funcRet
     
     return saveCallToDb
