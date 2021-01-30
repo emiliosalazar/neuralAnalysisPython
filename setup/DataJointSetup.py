@@ -860,11 +860,27 @@ class BinnedSpikeSetInfo(dj.Manual):
                     if useAllTrials:
                         trlsUse = np.arange(bnSpOrig.shape[0])
                     else:
-                        trlsUse = bnSpOrig.balancedTrialInds(bnSpOrig.labels[labelName], minCnt = numTrialsPerCond)
+                        try:
+                            trlsUse = bnSpOrig.balancedTrialInds(bnSpOrig.labels[labelName], minCnt = numTrialsPerCond)
+                        except Exception as e:
+                            if str(e) == "One of your labels doesn't have the minimum number of samples":
+                                keepSubsamp = False
+                            else:
+                                raise e
+                        else:
+                            keepSubsamp = True
+
                     chansUse = np.sort(np.random.permutation(chanInds)[:numChannels])
 
 
-                    randomSubset, fssKey = self.filterBSS(filterReason, filterDescription,trialNumPerCondMin = numTrialsPerCond, condLabel = labelName, binnedSpikeSet = [bnSpOrig], trialFilter = trlsUse, channelFilter = chansUse, returnKey=returnInfo)
+                    if keepSubsamp:
+                        randomSubset, fssKey = self.filterBSS(filterReason, filterDescription,trialNumPerCondMin = numTrialsPerCond, condLabel = labelName, binnedSpikeSet = [bnSpOrig], trialFilter = trlsUse, channelFilter = chansUse, returnKey=returnInfo)
+                    else:
+                        randomSubset = None
+                        fssKey = 'bss_relative_path IS NULL'
+                        trlsUse = None
+                        chansUse = None
+
                     if randomSubset not in randomSubsets:
                         randomSubsets += [randomSubset]
                         trlChanFilters.append((trlsUse, chansUse))
