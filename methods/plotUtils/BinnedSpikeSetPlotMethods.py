@@ -102,7 +102,15 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
             # Prep figure
             plt.figure()
             plt.suptitle(dsName + ': channel ' + str(chan))
-            sbpltAngs = np.arange(3*np.pi/4, -5*np.pi/4, -np.pi/4)
+            grpLabels = grpLabels.astype('float64')
+            if grpLabels.astype('float64').max()>2*np.pi:
+                sbpltAngs = np.arange(135, -225, -45)
+                modulusFullRot = 360
+                grpLblPlotFactor = np.pi/180
+            else:
+                sbpltAngs = np.arange(3*np.pi/4, -5*np.pi/4, -np.pi/4)
+                modulusFullRot = 2*np.pi
+                grpLblPlotFactor = 1
             # Add nan to represent center for tuning polar curve...
             sbpltAngs = np.concatenate((sbpltAngs[0:3], sbpltAngs[[-1]], np.expand_dims(np.asarray(np.nan),axis=0), sbpltAngs[[3]], np.flip(sbpltAngs[4:-1])), axis=0)
             axVals = np.empty((0,4))
@@ -125,10 +133,10 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
 
                 for idx in range(0, len(grpLabels)):
                     chanSpkBinsByTrial = groupedSpikes[alB][idx][:,chan]
-                    subplotChooseCond = np.where([np.allclose(grpLabels[idx] % (2*np.pi), sbpltAngs[i] % (2*np.pi)) for i in range(0,len(sbpltAngs))])[0]
+                    subplotChooseCond = np.where([np.allclose(grpLabels.astype('float64')[idx] % (modulusFullRot), sbpltAngs[i] % (modulusFullRot)) for i in range(0,len(sbpltAngs))])[0]
 
                     if not subplotChooseCond.size:
-                        subplotChooseCond = np.where(sbpltAngs==np.pi*(grpLabels[idx]-2))[0]
+                        subplotChooseCond = np.where(sbpltAngs==modulusFullRot/2*(grpLabels[idx]-2))[0]
                     subplotChoose = subplotChooseCond[0]*numAlignmentBins+alB
                     numColsAll = numCols*numAlignmentBins if plotSegments else 3
                     axes.append(plt.subplot(numRows, numColsAll, subplotChoose+1))
@@ -182,13 +190,13 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
 
                 # plot the average before the bin
                 plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
-                ptch = plt.fill(grpLabels, chanTmAvgs[alB][:,[chan]])
+                ptch = plt.fill(grpLabels*grpLblPlotFactor, chanTmAvgs[alB][:,[chan]])
                 ptch[0].set_fill(False)
                 ptch[0].set_edgecolor(colSt)
 
             # plot the average after the last bin
             plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
-            ptch = plt.fill(grpLabels, chanTmAvgs[alB+1][:,[chan]])
+            ptch = plt.fill(grpLabels*grpLblPlotFactor, chanTmAvgs[alB+1][:,[chan]])
             ptch[0].set_fill(False)
             ptch[0].set_edgecolor(colEnd)
 
@@ -203,6 +211,6 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
 
             # plot the overall average
             plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
-            ptch = plt.fill(grpLabels, chanTmAvg)
+            ptch = plt.fill(grpLabels*grpLblPlotFactor, chanTmAvg)
             ptch[0].set_fill(False)
             ptch[0].set_edgecolor('k')
