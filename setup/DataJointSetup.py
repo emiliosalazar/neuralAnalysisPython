@@ -1031,7 +1031,6 @@ class BinnedSpikeSetInfo(dj.Manual):
 
         return reBinnedSpikeSet
 
-    def generateDescriptivePlots(self, plotTypes = ['all']):
     def grabAlignedKinematics(self, kinBinning = None):
 #    start_alignment_state : varchar(100) # name of alignment state from whose beginning start_time is offset
 #    end_alignment_state : varchar(100) # name of alignment state from whose beginning end_time is offset
@@ -1089,8 +1088,11 @@ class BinnedSpikeSetInfo(dj.Manual):
 
         return kinsForBss
 
+    def generateDescriptivePlots(self, plotTypes = ['all'], chPlot = None):
         from methods.plotUtils.BinnedSpikeSetPlotMethods import plotResponseOverTime
         binnedSpikes, bSInfo = self.grabBinnedSpikes(returnInfo=True)
+
+
         if 'raster' in plotTypes or 'all' in plotTypes:
             rasterPlotInfo = plotTypes['raster'] if 'raster' in plotTypes else {}
             rasterPlotInfo['plotMethod'] = 'eventplot'
@@ -1102,13 +1104,13 @@ class BinnedSpikeSetInfo(dj.Manual):
                 reBinnedSpikeSet = self[bsPk].rebinSpikes(binSizeMs)
                 reBinnedSpikes.append(reBinnedSpikeSet.convertUnitsTo('count'))
 
-            plotResponseOverTime(reBinnedSpikes, bSInfo['dataset_names'], rasterPlotInfo)
+            plotResponseOverTime(reBinnedSpikes, bSInfo['dataset_names'], rasterPlotInfo, chPlot = chPlot)
 
 
         if 'psth' in plotTypes or 'all' in plotTypes:
             psthPlotInfo = plotTypes['psth'] if 'psth' in plotTypes else {}
             psthPlotInfo['plotMethod'] = 'plot'
-            plotResponseOverTime(binnedSpikes, bSInfo['dataset_names'], psthPlotInfo)
+            plotResponseOverTime(binnedSpikes, bSInfo['dataset_names'], psthPlotInfo, chPlot = chPlot)
 
         #%% PCA projections
         if 'pca' in plotTypes or 'all' in plotTypes:
