@@ -221,8 +221,13 @@ class BinnedSpikeSet(np.ndarray):
         if self.size == 0:
             # the average of nothing is nothing
             if self.shape[2] == 0:
-                print('no timepoints, huh?')
-                return np.empty((self.shape[0], 0)).view(BinnedSpikeSet)
+#                print('no timepoints, huh?')
+                # this retains the metadata of labels, etc.
+                tmAvg = self[:,0,:]
+                tmAvg.binSize = None # since there are no bins, there is no bin size... (matches how np.average is implemented below for BinnedSpikeSet)
+                tmAvg.start = None
+                tmAvg.end = None
+                return tmAvg #np.empty((self.shape[0], 0)).view(BinnedSpikeSet)
             return np.empty(self.shape[:2]).view(BinnedSpikeSet)
         else:
             if self.dtype == 'object':
@@ -273,7 +278,8 @@ class BinnedSpikeSet(np.ndarray):
             else:
                 return np.average(self, axis=0)
         else:
-            return np.empty_like(self.shape[1:]).view(BinnedSpikeSet)
+            # this retains the metadata of labels, etc.
+            return self[0,:]#np.empty_like(self.shape[1:]).view(BinnedSpikeSet)
         
     def trialStd(self):
         if self.size > 0:
@@ -313,8 +319,10 @@ class BinnedSpikeSet(np.ndarray):
             if cnt>minCnt:
                 # grab a random subset of labelled data of the correct balanced size
                 idxUse.append(np.random.permutation(inds)[:minCnt])
-            else:
+            elif cnt==minCnt:
                 idxUse.append(inds)
+            else:
+                raise Exception("One of your labels doesn't have the minimum number of samples")
                 
         idxUseAll = np.stack(idxUse, axis=0).flatten()
         idxUseAll.sort()
@@ -411,8 +419,12 @@ class BinnedSpikeSet(np.ndarray):
 
         if self.dtype == 'object':
             chanFirst = cntBinned.swapaxes(0,1)
-            avgCountChan = np.stack([np.sum(np.hstack(chan), axis=1) for chan in chanFirst])
-            breakpoint() # because I'm not sure this is correct...
+#            avgCountChanOrig = np.array([np.sum(np.hstack(chan), axis=0)/chan.shape[0] for chan in chanFirst])
+            # NOTE that here I'm returning the PER-BIN sum... this is to even
+            # out discrepencies in trial length but kinda lies to the user
+            # given the method name >.>
+            avgCountChan = np.array([np.stack([trl.mean() for trl in chan]).mean() for chan in chanFirst])
+#            breakpoint() # because... I'm lying to the user with this method name >.>
         else:
             avgCountChan = cntBinned.sum(axis=2).trialAverage()
         
@@ -426,8 +438,12 @@ class BinnedSpikeSet(np.ndarray):
 
         if self.dtype == 'object':
             chanFirst = cntBinned.swapaxes(0,1)
-            avgCountStdChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
-            breakpoint() # because I'm not sure this is correct... NOTE want sum before std?
+#            avgCountStdChan = np.stack([np.std(np.hstack(chan), axis=1) for chan in chanFirst])
+            # NOTE that here I'm returning the PER-BIN std... this is to even
+            # out discrepencies in trial length but kinda lies to the user
+            # given the method name >.>
+            avgCountStdChan = np.array([np.hstack([trl for trl in chan]).std(ddof=1) for chan in chanFirst])
+#            breakpoint() # because... I'm lying to the user with this method name >.>
         else:
             # we're taking a sum over the bins before taking the standard
             # deviation... so it's the standard devation of spike counts in a
