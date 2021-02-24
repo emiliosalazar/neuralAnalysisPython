@@ -32,9 +32,11 @@ data.append({'description': 'Earl 2019-03-18 M1 thresh - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/18/threshCrossings'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -44,9 +46,11 @@ data.append({'description': 'Earl 2019-03-18 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/18/nasFromLincoln'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -58,9 +62,11 @@ data.append({'description': 'Earl 2019-03-20 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/20'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -72,9 +78,11 @@ data.append({'description': 'Earl 2019-03-21 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/21'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -86,9 +94,11 @@ data.append({'description': 'Earl 2019-03-22 M1 thresh - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/22/threshCrossings'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -98,9 +108,11 @@ data.append({'description': 'Earl 2019-03-22 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/22/nasFromLincoln'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -112,9 +124,11 @@ data.append({'description': 'Earl 2019-03-23 M1 thresh - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/23/threshCrossings'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -124,9 +138,11 @@ data.append({'description': 'Earl 2019-03-23 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Earl/2019/03/23/nasFromLincoln'),
               'keyStates' : {
+                  'fixation' : 'Start Hold Loop',
                   'delay': 'Delay Period',
                   'stimulus': 'Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'Go Cue',
+                  'action' : 'Reach Start'
               },
               'stateWithAngleName' : 'ReachTargetAppear',
               'alignmentStates': [],
@@ -138,23 +154,11 @@ data.append({'description': 'Quincy 2020-10-20 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Quincy/2020/10/20/Array1_M1'),
               'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
                   'delay': 'HC Delay Period 1',
                   'stimulus': 'HC Target Flash',
-                  'action' : 'Target Reach'
-              },
-              'stateWithAngleName' : 'HC_T1',
-              'alignmentStates': [],
-              'processor': 'Erinn',
-              'spikeIdMethod' : 'nas',
-              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
-              'nasGamma' : 0.2});
-data.append({'description': 'Quincy 2020-10-20 M1 nas g0.5 - MGR',
-              'area' : 'M1',
-              'path': Path('memoryGuidedReach/Quincy/2020/10/20/Array1_g05_M1'),
-              'keyStates' : {
-                  'delay': 'HC Delay Period 1',
-                  'stimulus': 'HC Target Flash',
-                  'action' : 'Target Reach'
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
               },
               'stateWithAngleName' : 'HC_T1',
               'alignmentStates': [],
@@ -166,9 +170,11 @@ data.append({'description': 'Quincy 2020-10-21 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Quincy/2020/10/21/Array1_M1'),
               'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
                   'delay': 'HC Delay Period 1',
                   'stimulus': 'HC Target Flash',
-                  'action' : 'HC T1'
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
               },
               'stateWithAngleName' : 'HC_T1',
               'alignmentStates': [],
@@ -180,9 +186,11 @@ data.append({'description': 'Quincy 2020-10-22 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Quincy/2020/10/22/Array1_M1'),
               'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
                   'delay': 'HC Delay Period 1',
                   'stimulus': 'HC Target Flash',
-                  'action' : 'HC T1'
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
               },
               'stateWithAngleName' : 'HC_T1',
               'alignmentStates': [],
@@ -194,9 +202,11 @@ data.append({'description': 'Quincy 2020-11-07 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Quincy/2020/11/07/Array1_M1'),
               'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
                   'delay': 'HC Delay Period 1',
                   'stimulus': 'HC Target Flash',
-                  'action' : 'HC T1'
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
               },
               'stateWithAngleName' : 'HC_T1',
               'alignmentStates': [],
@@ -208,9 +218,11 @@ data.append({'description': 'Quincy 2020-11-24 M1 nas - MGR',
               'area' : 'M1',
               'path': Path('memoryGuidedReach/Quincy/2020/11/24/Array1_M1'),
               'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
                   'delay': 'HC Delay Period 1',
                   'stimulus': 'HC Target Flash',
-                  'action' : 'HC T1'
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
               },
               'stateWithAngleName' : 'HC_T1',
               'alignmentStates': [],
@@ -221,55 +233,63 @@ data.append({'description': 'Quincy 2020-11-24 M1 nas - MGR',
 
 
 # PMd
-#data.append({'description': 'Quincy 2020-10-20 PMd nas - MGR',
-#              'area' : 'PMd',
-#              'path': Path('memoryGuidedReach/Quincy/2020/10/20/Array2_PMd'),
-#              'keyStates' : {
-#                  'delay': 'HC Delay Period 1',
-#                  'stimulus': 'HC Target Flash',
-#                  'action' : 'Target Reach'
-#              },
-#              'stateWithAngleName' : 'HC_T1',
-#              'alignmentStates': [],
-#              'processor': 'Erinn',
-#              'spikeIdMethod' : 'nas',
-#              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
-#              'nasGamma' : 0.2});
-#data.append({'description': 'Quincy 2020-10-21 PMd nas - MGR',
-#              'area' : 'PMd',
-#              'path': Path('memoryGuidedReach/Quincy/2020/10/21/Array2_PMd'),
-#              'keyStates' : {
-#                  'delay': 'HC Delay Period 1',
-#                  'stimulus': 'HC Target Flash',
-#                  'action' : 'HC T1'
-#              },
-#              'stateWithAngleName' : 'HC_T1',
-#              'alignmentStates': [],
-#              'processor': 'Erinn',
-#              'spikeIdMethod' : 'nas',
-#              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
-#              'nasGamma' : 0.2});
-#data.append({'description': 'Quincy 2020-10-22 PMd nas - MGR',
-#              'area' : 'PMd',
-#              'path': Path('memoryGuidedReach/Quincy/2020/10/22/Array2_PMd'),
-#              'keyStates' : {
-#                  'delay': 'HC Delay Period 1',
-#                  'stimulus': 'HC Target Flash',
-#                  'action' : 'HC T1'
-#              },
-#              'stateWithAngleName' : 'HC_T1',
-#              'alignmentStates': [],
-#              'processor': 'Erinn',
-#              'spikeIdMethod' : 'nas',
-#              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
-#              'nasGamma' : 0.2});
+data.append({'description': 'Quincy 2020-10-20 PMd nas - MGR',
+              'area' : 'PMd',
+              'path': Path('memoryGuidedReach/Quincy/2020/10/20/Array2_PMd'),
+              'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.5});
+data.append({'description': 'Quincy 2020-10-21 PMd nas - MGR',
+              'area' : 'PMd',
+              'path': Path('memoryGuidedReach/Quincy/2020/10/21/Array2_PMd'),
+              'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.2});
+data.append({'description': 'Quincy 2020-10-22 PMd nas - MGR',
+              'area' : 'PMd',
+              'path': Path('memoryGuidedReach/Quincy/2020/10/22/Array2_PMd'),
+              'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
+                  'delay': 'HC Delay Period 1',
+                  'stimulus': 'HC Target Flash',
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
+              },
+              'stateWithAngleName' : 'HC_T1',
+              'alignmentStates': [],
+              'processor': 'Erinn',
+              'spikeIdMethod' : 'nas',
+              'nasUsed' : 'nas_PmdLincoln_NickSortsProbs',
+              'nasGamma' : 0.2});
 data.append({'description': 'Quincy 2020-11-07 PMd nas - MGR',
               'area' : 'PMd',
               'path': Path('memoryGuidedReach/Quincy/2020/11/07/Array2_PMd'),
               'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
                   'delay': 'HC Delay Period 1',
                   'stimulus': 'HC Target Flash',
-                  'action' : 'HC T1'
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
               },
               'stateWithAngleName' : 'HC_T1',
               'alignmentStates': [],
@@ -281,9 +301,11 @@ data.append({'description': 'Quincy 2020-11-24 PMd nas - MGR',
               'area' : 'PMd',
               'path': Path('memoryGuidedReach/Quincy/2020/11/24/Array2_PMd'),
               'keyStates' : {
+                  'fixation' : 'Touchbar Hold',
                   'delay': 'HC Delay Period 1',
                   'stimulus': 'HC Target Flash',
-                  'action' : 'HC T1'
+                  'go cue' : 'HC Go Cue',
+                  'action' : 'HC Reach Start' # just keeping the same HC terminology as other states...?
               },
               'stateWithAngleName' : 'HC_T1',
               'alignmentStates': [],
@@ -298,8 +320,10 @@ data.append({'description': 'Pepe A1 2018-07-14 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array1_PFC/'),
               'keyStates' : {
+                  'fixation' : 'FIXATE',
                   'delay': 'TARG_OFF',
                   'stimulus': 'TARG_ON',
+                  'go cue' : 'FIX_OFF',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -311,8 +335,10 @@ data.append({'description': 'Pepe A2 2018-07-14 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/Array2_PFC/'),
               'keyStates' : {
+                  'fixation' : 'FIXATE',
                   'delay': 'TARG_OFF',
                   'stimulus': 'TARG_ON',
+                  'go cue' : 'FIX_OFF',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -324,8 +350,10 @@ data.append({'description': 'Pepe A1 2018-07-14 PFC thresh - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/ArrayNoSort1_PFC/'),
               'keyStates' : {
+                  'fixation' : 'FIXATE',
                   'delay': 'TARG_OFF',
                   'stimulus': 'TARG_ON',
+                  'go cue' : 'FIX_OFF',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -335,8 +363,10 @@ data.append({'description': 'Pepe A2 2018-07-14 PFC thresh - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Pepe/2018/07/14/ArrayNoSort2_PFC/'),
               'keyStates' : {
+                  'fixation' : 'FIXATE',
                   'delay': 'TARG_OFF',
                   'stimulus': 'TARG_ON',
+                  'go cue' : 'FIX_OFF',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -346,8 +376,10 @@ data.append({'description': 'Wakko A1 2018-02-11 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array1_PFC/'),
               'keyStates' : {
+                  'fixation' : 'FIXATE',
                   'delay': 'TARG_OFF',
                   'stimulus': 'TARG_ON',
+                  'go cue' : 'FIX_OFF',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -359,8 +391,10 @@ data.append({'description': 'Wakko A2 2018-02-11 PFC - MGS',
               'area' : 'PFC',
               'path': Path('memoryGuidedSaccade/Wakko/2018/02/11/Array2_PFC/'),
               'keyStates' : {
+                  'fixation' : 'FIXATE',
                   'delay': 'TARG_OFF',
                   'stimulus': 'TARG_ON',
+                  'go cue' : 'FIX_OFF',
                   'action' : 'SACCADE'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -372,8 +406,10 @@ data.append({'description': 'Pepe 2016-02-02 PFC - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/02/Array2_PFC/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target',  in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -383,8 +419,10 @@ data.append({'description': 'Pepe 2016-02-02 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort2_PFC/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target',  in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -396,8 +434,10 @@ data.append({'description': 'Pepe 2016-02-03 PFC - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/03/Array2_PFC/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target',  in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -407,8 +447,10 @@ data.append({'description': 'Pepe 2016-02-03 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort2_PFC/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target',  in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -420,8 +462,10 @@ data.append({'description': 'Pepe 2016-02-04 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort2_PFC/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target',  in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -433,8 +477,10 @@ data.append({'description': 'Pepe 2016-02-05 PFC NAS - cuedAttn',
               'area' : 'PFC',
               'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort2_PFC/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target',  in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -523,16 +569,15 @@ data.append({'description': 'Satchel A2 2021-01-15 PFC NAS - cursorMove no help'
 
 
 
-
-
-
 # V4
 data.append({'description': 'Pepe 2016-02-02 V4 - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/02/Array1_V4/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target', # in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -542,8 +587,10 @@ data.append({'description': 'Pepe 2016-02-02 V4 NAS - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/02/ArrayNasSort1_V4/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target', # in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -555,8 +602,10 @@ data.append({'description': 'Pepe 2016-02-03 V4 - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/03/Array1_V4/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target', # in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -566,8 +615,10 @@ data.append({'description': 'Pepe 2016-02-03 V4 NAS - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/03/ArrayNasSort1_V4/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target', # in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -579,8 +630,10 @@ data.append({'description': 'Pepe 2016-02-04 V4 NAS - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/04/ArrayNasSort1_V4/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target', # in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
@@ -592,8 +645,10 @@ data.append({'description': 'Pepe 2016-02-05 V4 NAS - cuedAttn',
               'area' : 'V4',
               'path': Path('cuedAttention/Pepe/2016/02/05/ArrayNasSort1_V4/'),
               'keyStates' : {
+                  'fixation': 'Blank Before Cut',
                   'delay': 'Blank Before',
                   'stimulus': 'Target',
+                  'go cue': 'Target', # in this task, the go cue *is* the stimulus, and prompts the animal to decide
                   'action' : 'Success'
               },
               'alignmentStates': ['SOUND_CHANGE','ALIGN'],
