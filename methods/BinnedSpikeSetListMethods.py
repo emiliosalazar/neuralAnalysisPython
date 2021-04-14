@@ -342,15 +342,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
     lblLLErr = 'LL err over folds'
     lblLL= 'LL mean over folds'
 
-    if plotOutput:
-        plotInfo = {}
-        figErr = plt.figure()
-        figErr.suptitle('dimensionality vs. GPFA log likelihood')
-        # might have to go back on these lines for how to define ncols...
-        gpPathPer = [[Path(gpH[0]).parent for gpH in gp.keys()] for gp in gpfaRes]
-        gpUnPathNum = [len(np.unique(gpP)) for gpP in gpPathPer]
-        ncols = np.max(gpUnPathNum) # len(bssExp)
-        axs = figErr.subplots(nrows=2, ncols=ncols, squeeze=False)
+    
 
     crossValsUse = [0]
 
@@ -523,9 +515,54 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         gpfaAlignmentBins.append([d['alignmentBins'] for _, d in gpfaCrunchedResults.items()])
         gpfaDimsTested.append([d['dimsTest'] for _, d in gpfaCrunchedResults.items()])
 
+    if plotOutput:
+        plotInfo = {}
+        # might have to go back on these lines for how to define ncols...
+        gpPathPer = [[Path(gpH[0]).parent for gpH in gp.keys()] for gp in gpfaRes]
+        gpUnPathNum = [len(np.unique(gpP)) for gpP in gpPathPer]
+        ncols = np.max(gpUnPathNum) # len(bssExp)
+        # sorry for the hard code
+        brainAreas = ['V4', 'PFC', 'M1']
+        dimArBest = [[],[],[]]
+        ncols = len(brainAreas)
+        # axs = figErr.subplots(nrows=3, ncols=ncols, squeeze=False, constrained_layout=True)
+        figErr, axs = plt.subplots(nrows=3, ncols=ncols, squeeze=False, constrained_layout=True)
+        figErr.suptitle('dimensionality vs (GP)FA log likelihood/cumulative/individual variance accounted for')
+        
+        if type(bssExp) is list:
+            # Um.... DataJoint can apparently handle bssExp being a list of expressions
+            # and that's nuts. Unfortunately for the nuttiness, I *do* need to be able
+            # to keep these grouped together.
+            gpfaResAll = []
+            gpfaInfoAll = []
+            lstSzs = []
+            for subExp in bssExp:
+                ind+=1
+                lstSzs.append(len(gai[subExp]))
+                gpfaResH, gpfaInfoH = gai[subExp][gap['num_folds_crossvalidate={}'.format(crossvalidateNumFolds)]].grabGpfaResults(returnInfo=True, useFa=useFa)
+                
+                gpfaResAll.append(gpfaResH)
+                gpfaInfoAll.append(gpfaInfoH)
+        else:
+            gpfaResAll, gpfaInfoAll = gai[bssExp][gap['num_folds_crossvalidate={}'.format(crossvalidateNumFolds)]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
+        
+        for gpfaResHere, gpfaInfoHere in zip(gpfaResAll, gpfaInfoAll):
+            gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
 
-        if plotOutput:
-            for idx, (description, dimsTest, testIndsCondAll, dimResult, normalGpfaScoreAll, binSize, condLabels, alignmentBins) in enumerate(zip(gpfaInfoHere['datasetNames'], gpfaDimsTested[-1], gpfaTestIndsOutAll[-1], gpfaOutDimAll[-1], normScoreAll[-1], gpfaBinSize[-1], gpfaCondLabels[-1], gpfaAlignmentBins[-1])):
+            bssPaths = [pthAndCond[:2] for pthAndCond in gpfaCrunchedResults.keys()]
+            _, smDimGrph = np.unique(bssPaths, return_inverse=True, axis=0)
+            
+            dimExpAllTest = [d['xDimBestAll'] for _, d in gpfaCrunchedResults.items()]
+            normScoreAllTest = [d['normalGpfaScoreAll'] for _, d in gpfaCrunchedResults.items()]
+            gpfaOutDimAllTest = [d['dimResults'] for _, d in gpfaCrunchedResults.items()]
+            gpfaTestIndsOutAllTest = [d['testInds'] for _, d in gpfaCrunchedResults.items()]
+            gpfaBinSizeAllTest = [d['binSize'] for _, d in gpfaCrunchedResults.items()]
+            gpfaCondLabelsAllTest = [d['condLabel'] for _, d in gpfaCrunchedResults.items()]
+            gpfaAlignmentBinsAllTest = [d['alignmentBins'] for _, d in gpfaCrunchedResults.items()]
+            gpfaDimsTestedAllTest = [d['dimsTest'] for _, d in gpfaCrunchedResults.items()]
+
+
+            for idx, (description, dimsTest, testIndsCondAll, dimResult, normalGpfaScoreAll, binSize, condLabels, alignmentBins) in enumerate(zip(gpfaInfoHere['datasetNames'], gpfaDimsTestedAllTest, gpfaTestIndsOutAllTest, gpfaOutDimAllTest, normScoreAllTest, gpfaBinSizeAllTest, gpfaCondLabelsAllTest, gpfaAlignmentBinsAllTest)):
 
                 # grab first cval--they'll be the same for each cval, which is what
                 # these lists store
@@ -533,18 +570,24 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 binSize = binSize[0]
                 testInds = testIndsCondAll[0]
 
-                axScore = axs[0, :].flat[smDimGrph[idx]]
-                axDim = axs[1,:].flat[smDimGrph[idx]]
+                axChs = np.array([description.find(bA)!=-1 for bA in brainAreas])
+                dimArBest[axChs.nonzero()[0][0]] += dimExpAllTest
+                axScore = axs[0][axChs][0]
+                axScore.set_title(np.array(brainAreas)[axChs][0])
+                axCumulDim = axs[1][axChs][0]
+                axByDim = axs[2][axChs][0]
                 plotInfo['axScore'] = axScore
-                plotInfo['axDim'] = axDim
+                plotInfo['axCumulDim'] = axCumulDim
+                plotInfo['axByDim'] = axByDim
+                # breakpoint()
 
                 if timeBeforeAndAfterStart is not None:
-                    tmValsStartBest = np.arange(timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
+                    tmValsStartBest = np.arange(-timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
                 else:
                     tmValsStartBest = np.ndarray((0,0))
                     
                 if timeBeforeAndAfterEnd is not None:
-                    tmValsEndBest = np.arange(timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
+                    tmValsEndBest = np.arange(-timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
                 else:
                     tmValsEndBest = np.ndarray((0,0))
 
@@ -553,7 +596,12 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 plotInfo['description'] = description
                 tmVals = [tmValsStartBest, tmValsEndBest]
                 visualizeGpfaResults(plotInfo, dimResult,  tmVals, cvApproach, normalGpfaScoreAll, dimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins)
-
+        
+        for axCumul, axByDim, dmB in zip(axs[1], axs[2], dimArBest):
+            axCumul.set_xlim(1, np.max(dmB))
+            axByDim.set_xlim(1, np.max(dmB))
+            axCumul.set_ylim(0, 1.05)
+            axByDim.set_ylim(0, 1.05)
     return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
 
 # NOTE: this function does not act on any of the binned spikes (computing
