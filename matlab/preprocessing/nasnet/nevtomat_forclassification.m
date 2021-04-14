@@ -1,4 +1,4 @@
-function nevToMatForNasClassification(nevFile)
+function nevToMatForNasClassification(nevFile, datapath)
 % create .mat data file for NASnet classification
 %
 % using runNASNet for classification is much faster on .mat files, because
@@ -12,16 +12,17 @@ function nevToMatForNasClassification(nevFile)
 % nev file (do not specify the .nev extension)
 %nevFile = 'Pe160525_s96ax_fixAndMultistim_movie_0001';
 
-paths    = mypaths;
-datapath = paths{1};
-filepath = [datapath nevFile];
+%paths    = mypaths;
+%datapath = paths{1};
+filepath = fullfile(datapath, nevFile);
 
 % select channels 
 chan     = 1:96; % if empty use all channels
 
 %% read nev
 
-[spikes,waveforms] = read_nev([filepath '.nev'],'channels',chan);
+%[spikes,waveforms] = read_nev([filepath '.nev'],'channels',chan);
+[spikes,waveforms] = readNEV([filepath '.nev'],'channels',chan);
 
 disp('checking that channels are valid...')
 % 512 is the highest available number of spike channels 
@@ -31,24 +32,28 @@ channels   = unique(spikes(:,1));
 
 disp('Warning: the next operations may take some time, if file size is too big')
 
+keyboard()
 if ~isempty(find(channels==0,1))
     % These are digital codes. There are no waveforms to classify for
     % these indices, delete them
     disp('removing digital codes...')
-    waveforms(spikes(:,1)==0)  = [];
+%     waveforms(spikes(:,1)==0)  = [];
+    waveforms(:, spikes(:,1)==0) = [];
     spikes(spikes(:,1)==0)     = [];
 end
 if ~isempty(find(channels>=maxspikech,1))
     % Same for non-spike data channels, such as uStim channels
     disp('removing non-spike channels...')
-    waveforms(spikes(:,1)>=maxspikech) = [];
+%     waveforms(spikes(:,1)>=maxspikech) = [];
+    waveforms(:, spikes(:,1)>=maxspikech) = [];
     spikes(spikes(:,1)>=maxspikech)    = [];
 end
 
 disp('converting cell array into a matrix...')
-waveforms = [waveforms{:}]';
+% waveforms = [waveforms{:}]';
 
 % save file (in same folder as nev file)
 % note that NASnet only supports -v7.3 mat format
 disp('saving waveforms in mat v7.3 formated file...')
+keyboard()
 save(filepath,'waveforms','spikes','-v7.3')

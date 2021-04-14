@@ -19,8 +19,8 @@ end
 waveData = outputMat';
 
 yr = '2020';
-mnth = '11';
-dy = '24';
+mnth = '12';
+dy = '04';
 animal = 'Quincy';
 save(sprintf('%s%s%s%s_sessionWv_Sorts.mat',animal, yr,mnth,dy), 'waveData', '-v7.3')
 save(sprintf('%s%s%s%s_sessionInf_Sorts.mat',animal,yr,mnth,dy), 'snInfoMat', '-v7.3')
@@ -73,20 +73,24 @@ end
 %filenameInf = 'testNas/Earl_thresh20190318_sessionInf_Sorts.mat';
 % filename = 'testNas/Lincoln_NickMbSrt20100218_sessionWv_Sorts.mat';
 % filenameInf = 'testNas/Lincoln_NickMbSrt20100218_sessionInf_Sorts.mat';
-%filename = 'Quincy_thresh20201020_sessionWv_Sorts.mat';
-%filenameInf = 'Quincy_thresh20201020_sessionInf_Sorts.mat';
-%filename = 'Quincy_thresh20201021_sessionWv_Sorts.mat';
-%filenameInf = 'Quincy_thresh20201021_sessionInf_Sorts.mat';
-%filename = 'Quincy_thresh20201022_sessionWv_Sorts.mat';
-%filenameInf = 'Quincy_thresh20201022_sessionInf_Sorts.mat';
-%filename = 'Quincy_thresh20201107_sessionWv_Sorts.mat';
-%filenameInf = 'Quincy_thresh20201107_sessionInf_Sorts.mat';
-filename = 'Quincy_thresh20201124_sessionWv_Sorts.mat';
-filenameInf = 'Quincy_thresh20201124_sessionInf_Sorts.mat';
-%filename = 'Quincy_EmilioSort20201020_sessionWv_Sorts.mat';
-%filenameInf = 'wvInfo/Quincy_EmilioSort20201020_sessionInf_Sorts.mat';
+% filename = 'Quincy_thresh20201020_sessionWv_Sorts.mat';
+% filenameInf = 'Quincy_thresh20201020_sessionInf_Sorts.mat';
+% filename = 'Quincy_thresh20201021_sessionWv_Sorts.mat';
+% filenameInf = 'Quincy_thresh20201021_sessionInf_Sorts.mat';
+% filename = 'Quincy_thresh20201022_sessionWv_Sorts.mat';
+% filenameInf = 'Quincy_thresh20201022_sessionInf_Sorts.mat';
+% filename = 'Quincy_thresh20201107_sessionWv_Sorts.mat';
+% filenameInf = 'Quincy_thresh20201107_sessionInf_Sorts.mat';
+% filename = 'Quincy_thresh20201124_sessionWv_Sorts.mat';
+% filenameInf = 'Quincy_thresh20201124_sessionInf_Sorts.mat';
+% filename = 'Quincy_EmilioSort20201020_sessionWv_Sorts.mat';
+% filenameInf = 'wvInfo/Quincy_EmilioSort20201020_sessionInf_Sorts.mat';
+% filename = 'Quincy20201202_sessionWv_Sorts.mat';
+% filenameInf = 'Quincy20201202_sessionInf_Sorts.mat';
+filename = 'Quincy20201204_sessionWv_Sorts.mat';
+filenameInf = 'Quincy20201204_sessionInf_Sorts.mat';
 
-gamma = 0.2; 
+gamma = 0.5; 
 net_name = '~/../../project/nspg/esalazar/nasTests/trainedNasPmdLinc/nas_PmdLincoln_NickSortsProbs';
 %net_name = '~/../../project/nspg/esalazar/nasTests/trainedNasPmdLincM1Quincy/nas_PmdLincolnNick_M1QuincyEmilio';
 [slabel,spikes, gammaWv] = runNASNet(filename,gamma,net_name);
@@ -97,7 +101,7 @@ fileWv = load(filename);
 close all
 numPltPer = 9;
 wvsPlt = 200;
-gammaSel = 0.2; gamma;
+gammaSel = 0.05; gamma;
 snInfAuto = gammaWv > gammaSel;
 snInf = fileInf.snInfoMat;
 snWv = fileWv.waveData';
@@ -133,7 +137,7 @@ hFigs = get(0, 'children');
 fnmUnderscore = find(filename=='_');
 flnmSt = filename(1:fnmUnderscore(2)-1);
 for hh =  1:length(hFigs)
-    path = sprintf('%s_autoSortResAllLbG0-%d_fig%d', flnmSt, round(gammaSel*10), hh);
+    path = sprintf('%s_autoSortResAllLbG0-%02d_fig%d', flnmSt, round(gammaSel*100), hh);
 %    path = sprintf('test3', round(gammaSel*10), hh);
     set(hFigs(hh), 'renderer', 'painters');
     orient(hFigs(hh), 'landscape');
@@ -193,9 +197,10 @@ end
 
 %% relabel dataset
 % We have loaded Data and loaded new labels in slabel
+slabel = gammaWv > gammaUse; % gammaUse is the chosen gamma for this dataset!
 % when there were 96 channels
-quincyM1Chans = [1:48, 73:2:87, 89:96];
-quincyPmdChans =  [49:72, 74:2:88];
+% quincyM1Chans = [1:48, 73:2:87, 89:96];
+% quincyPmdChans =  [49:72, 74:2:88];
 % and when there were 128 channels (starting 11/18)
 quincyM1Chans = [33:96];
 quincyPmdChans =  [1:32 97:128];
@@ -218,8 +223,10 @@ DataPMd = Data;
 m1Channels = quincyM1Chans;
 pmdChannels = quincyPmdChans;
 for trl = 1:length(Data)
-	DataM1(trl).TrialData.spikes = Data(trl).TrialData.spikes(ismember([Data(trl).TrialData.spikes.channel], m1Channels));
-	DataPMd(trl).TrialData.spikes = Data(trl).TrialData.spikes(ismember([Data(trl).TrialData.spikes.channel], pmdChannels));
+    if isfield(Data(trl).TrialData.spikes, 'channel')
+        DataM1(trl).TrialData.spikes = Data(trl).TrialData.spikes(ismember([Data(trl).TrialData.spikes.channel], m1Channels));
+        DataPMd(trl).TrialData.spikes = Data(trl).TrialData.spikes(ismember([Data(trl).TrialData.spikes.channel], pmdChannels));
+    end
 
 end
 
@@ -229,4 +236,4 @@ Data = DataM1;save('Array1_M1/processedData.mat', 'Data', 'processDate')
 Data = DataPMd;save('Array2_PMd/processedData.mat', 'Data', 'processDate')  
 
 
-% gamma 0.2 for the first three days, but 0.5 for 11/07 on Quincy
+% gamma 0.5 10/20, 0.2 for next two days, and 0.5 for 11/07 on Quincy
