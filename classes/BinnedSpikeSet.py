@@ -917,7 +917,7 @@ class BinnedSpikeSet(np.ndarray):
         
         return ldaModel
     
-    def decode(self, labels=None, trainFrac = 0.75, plot=True):
+    def decode(self, labels=None, trainFrac = 0.75, zScoreRespFirst = False, plot=True):
         # this is going to use a Gaussian naive Bayes classifier to try and
         # predict the labels of a held out set...
         from sklearn.naive_bayes import GaussianNB
@@ -925,11 +925,33 @@ class BinnedSpikeSet(np.ndarray):
         if labels is None:
             labels = self.labels['stimulusMainLabel']
 
+        if zScoreRespFirst:
+            if labels.ndim > 1:
+                breakpoint() # this function should only take in a 1D list of labels...
+            labelGroup = labels[:,None]
+            grpSpksNpArr, _ = self.groupByLabel(labelGroup) 
+            grpSpksNpArr = [(g - g.mean(axis=(0,2))[:,None])/g.std(axis=(0,2))[:,None] for g in grpSpksNpArr]
+            spksUse = np.concatenate(grpSpksNpArr, axis=0) 
+            # here we get rid of any channels that didn't respond to any
+            # particular condition basically (at that point its z-score ends up
+            # as nan because its standard deviation for that condition (which
+            # is divided above) equals 0
+            # DOING BELOW INSTEAD
+#            spksUse = spksUse[:, ~np.any(np.isnan(spksUse), axis=(0,2)), :]
+        else:
+            spksUse = self
 #        for lbNum, lab in enumerate(labels):
 #            lbMn.append(1)
 
         idxUse = np.arange(self.shape[0])
-        tmAvgBins = self.timeAverage()
+        tmAvgBins = spksUse.timeAverage()
+        # here we get rid of any channels that didn't respond to any
+        # particular condition basically (at that point its z-score ends up
+        # as nan because its standard deviation for that condition (which
+        # is divided above) equals 0, and if this happens for each time point
+        # the time average is also nan (can consider at some point doing time
+        # averages that ignore nans as well...
+        tmAvgBins = tmAvgBins[:, ~np.any(np.isnan(tmAvgBins), axis=0)]
         trls, chans = tmAvgBins.shape # trials are samples, channels are features
 
         randomizedIndOrder = np.random.permutation(idxUse)
