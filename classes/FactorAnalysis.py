@@ -138,7 +138,7 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
     FastICA: Independent component analysis, a latent variable model with
         non-Gaussian latent variables.
     """
-    def __init__(self, n_components=None, tol=1e-8, copy=True, max_iter=1000,
+    def __init__(self, n_components=None, tol=1e-8, copy=True, max_iter=int(1e8),
                  noise_variance_init=None, svd_method='randomized',
                  iterated_power=3, random_state=0):
         self.n_components = n_components
@@ -290,16 +290,26 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         check_is_fitted(self, 'components_')
 
         X = check_array(X)
-        Ih = np.eye(len(self.components_))
 
         X_transformed = X - self.mean_
 
-        Wpsi = self.components_ / self.noise_variance_
-        cov_z = linalg.inv(Ih + np.dot(Wpsi, self.components_.T))
-        tmp = np.dot(X_transformed, Wpsi.T)
-        X_transformed = np.dot(tmp, cov_z)
+        precision = self.get_precision()
+        L = self.components_
+        beta = L.T @ precision
+        X_new = X_transformed @ beta.T
 
-        return X_transformed
+        Ih = np.eye(len(self.components_))
+
+        # This is the code as it was... I'm even tripped up on the first line
+        # because I don't know if that division once did inversion or
+        # something...
+#:w
+#        Wpsi = self.components_ / self.noise_variance_
+#        cov_z = linalg.inv(Ih + np.dot(Wpsi, self.components_.T))
+#        tmp = np.dot(X_transformed, Wpsi.T)
+#        X_transformed = np.dot(tmp, cov_z)
+
+        return X_new
 
     def get_covariance(self):
         """Compute data covariance with the FactorAnalysis model.
@@ -338,6 +348,7 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         psi = self.noise_variance_
         L = self.components_
         invPsi = np.diag(1/psi)
+
         iPsiL = invPsi @ L
         precision = invPsi - iPsiL @ np.linalg.inv(np.eye(self.n_components) + L.T @ iPsiL) @ iPsiL.T
 

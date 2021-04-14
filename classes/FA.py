@@ -59,12 +59,14 @@ class FA:
                 concatTrlTrain = np.concatenate(bnSp[trnInd, :], axis=1)
                 concatTrlTest = np.concatenate(bnSp[tstInd, :], axis=1)
 
-            if gpfaResultsPath is None:
+            if gpfaResultsPath is not None:
+                cValGpfaResultsPath = gpfaResultsPath / ("%s_xDim%02d_cv%02d.mat" % ("gpfa", numDim, cVal))
 
-                breakpoint()
+            if gpfaResultsPath is None or not cValGpfaResultsPath.exists():
+
                 try:
                     # Note that we transpose here because FactorAnalysis class
-                    # expaects a samples x features matrix, and here the trials
+                    # expects a samples x features matrix, and here the trials
                     # will be samples and the channels will be features. (Before
                     # transposing it comes in as a channels x trials matrix...)
                     fA.fit(concatTrlTrain.T)
@@ -83,29 +85,34 @@ class FA:
                 L = fA.components_
                 psi = fA.noise_variance_
                 d = fA.mean_
+                Lorth, singVal, rightSingVec = np.linalg.svd(L)
+                Lorth = Lorth[:, :L.shape[1]]
                 allEstParams.append({
                     'C': L, # here I'm matching GPFA naming of C
+                    'Corth': Lorth, # here I'm matching GPFA naming of C
                     'd': d,
                     'R': np.diag(psi) # here I'm matching GPFA naming of R...
                 })
                 
             else:
-                cValGpfaResultsPath = gpfaResultsPath / ("%s_xDim%02d_cv%02d.mat" % ("gpfa", numDim, cVal))
                 cValGpfaResults = LoadMatFile(cValGpfaResultsPath)
                 faParams =  cValGpfaResults['faParams']
-                ll =  cValGpfaResults['faLL']
+                ll =  np.append(ll, cValGpfaResults['faLL'][0,-1])
 
                 # used for the projection below
                 L = faParams['L']
                 d = faParams['d'].squeeze() # mean is only single dimensional
                 Ph = faParams['Ph'].squeeze() # noise variance is saved as single-dimensional diagonal elements
+                Lorth, singVal, rightSingVec = np.linalg.svd(L)
+                Lorth = Lorth[:, :L.shape[1]]
 
                 fADims.append(L)
 
                 allEstParams.append({
                     'C': L, # here I'm matching GPFA naming of C
+                    'Corth': Lorth, # here I'm matching GPFA naming of Corth
                     'd': d,
-                    'R': np.diag(Ph) # here I'm matching GPFA naming of R...
+                    'R': np.diag(Ph), # here I'm matching GPFA naming of R...
                 })
 
                 fA.components_ = L
@@ -116,10 +123,10 @@ class FA:
 
             # here I'm again matching to the GPFA output... (I'm trying to use
             # the same downstream code, see...
-            projTrainBnSp = np.stack([(bS.T @ L).T for bS in bnSp[trnInd, :].view(np.ndarray)])
-            projTestBnSp = np.stack([(bS.T @ L).T for bS in bnSp[tstInd, :].view(np.ndarray)])
-            seqsTrainNew.append([{'trialId' : trlNum, 'xorth' : trl} for trlNum, trl in enumerate(projTrainBnSp)])
-            seqsTestNew.append([{'trialId' : trlNum, 'xorth' : trl} for trlNum, trl in enumerate(projTestBnSp)])
+            projTrainBnSp = np.stack([(fA.transform(bS.T)).T for bS in bnSp[trnInd, :].view(np.ndarray)])
+            projTestBnSp = np.stack([(fA.transform(bS.T)).T for bS in bnSp[tstInd, :].view(np.ndarray)])
+            seqsTrainNew.append([{'trialId' : trlNum, 'xsm' : trlProj, 'y': trlOrig} for trlNum, (trlProj, trlOrig) in enumerate(zip(projTrainBnSp, bnSp[trnInd, :].view(np.ndarray)))])
+            seqsTestNew.append([{'trialId' : trlNum, 'xsm' : trlProj, 'y': trlOrig} for trlNum, (trlProj, trlOrig) in enumerate(zip(projTestBnSp, bnSp[tstInd, :].view(np.ndarray)))])
 
 
         self.dimOutput[numDim] = {}
