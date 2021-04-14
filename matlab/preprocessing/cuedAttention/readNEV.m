@@ -1,4 +1,4 @@
-function [spike] = readNEV(nevfile)
+function [spike,waveforms] = readNEV(nevfile)
 %function [spike] = readNEV(nevfile)
 %
 % readNEV takes an NEV file as input and returns the event codes

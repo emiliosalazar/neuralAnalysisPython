@@ -62,7 +62,7 @@ def saveCallsToDatabase(func):
             ))
         except Exception as err:
             hah = err
-            breakpoint()
+#            breakpoint()
             # handle unique exceptions here...
 
         return funcRet
