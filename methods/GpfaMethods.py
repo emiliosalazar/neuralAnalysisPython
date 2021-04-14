@@ -231,6 +231,150 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
 
     return resultsDict
 
+def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, logLikelihoodDimensionality, gpfaTestInds, gpfaParams):
+    # Note that gpfaParams are passed here so that various firing rates can be
+    # accurately used to remove channels that are actually use to find the
+    # latents
+
+    projFirstLatentByExParams = []
+    varExpLatentOnlyByExParams = []
+    projSignalFirstLatentByExParams = []
+    projAllSignalAllLatentByExParams = []
+    projFirstLatentIncSignalByExParams = []
+    varAccountedForLastSignalPCByExParams = []
+    ratioVarMnAccForVarShLatAccForByExParams = []
+    onesDirProjFirstLatentByExParams = []
+    onesDirProjEachLatentByExParams = []
+    projOnSignalZscByExParams = []
+    meanOnSignalByExParams = []
+    latentsOnSignalZscByExParams = []
+    # this first for loop goes through a list extracted by a specific parameter
+    # set (so if there are 5 sessions and 2 parameters sets, it would be a 10
+    # item list)
+    for bSpParams, gpfaResultForParams, gpfaDimUseParams, gpfaTestIndsParams in zip(binnedSpikeList, gpfaResultsByExtractionParams, logLikelihoodDimensionality, gpfaTestInds):
+        # each of these items might have subsets that were extracted with a
+        # given parameter set, and we loop through those usbsets here
+        for bnSpSubset, gpfaResultSubset, dimsUseSubset, gpfaTestIndsSubset in zip(bSpParams, gpfaResultForParams, gpfaDimUseParams, gpfaTestIndsParams):
+            # because GPFA gets rid of some channels based on thresholds before
+            # running, we have to do that here as well to make sure the number
+            # of channels match the number of channels in the latents
+            bnSpSubset, _ = bnSpSubset.channelsAboveThresholdFiringRate(firingRateThresh=gpfaParams['overallFiringRateThresh'])
+
+            condAvgs = []
+            dirsEigs = []
+            latents = []
+            eigsSharedOrth = []
+            trlProjsOnSignal = []
+            mnProjsOnSignal = []
+            latentsProjSignal = []
+            # each of the subsets might have multiple GPFA runs for each of
+            # their conditions... the bnSpSubset is not cut by condition, but
+            # the gpfaTestInds will tell us how to do that in this loop
+            for gpfaResultCond, dimsUseCond, gpfaTestInd in zip(gpfaResultSubset, dimsUseSubset, gpfaTestIndsSubset):
+                trlCondBnSp = bnSpSubset[gpfaTestInd.squeeze()]
+                if gpfaParams['perConditionGroupFiringRateThresh']>0:
+                    trlCondBnSp.channelsAboveThresholdFiringRate(firingRateThresh=gpfaParams['perConditionGroupFiringRateThresh'])
+                unLabs, unLabInd = np.unique(trlCondBnSp.labels['stimulusMainLabel'], axis=0, return_inverse = True)
+                byCondAvg = [trlCondBnSp[unLabInd == currInd, :].trialAverage() for currInd in np.unique(unLabInd)]
+                byCondAvg = np.hstack(byCondAvg).T #squeeze()
+                byCondStd = [trlCondBnSp[unLabInd == currInd, :].trialStd() for currInd in np.unique(unLabInd)]
+                byCondStd = np.hstack(byCondStd).T #squeeze()
+                byCondZsc = byCondAvg/byCondStd # we're putting the mean into the units of the z-score that found the FA latents
+                byCondZsc = [trlCondBnSp[unLabInd == currInd, :].trialAverage()/byCondStd[[currInd],:].T for currInd in np.unique(unLabInd)]
+                byCondZsc = np.hstack(byCondZsc).T
+                neurAvgCond = byCondZsc.mean(axis=0)
+                indTrlZsc = [(trlCondBnSp[unLabInd == currInd, :]/byCondStd[[currInd],:].T - neurAvgCond[:,None]).squeeze()  for currInd in np.unique(unLabInd)]
+                if byCondZsc.shape[0] != unLabs.shape[0]:
+                    breakpoint()
+
+                # mnSubAvgs = byCondAvg - byCondAvg.mean(axis=0)
+                mnSubAvgs = byCondZsc - byCondZsc.mean(axis=0)
+                covSubAvgs = 1/mnSubAvgs.shape[0]*(mnSubAvgs.T @ mnSubAvgs)
+                dirs, eigs, _ = np.linalg.svd(np.array((covSubAvgs))) # this is PCA
+                dirs, eigs = (dirs[:, :mnSubAvgs.shape[0]-1], eigs[:mnSubAvgs.shape[0]-1])
+                dirsEigs.append((dirs, eigs))
+
+                onesDir = np.ones((mnSubAvgs.shape[1],1))/np.sqrt(mnSubAvgs.shape[1])
+                
+                
+                condAvg = trlCondBnSp.trialAverage()
+                condAvgs.append(condAvg)
+
+                gpfaOptDimParams = gpfaResultCond[dimsUseCond] 
+                numCVals = gpfaOptDimParams['crossvalidateNum']
+
+                if numCVals > 1:
+                    # technically we should only use one crossval... so I'm
+                    # putting this here to make a decision later as to whether
+                    # multiple cvals being passed means we should average
+                    # results or do something else
+                    breakpoint()
+
+                C = gpfaOptDimParams['allEstParams'][0]['C']
+                Co, sqrtVarExp, _ = np.linalg.svd(C) # just for future reference, up top I do SVD on the *covariance* matrix, here, I'm doing it on the latents, hence the square root
+                Co = Co[:, :sqrtVarExp.size]
+                egsOrth = sqrtVarExp**2
+                latents.append(Co)
+                eigsSharedOrth.append(egsOrth)
+               
+                trlProjSignal = [trlResp @ dirs[:, :2] for trlResp in indTrlZsc]
+                trlProjsOnSignal.append(trlProjSignal)
+                mnProjSignal = mnSubAvgs @ dirs[:, :2]
+                mnProjsOnSignal.append(mnProjSignal)
+                latentsProjSignal.append(np.diag(egsOrth) @ Co.T @ dirs[:, :2])
+
+
+            projFirstLatentBySubset = [np.abs(xMn.T @ L[:,[0]])/np.sqrt(xMn.T @ xMn) for xMn, L in zip(condAvgs, latents)] 
+            varExpLatentOnlyBySubset = [np.sum(np.sqrt(xMn.T @ L @ L.T @ xMn)/np.sqrt(xMn.T @ xMn)) for xMn, L in zip(condAvgs, latents)] 
+            
+            if np.any(np.array(varExpLatentOnlyBySubset) > 100):
+                breakpoint()
+
+            projSignalFirstLatentBySubset = [np.abs(dsEgs[0][:,[0]].T @ L[:,[0]]) for dsEgs, L in zip(dirsEigs, latents)]
+            projAllSignalAllLatentBySubset = [np.diag(np.sqrt(dsEgs[0].T @ L @ L.T @ dsEgs[0])) for dsEgs, L in zip(dirsEigs, latents)]
+            projFirstLatentIncSignalBySubset = [np.diag(np.sqrt(L[:,[0]].T @ dsEgs[0][:,:(sigUse+1)] @ dsEgs[0][:,:(sigUse+1)].T @ L[:,[0]] )) for dsEgs, L in zip(dirsEigs, latents) for sigUse in range(dsEgs[0].shape[1])]
+
+            varAccountedForLastSignalPCBySubset = [dsEgs[1][-1]/dsEgs[1].sum() for dsEgs in dirsEigs]
+            ratioVarMnAccForVarShLatAccForBySubset = [dsEgs[1].sum() / egsSh[0] for dsEgs, egsSh in zip(dirsEigs, eigsSharedOrth)]
+
+            onesDirProjFirstLatentBySubset = [np.abs(onesDir.T @ L[:,0]) for L in latents]
+            onesDirProjEachLatentBySubset = [np.abs(onesDir.T @ L) for L in latents]
+
+        projFirstLatentByExParams.append(np.array(projFirstLatentBySubset))
+        varExpLatentOnlyByExParams.append(np.array(varExpLatentOnlyBySubset))
+        projSignalFirstLatentByExParams.append(np.array(projSignalFirstLatentBySubset))
+        projAllSignalAllLatentByExParams.append(np.array(projAllSignalAllLatentBySubset))
+        projFirstLatentIncSignalByExParams.append(np.array(projFirstLatentIncSignalBySubset))
+        varAccountedForLastSignalPCByExParams.append(np.array(varAccountedForLastSignalPCBySubset))
+        ratioVarMnAccForVarShLatAccForByExParams.append(np.array(ratioVarMnAccForVarShLatAccForBySubset))
+        onesDirProjFirstLatentByExParams.append(np.array(onesDirProjFirstLatentBySubset))
+        onesDirProjEachLatentByExParams.append(np.array(onesDirProjEachLatentBySubset))
+
+        projOnSignalZscByExParams.append(trlProjsOnSignal)
+        meanOnSignalByExParams.append(mnProjsOnSignal)
+        latentsOnSignalZscByExParams.append(latentsProjSignal)
+
+
+    projDict = {
+        # 'mean proj on 1st latent' : [np.hstack(proj) for proj in projFirstLatentByExParams],
+        # 'mean proj on all latents/mean size' : [np.hstack(var) for var in varExpLatentOnlyByExParams],
+        # 'max signal pca on 1st latent' : [np.hstack(proj) for proj in projSignalFirstLatentByExParams],
+        # 'all signal pca on all latent' : [np.hstack(proj) for proj in projAllSignalAllLatentByExParams],
+        'first latent on inc signal pca' : [np.hstack(proj) for proj in projFirstLatentIncSignalByExParams],
+        'last signal pc var acc for' : [np.hstack(varAcc) for varAcc in varAccountedForLastSignalPCByExParams],
+        'ratio mean var to first lat var' : [np.hstack(ratMnSh) for ratMnSh in ratioVarMnAccForVarShLatAccForByExParams], 
+        'ones dir on 1st latent' : [np.hstack(proj) for proj in onesDirProjFirstLatentByExParams],
+        'ones dir on each latent' : [np.hstack(proj) for proj in onesDirProjEachLatentByExParams],
+    }
+
+    projectedPoints = {
+        'data into top two signal PCs' : projOnSignalZscByExParams,
+        'mean into top two signal PCs' : meanOnSignalByExParams,
+        'noise latents into signal PCs' : latentsOnSignalZscByExParams,
+    }
+
+    return projDict, projectedPoints
+
 # note that gpfaResultsDictOfDicts is lists of spike sets of a specific set of
 # GPFA results grouped by some key which has results from various
 # dimensionality tests within (those results are in a dict keyed by
