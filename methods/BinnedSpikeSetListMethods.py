@@ -122,16 +122,19 @@ def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssKeys, maxNumT
 
         bnSpHereSubsample, trlNeurHereSubsamples, datasetName, subsampleKeyHere = bnSpOrigInfo.computeRandomSubsets("match for comparisons", numTrialsPerCond = maxNumTrlPerCond[bssInd] if type(maxNumTrlPerCond) is list else maxNumTrlPerCond, numChannels = maxNumNeuron, labelName = labelName, numSubsets = numSubsamples, returnInfo = True)
 
-        brainArea = dsi[bnSpOrigInfo].fetch('brain_area')[0] # returns array, grab the value (string)
-        task = dsi[bnSpOrigInfo].fetch('task')[0]
+        # here we check if any subsamples can be formed given the limitations,
+        # and only add on subsamples to the list if they were formed
+        if len(bsi[subsampleKeyHere]):
+            brainArea = dsi[bnSpOrigInfo].fetch('brain_area')[0] # returns array, grab the value (string)
+            task = dsi[bnSpOrigInfo].fetch('task')[0]
 
-        bnSpSubsamples.append(bnSpHereSubsample)
-        trlNeurSubsamples.append(trlNeurHereSubsamples)
-        subsampleExpressions.append(bsi[subsampleKeyHere])
-        subsmpKeys.append(subsampleKeyHere)
-        datasetNames.append(datasetName)
-        brainAreas.append(brainArea)
-        tasks.append(task)
+            bnSpSubsamples.append(bnSpHereSubsample)
+            trlNeurSubsamples.append(trlNeurHereSubsamples)
+            subsampleExpressions.append(bsi[subsampleKeyHere])
+            subsmpKeys.append(subsampleKeyHere)
+            datasetNames.append(datasetName)
+            brainAreas.append(brainArea)
+            tasks.append(task)
 
 
 
@@ -429,7 +432,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 # Mmk, I think this'll work; basically here we're checking
                 # about combined conditions, which makes cond have more than
                 # one value; to do so, we need to loop through the returned
-                # cnodNumsAllDb and check each array individually (well, all
+                # condNumsAllDb and check each array individually (well, all
                 # values in the array)
                 assert np.sum([np.all(cnd == cond) for cnd in condNumsAllDb]) == 1, "Too many GPFA analysis infos fit these parameters"
                 hshUseLog = np.array([np.all(cnd == cond) for cnd in condNumsAllDb])
@@ -501,6 +504,8 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             gpfaResBestExp.update(gpfaResBestCond)
 
         gpfaResBest.append(gpfaResBestExp)
+
+    
 
     for gpfaResHere, gpfaInfoHere in zip(gpfaResBest, gpfaInfo):
         gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
