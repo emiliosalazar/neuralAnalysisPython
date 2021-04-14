@@ -372,12 +372,47 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 gaiCompleted = gai[bssNewDimExp][gap[gpfaParams]]['gpfa_rel_path_from_bss LIKE "%cond{}{}{}%"'.format('s' if len(condNum)>1 else '', '-'.join([str(cN) for cN in condNum]), 'Grpd' if gpfaParams['combine_conditions'] != 'no' else '')]
 
                 if len(gaiCompleted) == 0:
-                    gai.computeGpfaResults(gap[gpfaParams], bssNewDimExp, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParams['combine_conditions'] == 'all' else condNum, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
+                    # outVals aren't quite what we need unless this is FA which
+                    # is handled in the try statement below
+                    # NOTE: we set useFa to False here because GPFA *HAS* to be
+                    # run to get it input into the database... not the best
+                    # work flow, but FA has never been in my code ;_;
+                    outVals = gai.computeGpfaResults(gap[gpfaParams], bssNewDimExp, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParams['combine_conditions'] == 'all' else condNum, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=False) 
 
-                gpfaResH, gpfaInfoH = gaiCompleted.grabGpfaResults(returnInfo=True, useFa=useFa)
+                try:
+                    gpfaResH, gpfaInfoH = gaiCompleted.grabGpfaResults(returnInfo=True, useFa=useFa)
+                    keyRes = list(gpfaResH.keys())
+                    assert len(keyRes)==1, "Should have one (and only one) key from the new dim runs..."
+                except AssertionError:
+                    breakpoint()
+                    if useFa:
+                        # sometimes GPFA hasn't been run, so I have another
+                        # pathway that runs FA through Python but as a result
+                        # doesn't exist in the database. This means that the
+                        # try statement doesn't come up with a keyRes... so we
+                        # try to recreate it here, because gpfaResHere *does*
+                        # exist... (I think?)
+                        import re
+                        # put in a list because that's how it would output from
+                        # the db
+                        keyRes = [(bssNewDimExp['bss_relative_path'][0], str(gpfaParams['num_folds_crossvalidate']) ,re.sub(' ', ',',str(np.array(condNum))))]
 
-                keyRes = list(gpfaResH.keys())
-                assert len(keyRes)==1, "Should have one (and only one) key from the new dim runs..."
+                        faRunInfo = outVals[0]
+                        fullPath = faRunInfo['pathToCond'] / ("cond" + str(faRunInfo['condDescriptors'][0])) / ("faResultsDim{}.npz".format(newDimTest))
+
+
+                        print('Loading FA for %s' % fullPath)
+                        try:
+#                    raise(FileNotFoundError)
+                            with np.load(fullPath, allow_pickle=True) as faRes:
+                                gpfaResLoaded = dict(
+                                    zip((k for k in faRes), (faRes[k] for k in faRes))
+                                )
+                        except e:
+                            raise(e)
+
+                        gpfaResH[keyRes[0]] = {newDimTest : gpfaResLoaded}
+
                 keyRes = keyRes[0]
                 gpfaResHere[keyRes].update(gpfaResH[keyRes])
                 gpfaInfoHereNew = {k:gih1 + gih2 for  (k, gih1), (_, gih2) in zip(gpfaInfoHere.items(), gpfaInfoH.items())}
