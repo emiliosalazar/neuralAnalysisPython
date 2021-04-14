@@ -1530,9 +1530,12 @@ class GpfaAnalysisInfo(dj.Manual):
                     unsavedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
 
                     condNums = unsavedGpfa['condition_nums'][0]
+                    combConds = gap[gpfaParams]['combine_conditions']
                     gpfaRunArgsMap = dict(
                         labelUse = unsavedGpfa['label_use'][0],
-                        conditionNumbersGpfa = condNums,
+                        # the way I set it up, setting conditionNumbersGpfa to
+                        # None needs to happen if combConds is all
+                        conditionNumbersGpfa = condNums if combConds != 'all' else None,
                         perCondGroupFiringRateThresh = unsavedGpfa['condition_grp_fr_thresh'][0]
                     )
                     
@@ -1559,9 +1562,12 @@ class GpfaAnalysisInfo(dj.Manual):
 
                     labelUse = gpfaParams['label_use'][0]
                     condNums = gpfaParams['condition_nums'][0]
+                    combConds = gap[gpfaParams]['combine_conditions']
                     gpfaRunArgsMap = dict(
                         labelUse = labelUse,
-                        conditionNumbersGpfa = condNums,
+                        # the way I set it up, setting conditionNumbersGpfa to
+                        # None needs to happen if combConds is all
+                        conditionNumbersGpfa = condNums if combConds != 'all' else None,
                         perCondGroupFiringRateThresh = gpfaParams['condition_grp_fr_thresh'][0]
                     )
                     
@@ -1675,6 +1681,8 @@ class GpfaAnalysisInfo(dj.Manual):
                 retVals = {}
                 retVals['faRes'] = bss.fa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams)
                 retVals['groupedBalancedSpikes'] = groupedBalancedSpikes
+                retVals['pathToCond'] = fullPathToConditions
+                retVals['condDescriptors'] = condDescriptors
                 retValsAll.append(retVals)
                 continue
             else:
@@ -1730,7 +1738,7 @@ class GpfaAnalysisInfo(dj.Manual):
                         # check if this could happen because you're trying to
                         # insert something that's there with no changes to
                         # uniqueness...
-                        breakpoint()
+#                        breakpoint()
                         pass
 #                        raise e
         return retValsAll
