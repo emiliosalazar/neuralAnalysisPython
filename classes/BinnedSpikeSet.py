@@ -1166,6 +1166,7 @@ class BinnedSpikeSet(np.ndarray):
                     
             corrSpksCondMn = corrSpksPerCond.mean(axis=2)
         else:
+            labelPresented = np.repeat(labelPresented, numTp)
             # when combining the labels, we z-score the spike counts first
             for lblNum, _ in enumerate(uniqueLabel):
                 lblSpks = maskChanFlat[:, labelPresented==lblNum]
@@ -1314,15 +1315,29 @@ class BinnedSpikeSet(np.ndarray):
 
 
         if combineConds and (condNums is None or len(condNums)>1):
-            # okay, so if we combine conditions, on advice of Byron and Matt...
-            # and like 50% understanding why myself, we are going to z-score
-            # each channels response *within* each condition first (note that
-            # when looking at residuals, you've already mean subtracted, since
-            # they're residuals, but this function allows for that not to be
-            # the case, so appropriate z-scoring must include mean
-            # subtraction!)
-            grpSpksNpArr = [(g - g.mean(axis=0))/g.std(axis=0) for g in grpSpksNpArr]
+            # If we combine conditions we are going to z-score each channel's
+            # response *within* each condition first. This reduces the fact
+            # that PSTH is not the only thing that changes between conditions
+            # (which looking at residuals would take care of since the PSTH is
+            # removed), but that variance *also* changes, because these are
+            # assumed Poisson. (Also note that when looking at residuals,
+            # you've already mean subtracted, since they're residuals, but this
+            # function allows for that not to be the case, so appropriate
+            # z-scoring must include mean subtraction!)
+            #
+            # NOTE: I'm computing the mean and standard deviation over all time
+            # bins (so instead of subtracting a mean/std per time point if I
+            # were to compute them over just axis=0, or per trial if I were to
+            # compute with axis=2, I combine both and subtract over all of them
+            grpSpksNpArr = [(g - g.mean(axis=(0,2))[:,None])/g.std(axis=(0,2))[:,None] for g in grpSpksNpArr]
             grpSpksNpArr = [np.concatenate(grpSpksNpArr, axis=0)] # grpSpksNpArr
+            # I'm not sure that this is the best way to approach this, but if
+            # the standard deviation is 0 for a channel in a condition, then
+            # that channel/condition's entry is np.nan, and I'm going to change
+            # that to 0. I do this since I've only witnessed it when the
+            # channel has zero response. It could conceivably occur elsewhere,
+            # but I'll cross that bridge when I get to it?
+            grpSpksNpArr[0][np.isnan(grpSpksNpArr[0])] = 0
             condDescriptors = ['s' + '-'.join(['%d' % stN for stN in condsUse]) + 'Grpd']
             # grouping all of them together
             condsUse = [condsUse] # list turns out to be important keeping things together...
@@ -1384,6 +1399,7 @@ class BinnedSpikeSet(np.ndarray):
                 print("FA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
                         
                 preSavedDataPath = fullOutputPath / ("faResultsDim%d.npz" % xDim)
+                preSavedDataPath.parent.mkdir(parents=True, exist_ok = True)
                 np.savez(preSavedDataPath, dimOutput=faPrep.dimOutput[xDim], testInds = faPrep.testInds, trainInds=faPrep.trainInds, score=faScoreCond[0,:], alignmentBins = grpSpks.alignmentBins, condLabel = grpSpks[0].labels[labelUse], binSize = grpSpks.binSize  )
 
         print("All FA training done in %d seconds" % (time()-tSt))
