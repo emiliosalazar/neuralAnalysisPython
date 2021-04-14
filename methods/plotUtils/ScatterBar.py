@@ -4,20 +4,23 @@ import numpy as np
 
 def scatterBar(Ys):
     if type(Ys) is list:
-        # list stuff here... I think I might just delete this...
-        pass
-    else:
-        try:
-            numPoints, numBars = Ys.shape
-        except ValueError:
-            # the second dimension of the array wasn't passed, so it's one
-            Ys = Ys[:, None]
-            numPoints, numBars = Ys.shape
+        # I'm going to assume that a list means we want many bars, but that
+        # the bars might not be the same length. As a result, we pad the
+        # incorrect length with nans
+        mxShape = np.max([y.shape[0] for y in Ys])
+        Ys = np.hstack([np.hstack([y, np.full(mxShape - y.shape[0],np.nan)])[:,None] for y in Ys])
+
+    try:
+        numPoints, numBars = Ys.shape
+    except ValueError:
+        # the second dimension of the array wasn't passed, so it's one
+        Ys = Ys[:, None]
+        numPoints, numBars = Ys.shape
 
     XYPos = np.zeros((numPoints,2,numBars))
     indScrambles = np.zeros((numPoints,numBars))
     for ii in range(numBars):
-        XYPos[:,:,ii] = scatterPoints(Ys[:,ii],Ys.max() - Ys.min()) - np.array([ii,0])
+        XYPos[:,:,ii] = scatterPoints(Ys[:,ii],Ys.max() - Ys.min()) + np.array([ii,0])
         indsToSortInput = np.argsort(Ys[:,ii], axis=0)
         # I feel like I'm missing something and being dumb here, but sorting
         # the inds to sort the array tells you how to unsort the array to its
