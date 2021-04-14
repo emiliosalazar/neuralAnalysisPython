@@ -86,13 +86,13 @@ def plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesPlotList, axesOthe
         axesHere = axesPlotList[pltListNum]    
         plt.axes(axesHere)
     
-    plt.plot(tmValsPlot, dimVals, color=colorUse, linewidth=linewidth, label=labelTraj)
+    plt.plot(tmValsPlot, dimVals, color=colorUse, linewidth=linewidth, label=labelTraj, marker='.' if tmValsPlot.size==1 else '')
     
     return axesHere
 
    
 
-def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaScoreAll, xDimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins,
+def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll, xDimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins,
             baselineSubtract = False, # setting to false default because I think I want to get rid of it entirely...
             computeShuffles = False, sqrtSpikes = False):
 
@@ -101,22 +101,26 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
 
    for idx, dimResult in enumerate(dimResults):
         print("** Plotting GPFA for condition %d/%d **" % (idx+1, len(dimResults)))
-        normalGpfaScore = normalGpfaScoreAll[idx]
-        normalizedGpfaScore = (normalGpfaScore - np.min(normalGpfaScore, axis=0))/(np.max(normalGpfaScore,axis=0)-np.min(normalGpfaScore,axis=0))
+        gpfaScore = gpfaScoreAll[idx]
+        # normalizedGpfaScore = (gpfaScore - np.min(gpfaScore, axis=0))/(np.max(gpfaScore,axis=0)-np.min(gpfaScore,axis=0))
 
-        normalGpfaScoreMn = normalizedGpfaScore.mean(axis=1)
-        normalGpfaScoreErr = normalizedGpfaScore.std(axis=1)
+        # breakpoint()
+        gpfaScoreMn = gpfaScore.mean(axis=1)
+        gpfaScoreErr = gpfaScore.std(axis=1)
 
         if cvApproach is "logLikelihood":
-            xDimScoreBest = xDimTest[np.argmax(normalGpfaScoreMn)]
+            xDimScoreBest = xDimTest[np.argmax(gpfaScoreMn)]
         elif cvApproach is "squaredError":
-            xDimScoreBest = xDimTest[np.argmin(normalGpfaScoreMn)]
+            xDimScoreBest = xDimTest[np.argmin(gpfaScoreMn)]
         
         Cparams = [prm['C'] for prm in dimResult[xDimScoreBest]['allEstParams']]
         shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
         percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
         meanPercAcc = np.mean(percAcc, axis=0)
         stdPercAcc = np.std(percAcc, axis = 0)
+        accByDim = np.stack([eVals/np.sum(eVals) for eVals in shEigs])
+        meanAccByDim = np.mean(accByDim, axis=0)
+        stdAccByDim = np.std(accByDim, axis = 0)
         xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
         
         axScore = plotInfo['axScore']
@@ -126,34 +130,46 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
         description = plotInfo['description']
 
         if cvApproach is "logLikelihood":
-            axScore.plot(xDimTest,normalGpfaScoreMn, label = lblLL)
-            axScore.fill_between(xDimTest, normalGpfaScoreMn-normalGpfaScoreErr, normalGpfaScoreMn+normalGpfaScoreErr, alpha=0.2, label =lblLLErr)
-            axScore.set_title(description)
+            axScore.plot(xDimTest,gpfaScoreMn, label = lblLL)
+            axScore.fill_between(xDimTest, gpfaScoreMn-gpfaScoreErr, gpfaScoreMn+gpfaScoreErr, alpha=0.2, label =lblLLErr)
+            # axScore.set_title(description)
         elif cvApproach is "squaredError":
-            axScore.plot(xDimTest,normalGpfaScoreMn, label = 'Summed GPFA Error Over Folds')
+            axScore.plot(xDimTest,gpfaScoreMn, label = 'Summed GPFA Error Over Folds')
             axScore.plot(np.arange(len(reducedGpfaScore))+1, reducedGpfaScore, label='Summed Reduced GPFA Error Over Folds')
-            axScore.set_title(description)
+            # axScore.set_title(description)
         # axScore.legend(loc='upper right')
         
-        axDim = plotInfo['axDim']
-        axDim.set_xlabel("num dims")
+        axCumulDim = plotInfo['axCumulDim']
+        axByDim = plotInfo['axByDim']
+        axByDim.set_xlabel("num dims")
         
-        axDim.plot(np.arange(len(meanPercAcc))+1,meanPercAcc)
-        axDim.fill_between(np.arange(len(meanPercAcc))+1, meanPercAcc-stdPercAcc,meanPercAcc+stdPercAcc,alpha=0.2)
+        axCumulDim.plot(np.arange(len(meanPercAcc))+1,meanPercAcc, '.' if len(meanPercAcc)==1 else '-')
+        axCumulDim.fill_between(np.arange(len(meanPercAcc))+1, meanPercAcc-stdPercAcc,meanPercAcc+stdPercAcc,alpha=0.2)
+        axByDim.plot(np.arange(len(meanAccByDim))+1,meanAccByDim, '.' if len(meanAccByDim)==1 else '-')
+        axByDim.fill_between(np.arange(len(meanAccByDim))+1, meanAccByDim-stdAccByDim,meanAccByDim+stdAccByDim,alpha=0.2)
         
-        axDim.axvline(xDimBest, linestyle='--')
-        axDim.axhline(shCovThresh, linestyle='--')
+        axCumulDim.axhline(shCovThresh, linestyle='--')
+        axCumulDim.axhline(0, linestyle='--', color='k')
         
         axScore.axvline(xDimBest, linestyle='--')
 
-        xlD = axDim.get_xlim()
+        xlD = axCumulDim.get_xlim()
         xlS = axScore.get_xlim()
         axScore.set_xticks(xDimTest)
         axScore.set_xticklabels(xDimTest)
         axScore.set_xlim(xmin=np.min([xlD[0],xlS[0]]), xmax=np.max([xlD[1],xlS[1]]))
+        axScore.spines['right'].set_visible(False)
+        axScore.spines['top'].set_visible(False)
 
-        axDim.set_xticks(xDimTest)
-        axDim.set_xticklabels(xDimTest)
+        axCumulDim.xaxis.set_ticklabels('')
+        axCumulDim.xaxis.set_visible(False)
+        axCumulDim.spines['bottom'].set_visible(False)
+        axCumulDim.spines['right'].set_visible(False)
+        axCumulDim.spines['top'].set_visible(False)
+        axByDim.set_xticks(xDimTest)
+        axByDim.set_xticklabels(xDimTest)
+        axByDim.spines['right'].set_visible(False)
+        axByDim.spines['top'].set_visible(False)
 
        
         alBins = alignmentBins[idx]
@@ -166,7 +182,7 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
             if baselineSubtract:
                 # NOTE: This should probably be pulled out of this function; will let it fail for now because labelMeans isn't defined
                 # meanTraj = gpfaPrep.projectTrajectory(gpfaPrep.dimOutput[xDimScoreBest]['allEstParams'][cValUse], labelMeans[idx][None,:,:], sqrtSpks = sqrtSpikes)
-                meanTraj = projectTrajectory(dimResult[xDimScoreBest]['allEstParams'][cValUse], np.stack(labelMeans), sqrtSpks = sqrtSpikes)
+                meanTraj = projectTrajectory(dimResult[xDimScoreBest]['allEstParams'][cValUse], np.stack(labelMeans))
                 
             if computeShuffles:
                 # NOTE this will fail for the moment... I'm going to ignore it until it's needed again, though
@@ -437,11 +453,20 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
                     pltListNum = 0
                     plt.figure(figSep.number)
                     plt.suptitle(description + " cond " + str(idx) + "")
+                    try:
+                        zip(sq['xorth'])
+                    except TypeError:
+                        sq['xorth'] = [sq['xorth']]
                     for dimNum, dim in enumerate(sq['xorth']):
                         dimNum = dimNum+1 # first is 1-dimensional, not zero-dimensinoal
                         #we'll only plot the xDimBest dims...
                         if dimNum > xDimBest:
                             break
+
+                        try:
+                            dim[0]
+                        except TypeError:
+                            dim = [dim]
                         
                         if tmValsStart.size:
                             axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorset[idx,:], lblNeuralTraj, axTitle = 'Start')
@@ -724,13 +749,13 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, normalGpfaSco
                 ax.spines['top'].set_visible(False)
 
 def projectTrajectory(estParams, trajectory):
-
+    from classes import GPFA
     seqTrajDict = GPFA.binSpikesToGpfaInputDict([], binnedSpikes = trajectory)
     from multiprocessing import Pool
     with Pool() as poolHere:
         res = []
 
-        res.append(poolHere.apply_async(projectTrajectory, (seqTrajDict,estParams)))
+        res.append(poolHere.apply_async(GPFA.projectTrajectory, (seqTrajDict,estParams)))
 
         resultsTraj = [rs.get() for rs in res]
 
