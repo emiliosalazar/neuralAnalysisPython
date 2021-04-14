@@ -51,30 +51,50 @@ class Dataset():
             
             _, self.markerTargAngles = self.computeTargetCoordsAndAngle(markerTargWindows, markerTargWindowNames, stateWithAngleName = stateWithAngleName)
             
-            self.statesPresented = [trlDat['stateTransitions'][0][0] for trlDat in annots['Data']['TrialData'][0]]
+            statesPres = [trlDat['stateTransitions'][0][0] for trlDat in annots['Data']['TrialData'][0]]
             
             # here, if there are multiple sets of state names, we assign
             # stateNames to an object array containing one set per trial;
             # otherwise, we assign stateNames to the one unique set
             stateNamesList = [trlDat['stateNames'][0][0] for trlDat in annots['Data']['Parameters'][0]]
 #            self.stateNames = annots['Data']['Parameters'][0][0]['stateNames'][0][0]
-            if not np.all([np.all(stNms == stateNamesList[0]) for stNms in stateNamesList]):
-                stateNamesObjArr = np.ndarray((len(stateNamesList),), dtype='object')
-                stateNamesObjArr[:] = [stNms.squeeze() for stNms in stateNamesList]
-                self.stateNames = stateNamesObjArr 
-            else:
-                self.stateNames = stateNamesList[0]
+#            if not np.all([np.all(stNms == stateNamesList[0]) for stNms in stateNamesList]):
+            stateNamesObjArr = np.ndarray((len(stateNamesList),), dtype='object')
+            stateNamesObjArr[:] = [stNms.squeeze() for stNms in stateNamesList]
+#            else:
+#                self.stateNames = stateNamesList[0]
 
             stateHandLoc = annots['Data']['Parameters'][0][0]['StateTable'][0,0][0,0]['Hand'][0,0]['window'][0,0:3]
             
             kinematicsTemp = [trlDat['HandKinematics'][0][0]['cursorKinematics'][0][0] for trlDat in annots['Data']['TrialData'][0]]
-            for idx, struc in enumerate(kinematicsTemp):
+            moveStart = [trlDat['timeMoveOnset'][0][0][0,0] if 'timeMoveOnset' in trlDat.dtype.names else np.nan for trlDat in annots['Data']['TrialData'][0]]
+            for idx, (kinStruc, stNames, stPresInfo, mvStTm) in enumerate(zip(kinematicsTemp, stateNamesObjArr, statesPres, moveStart)):
                 emptyObjArr = np.empty((0,0), dtype='uint8')
                 # fa = np.array([[(emptyObjArr)]], dtype=[('hah', 'object')])
                 #np.ndarray((0,0), dtype='int8')# np.array(([[np.ndarray((0,0), dtype='int8')]]), dtype=[('0', 'object')])
-                # np.array(())
-                if not struc.size:
+                # np.array()
+                if not kinStruc.size:
                     kinematicsTemp[idx] = np.array([[(emptyObjArr,emptyObjArr,emptyObjArr,emptyObjArr)]], dtype=[('time', 'O'), ('position', 'O'), ('velocity', 'O'), ('acceleration', 'O')])
+                else:
+                    if not np.isnan(mvStTm): # only if there was a valid reach do we do this...
+                        reachState = np.array([keyStates['action']]) # weird construction but trying to keep it in line with how it's loaded up from Matlab
+                        stNames = np.append(stNames, reachState)
+                        # this re-setting is to have it wrapped in an array like the rest of the states...
+                        stNames[-1] = reachState
+                        stateNamesObjArr[idx] = stNames
+
+                        stateActionInd = stNames.shape[0]
+
+                        stActionInfo = np.array([stateActionInd, mvStTm], dtype='int16')
+
+                        stateTimes = stPresInfo[1, :]
+                        indAfterInsert = (stateTimes>mvStTm).nonzero()[0][0]
+                        newStPresInfo = np.insert(stPresInfo, indAfterInsert, stActionInfo, axis=1)
+                        statesPres[idx] = newStPresInfo
+
+                    
+            self.statesPresented = statesPres
+            self.stateNames = stateNamesObjArr 
             self.kinematics = np.stack(kinematicsTemp)
             self.kinematicCenter = stateHandLoc
         elif preprocessor == 'Yuyan':
@@ -351,7 +371,7 @@ class Dataset():
         self.id = None
         self.stateWithAngleName = stateWithAngleName # this is the state for some preprocessing that will let us extract the angle name
         self.metastates = metastates # these are states that don't refer to what the monkey is seeing, but rather some state of the session itself (for alignment purposes, say)
-        self.keyStates = keyStates # I'm trying to allow some semblance of consistency for states o 'interest' among different stimuli -- i.e. 'delay period', 'stim period', etc.
+        self.keyStates = keyStates # I'm trying to allow some semblance of consistency for states of 'interest' among different stimuli -- i.e. 'delay period', 'stim period', etc.
 
     def hash(self):
         return hashlib.md5(str(self.spikeDatTimestamps).encode('ascii')) # this is both unique, fast, and good info
@@ -809,8 +829,12 @@ class Dataset():
                 # stNames])... but I can't promise that'll behave correctly for
                 # all formats of stNames since they're not... you know...
                 # necessarily equivalent given where the dataset came from ;_;
-                indStatePres = np.nonzero(stNames == stateName)[0][0] # this is a horizontal vector...
-                locStateLog = statesPres[0,:]==(indStatePres+1) # remember Matlab is 1-indexed
+                indStatePres = np.nonzero(stNames == stateName)[0]
+                if indStatePres.size>0:
+                    indStatePres = indStatePres[0]
+                    locStateLog = statesPres[0,:]==(indStatePres+1) # remember Matlab is 1-indexed
+                else:
+                    locStateLog = []
                 if np.any(locStateLog):
                     locStateStrtSt = np.where(locStateLog)[0][0]
                     delayStartSt = locStateStrtSt
