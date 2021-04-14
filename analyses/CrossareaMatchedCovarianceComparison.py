@@ -42,11 +42,12 @@ from methods.BinnedSpikeSetListMethods import plotStimDistributionHistograms
 from methods.BinnedSpikeSetListMethods import plotFiringRates
 
 # for computing metrics
-from methods.BinnedSpikeSetListMethods import rscComputations
-from methods.GpfaMethods import computePopulationMetrics
+from methods.BinnedSpikeSetListMethods import rscComputations, decodeComputations
+from methods.GpfaMethods import computePopulationMetrics, computeProjectionMetrics
 
 # for plotting the metrics
-from methods.plotUtils.UnsortedPlotMethods import plotAllVsAll, plotMetricVsExtractionParams, plotMetricsBySeparation
+from methods.plotUtils.PopMetricsPlotMethods import plotAllVsAll, plotMetricVsExtractionParams, plotMetricsBySeparation
+from methods.plotUtils.UnsortedPlotMethods import plotPointProjections
 
 
 @saveCallsToDatabase
@@ -78,7 +79,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
 
     extraOpts = subsampleParams['extraOpts']
-    labelName = 'stimulusMainLabel'
+    labelName = subsampleParams['labelName']
 
 
 
@@ -184,10 +185,11 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
     tasks*=len(paramIterator)
     binnedResidShStOffSubsamples = bnSpOut
 
-    if plotParams['plotGpfa']:
+    if plotParams and plotParams['plotGpfa']:
         plotGpfaParams = plotParams['plotGpfa']
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname=("{}{}Neur{}Trl{}".format(plotGpfaParams['pdfnameSt'],plotParams['analysisIdentifier'], maxNumNeuron, maxNumTrlPerCond))))
         plt.close('all')
+
 
     
     binnedSpksShortStOffSubsamplesFR = []
@@ -205,19 +207,31 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
     # some descriptive data plots
     descriptions = dsNames #[data[idx]['description'] for idx in dataIndsProcess]
 
-    if plotParams['plotGenericMetrics']:
+    if plotParams and plotParams['plotGenericMetrics']:
         plotGenericMetricParams = plotParams['plotGenericMetrics']
         supTitle = plotGenericMetricParams['supTitle']
 
         plotStimDistributionHistograms(binnedSpksShortStOffSubsamplesFR, descriptions)
         plotFiringRates(binnedSpksShortStOffSubsamplesFR, descriptions, supTitle = supTitle + " firing rates", cumulative = False)
 
-        plotStimDistributionHistograms(binnedSpksShortStOffSubsamplesCnt, descriptions)
+#        plotStimDistributionHistograms(binnedSpksShortStOffSubsamplesCnt, descriptions)
         plotFiringRates(binnedSpksShortStOffSubsamplesCnt, descriptions, supTitle = supTitle + " count", cumulative = False)
 
 
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotGenericMetricParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
+
+    # Projection metrics
+    projMetricsDict, projPtsForPlotDict = computeProjectionMetrics(binnedResidShStOffSubsamples, gpfaDimOut, dimsLL, gpfaTestInds, gpfaParams)
+
+    if plotParams and plotParams['plotProjections']:
+        plotProjParams = plotParams['plotProjections']
+        projOnSignalZscByExParams = projPtsForPlotDict['data into top two signal PCs']
+        meanOnSignalByExParams = projPtsForPlotDict['mean into top two signal PCs']
+        latentsOnSignalZscByExParams = projPtsForPlotDict['noise latents into signal PCs']
+        plotPointProjections(projOnSignalZscByExParams, meanOnSignalByExParams, latentsOnSignalZscByExParams, descriptions)
+        outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotProjParams['pdfnameSt'],plotParams['analysisIdentifier'])))
+    breakpoint()
 
     # Population metrics
     popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims, binnedSpikeSetGenerationParamsDict['binSizeMs'])
@@ -227,13 +241,19 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
     rscMetricDict = rscComputations(binnedResidShStOffSubsamples, descriptions, labelName, **correlationParams)
 
 
-    if plotParams['plotResid']:
+
+    if plotParams and plotParams['plotResid']:
         plotResidParams = plotParams['plotResid']
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotResidParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
+    # Decode metrics
+    decodeDict = decodeComputations(binnedResidShStOffSubsamples, descriptions, labelName)
+
     metricDict = {}
+    metricDict.update(projMetricsDict)
     metricDict.update(popMetricsDict)
+    # metricDict.update(decodeDict)
     metricDict.update(rscMetricDict)
 
 
@@ -241,7 +261,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
 #    descriptions = dsNames*len(computeResidualsLog)
  #[data[idx]['description'] for idx in dataIndsProcess]
-    if plotParams['plotScatterMetrics']:
+    if plotParams and plotParams['plotScatterMetrics']:
         plotAllVsAllParams = plotParams['plotScatterMetrics']['plotAllVsAllParams']
         plotMetVsExtPrmParams = plotParams['plotScatterMetrics']['plotMetVsExtPrmParams']
         plotMetBySeparation = plotParams['plotScatterMetrics']['plotMetBySeparation']
