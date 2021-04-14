@@ -840,6 +840,30 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
 
     return resultsDict
 
+def decodeComputations(listBSS,descriptions, labelUse):
+
+    decodeAcc = []
+    decodeAccZSc = []
+    for bnSpCnt in listBSS:
+        decAccHere = []
+        decAccZScHere = []
+        for bSp in bnSpCnt:
+            labelOrig = bSp.labels[labelUse]
+            labelCategory = np.unique(labelOrig, axis=0, return_inverse=True)[1]
+            acc = bSp.decode(labels=labelCategory)
+            decAccHere.append(acc)
+            accZsc = bSp.decode(labels=labelCategory, zScoreRespFirst = True)
+            decAccZScHere.append(accZsc)
+
+        decodeAcc.append(decAccHere)
+        decodeAccZSc.append(decAccZScHere)
+
+    decodeDict = {
+        'main label decode accuracy' : decodeAcc,
+        'main label dec acc z-sc first' : decodeAccZSc,
+    }
+
+    return decodeDict 
 
 #%% Plotting and descriptive
 def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
