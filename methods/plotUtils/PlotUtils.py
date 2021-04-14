@@ -80,6 +80,7 @@ def MoveFigureToSubplot(origFig, newFig, newSubplotToCopyInto):
     
     oldFigAx = origFig.axes
     newFigPos = newSubplotToCopyInto.get_position().bounds
+    newSubplotToCopyInto.remove()
     
     for ax in oldFigAx:
         ax.remove() # remove axis from the old figure
@@ -89,9 +90,38 @@ def MoveFigureToSubplot(origFig, newFig, newSubplotToCopyInto):
         
         origPos = ax.get_position().bounds # this is still saved even though the axis was deleted from the old figure...
         newAxPos = [newFigPos[0]+origPos[0]*newFigPos[2], newFigPos[1]+origPos[1]*newFigPos[3], origPos[2]*newFigPos[2], origPos[3]*newFigPos[3]]
-        ax.set_position(newAxPos)
+        ax.set_position(newAxPos, which='both')
+#        breakpoint()
         
-    newSubplotToCopyInto.remove()
     plt.close(origFig)
-                    
-                    
+
+
+# same as above, but only one axis now...  shout out to
+# https://gist.github.com/salotz/8b4542d7fe9ea3e2eacc1a2eef2532c5 for...
+# well, basically the code
+#
+# note that not removing the old fig might cause problems is my
+# understanding... byuuut.... maybe you don't wanna so
+# let's keep it False as default
+def MoveAxisToSubplot(axToMove, newFig, newSubplotToCopyInto, removeOldFig = False):
+    # original figure
+    oldFig = axToMove.figure
+
+    # remove axis from said figure
+    axToMove.remove()
+
+    # assign axis to new figure and vice-versa
+    axToMove.figure = newFig
+    newFig.axes.append(axToMove) # add new axis to the figure also has to be done
+    newFig.add_axes(axToMove)
+
+    # set its position to the correct subplot
+    axToMove.set_position(newSubplotToCopyInto.get_position())
+
+    # remove the temporary subplot
+    newSubplotToCopyInto.remove()
+
+    # there definitely might be problems if you don't do this...
+    if removeOldFig:
+        plt.close(oldFig)
+

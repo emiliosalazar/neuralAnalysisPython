@@ -46,7 +46,7 @@ from methods.BinnedSpikeSetListMethods import rscComputations
 from methods.GpfaMethods import computePopulationMetrics
 
 # for plotting the metrics
-from methods.plotUtils.UnsortedPlotMethods import plotAllVsAll, plotMetricVsExtractionParams, plotMetricsBySeparation
+from methods.plotUtils.PlotUtils import MoveFigureToSubplot, MoveAxisToSubplot
 
 
 @saveCallsToDatabase
