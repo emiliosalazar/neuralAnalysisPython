@@ -50,7 +50,7 @@ from methods.plotUtils.PopMetricsPlotMethods import plotAllVsAll, plotMetricVsEx
 from methods.plotUtils.UnsortedPlotMethods import plotPointProjections
 
 
-@saveCallsToDatabase
+# @saveCallsToDatabase
 def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerationParamsDict, subsampleParams, gpfaParams, correlationParams,plotParams):
 
     dsgl = DatasetGeneralLoadParams()
