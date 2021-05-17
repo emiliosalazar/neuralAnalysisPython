@@ -3,6 +3,7 @@ This function is responsible for outputting descriptive plots of datasets--usefu
 Some of what's on here is like the olde HeadlessAnalysisRun4.py for now...
 """
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 import os
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['GOTO_NUM_THREADS'] = '1'
@@ -56,6 +57,8 @@ def datasetDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsD
     dsi = DatasetInfo()
     bsi = BinnedSpikeSetInfo()
     fsp = FilterSpikeSetParams()
+
+    colorsUse = BinnedSpikeSet.colorset
 
     outputFiguresRelativePath = []
 
@@ -147,6 +150,107 @@ def datasetDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsD
 #            outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotGenericMetricParams['pdfnameSt'],plotParams['analysisIdentifier'])))
 #            plt.close('all')
 
+    if 'plotKinematics' in plotParams and plotParams['plotKinematics']:
+        plotKinParams = plotParams['plotKinematics']
+
+        for bssKeyOne in bssKeys:
+            bssExp = bsi[bssKeyOne]
+            bss = bssExp.grabBinnedSpikes()[0]
+            bss.labels['stimulusMainLabel'] = bss.labels['stimulusMainLabel'].astype('float64')
+            dsID = dsi[bssExp]['dataset_name'][0].replace(' ', '_')
+            dsFilteredToBssTrls = bssExp.grabFilteredDataset()
+
+            matchedKinematics = bssExp.grabAlignedKinematics(kinBinning='binToMatch')
+            # NOTE ONLY TRUE if this is the period POST cursor on...
+            for trl, (kinTrl, bsTrl) in enumerate(zip(matchedKinematics, bss)):
+                for ch, chResp in enumerate(bsTrl):
+                    bss[trl,ch] = chResp[~np.isnan(kinTrl[:, 1])]
+                matchedKinematics[trl] = kinTrl[~np.isnan(kinTrl[:, 1]), :]
+
+            unLb, lbTrl = np.unique(bss.labels['stimulusMainLabel'], return_inverse=True)
+
+            fgIndCondKin, axsInd = plt.subplots(2, int(np.ceil(unLb.shape[0]/2)))
+            fgTogTrajAndRT, axsOverall = plt.subplots(2, 2)
+            axsRTandAT = axsOverall[:, 1]
+            fgTogTrajAndRT.delaxes(axsOverall[0, 0])
+            fgTogTrajAndRT.delaxes(axsOverall[1, 0])
+            axsOverallTraj = fgTogTrajAndRT.add_subplot(1,2,1)
+
+
+            trajInCombo = []
+            for uLb, ax in enumerate(axsInd.flatten()):
+                trlH = lbTrl==uLb
+                [ax.plot(pts[:, 0], pts[:, 1], 'k-', alpha=0.05) for pts in matchedKinematics[trlH]]
+                ax.set_title(unLb[uLb])
+
+                [axsOverallTraj.plot(pts[:, 0], pts[:, 1], color=colorsUse[uLb, :], alpha=0.05) for pts in matchedKinematics[trlH]]
+                # oneTrlPts = matchedKinematics[trlH.nonzero()[0][0]]
+                # trajInCombo += axsOverallTraj.plot(oneTrlPts[:, 0], oneTrlPts[:, 1], color=colorsUse[uLb, :], alpha=0.05, label=unLb[uLb])
+                trajInCombo += [Line2D([0],[0], color=colorsUse[uLb,:], label=unLb[uLb])]
+
+            axsOverallTraj.legend(handles = trajInCombo,prop={'size':5},loc='lower left')
+            axsOverallTraj.set_title('successful trajectories')
+            axsOverallTraj.set_xlabel('pixels')
+            axsOverallTraj.set_ylabel('pixels')
+
+            mnX = np.min([np.min(a.get_xlim()) for a in axsInd.flatten()])
+            mxX = np.max([np.max(a.get_xlim()) for a in axsInd.flatten()])
+            mnY = np.min([np.min(a.get_ylim()) for a in axsInd.flatten()])
+            mxY = np.max([np.max(a.get_ylim()) for a in axsInd.flatten()])
+
+            [a.set_xlim(mnX, mxX) for a in axsInd.flatten()]
+            [a.set_ylim(mnY, mxY) for a in axsInd.flatten()]
+
+            fgIndCondKin.suptitle('successful trajectories')
+            fgIndCondKin.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+            # histograms of reaction time
+            stTm,endTm,stEndNm = dsFilteredToBssTrls.computeStateStartAndEnd(stateName = dsFilteredToBssTrls.keyStates['go cue'])
+            endTm = np.array(endTm)
+            stTm = np.array(stTm)
+            rt = endTm - stTm
+            binSize = 5 # ms
+            binStart = np.floor(rt.min()/binSize)*binSize # this gets to the nearest binSize 
+            histHands = []
+            for uLb, uLbNm in enumerate(unLb):
+                trlH = lbTrl==uLb
+                histInfo =  axsRTandAT[0].hist(rt[trlH],bins = np.arange(rt.min(), rt.max()+binSize, binSize), color=colorsUse[uLb,:], alpha=2/len(unLb), label=uLbNm)
+                histHands.append(histInfo[-1][0])
+
+            axsRTandAT[0].legend(handles = histHands,prop={'size':5},loc='best')
+            axsRTandAT[0].set_title('reaction times')
+            axsRTandAT[0].set_xlabel('time (ms)')
+            axsRTandAT[0].set_ylabel('count')
+
+            # histograms of action time
+            stTm = dsFilteredToBssTrls.timeOfState(dsFilteredToBssTrls.keyStates['action'])
+            endTm = dsFilteredToBssTrls.timeOfState('CORRECT')
+            stTm = np.array(stTm)
+            endTm = np.array(endTm)
+            at = endTm - stTm
+            binSize = 20 # ms
+            binStart = np.floor(at.min()/binSize)*binSize # this gets to the nearest binSize 
+            histHands = []
+            for uLb, uLbNm in enumerate(unLb):
+                if uLb==2:
+                    breakpoint()
+                trlH = lbTrl==uLb
+                histInfo =  axsRTandAT[1].hist(at[trlH],bins = np.arange(at.min(), at.max()+binSize, binSize), color=colorsUse[uLb,:], alpha=2/len(unLb), label=uLbNm)
+                histHands.append(histInfo[-1][0])
+
+            axsRTandAT[1].legend(handles = histHands,prop={'size':5},loc='best')
+            axsRTandAT[1].set_title('movement times')
+            axsRTandAT[1].set_xlabel('time (ms)')
+            axsRTandAT[1].set_ylabel('count')
+            fgTogTrajAndRT.tight_layout()
+
+
+
+
+            pdfName = dsID + '_' + bssExp['bss_hash'][0][:5]
+            saveFiguresToPdf(pdfname=pdfName, analysisDescription="kinematicPlots")
+            plt.close('all')
+
     if 'plotKinematicDecoding' in plotParams and plotParams['plotKinematicDecoding']:
         plotKinParams = plotParams['plotKinematicDecoding']
 
@@ -182,12 +286,11 @@ def datasetDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsD
             unLb, lbTrl = np.unique(bss[testInds].labels['stimulusMainLabel'], return_inverse=True)
 
             fgLinEst, axs = plt.subplots(2, int(np.ceil(unLb.shape[0]/2)))
-            fgLinEst.tight_layout()
 
             for uLb, ax in enumerate(axs.flatten()):
                 trlH = lbTrl==uLb
-                [ax.plot(pts[:, 0], pts[:, 1], 'k-') for pts in trueVals[trlH]]
-                [ax.plot(pts[:, 0], pts[:, 1], 'r--') for pts in estimates[trlH]]
+                [ax.plot(pts[:, 0], pts[:, 1], 'k-', alpha=0.05) for pts in trueVals[trlH]]
+                [ax.plot(pts[:, 0], pts[:, 1], 'r--', alpha=0.05) for pts in estimates[trlH]]
                 ax.set_title(unLb[uLb])
 
             mnX = np.min([np.min(a.get_xlim()) for a in axs.flatten()])
@@ -199,9 +302,10 @@ def datasetDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsD
             [a.set_ylim(mnY, mxY) for a in axs.flatten()]
 
             fgLinEst.suptitle('true vs estimated traj')
+            fgLinEst.tight_layout(rect=[0, 0.03, 1, 0.95])
 
             pdfName = dsID + '_' + bssExp['bss_hash'][0][:5]
-            saveFiguresToPdf(pdfname=pdfName, analysisDescription="kinematicPlots")
+            saveFiguresToPdf(pdfname=pdfName, analysisDescription="decodeKinematics")
             plt.close('all')
 
             breakpoint()
