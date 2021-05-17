@@ -240,6 +240,9 @@ def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, log
     varExpLatentOnlyByExParams = []
     projSignalFirstLatentByExParams = []
     projAllSignalAllLatentByExParams = []
+    projFirstLatentOnConditionDiffsByExParams = []
+    sigToNoiseDiffByExParams = []
+    projFirstLatent95pctPCByExParams = []
     projFirstLatentIncSignalByExParams = []
     varAccountedForLastSignalPCByExParams = []
     ratioVarMnAccForVarShLatAccForByExParams = []
@@ -264,6 +267,11 @@ def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, log
             dirsEigs = []
             latents = []
             eigsSharedOrth = []
+            meanDiffsNorm = []
+            meanDiffsNormFactor = []
+            stdActMnDiffs = []
+            meanDiffsProjNormSigSp = []
+            meanDiffsProjNormFactor = []
             trlProjsOnSignal = []
             mnProjsOnSignal = []
             latentsProjSignal = []
@@ -289,10 +297,24 @@ def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, log
 
                 # mnSubAvgs = byCondAvg - byCondAvg.mean(axis=0)
                 mnSubAvgs = byCondZsc - byCondZsc.mean(axis=0)
+                diffsBetweenMeans = mnSubAvgs - mnSubAvgs[:, None, :]
+                normDiffs = np.sqrt((diffsBetweenMeans**2).sum(axis=2))
+                normDiffsBetweenMeans = diffsBetweenMeans/normDiffs[:,:,None]
+                meanDiffsNorm.append(normDiffsBetweenMeans)
+                meanDiffsNormFactor.append(normDiffs)
+
+                stdActivityOnMeanDiff = np.stack([np.stack(np.asarray([np.std(np.vstack([cond1Trls, cond2Trls]) @ diffsBtMn[[cond2Num]].T) for cond2Num, cond2Trls in enumerate(indTrlZsc)])) for cond1Trls, diffsBtMn in zip(indTrlZsc, normDiffsBetweenMeans)])
+                stdActMnDiffs.append(stdActivityOnMeanDiff)
+
                 covSubAvgs = 1/mnSubAvgs.shape[0]*(mnSubAvgs.T @ mnSubAvgs)
                 dirs, eigs, _ = np.linalg.svd(np.array((covSubAvgs))) # this is PCA
                 dirs, eigs = (dirs[:, :mnSubAvgs.shape[0]-1], eigs[:mnSubAvgs.shape[0]-1])
                 dirsEigs.append((dirs, eigs))
+
+                diffsProj = np.transpose(dirsEigs[0][0].T @ np.transpose(diffsBetweenMeans, axes=(0,2,1)), axes=(0,2,1))
+                normDiffsProj = np.sqrt((diffsProj**2).sum(axis=2))
+                meanDiffsProjNormSigSp.append(diffsProj/normDiffsProj[:,:,None])
+                meanDiffsProjNormFactor.append(normDiffsProj)
 
                 onesDir = np.ones((mnSubAvgs.shape[1],1))/np.sqrt(mnSubAvgs.shape[1])
                 
@@ -321,7 +343,7 @@ def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, log
                 trlProjsOnSignal.append(trlProjSignal)
                 mnProjSignal = mnSubAvgs @ dirs[:, :2]
                 mnProjsOnSignal.append(mnProjSignal)
-                latentsProjSignal.append(np.diag(egsOrth) @ Co.T @ dirs[:, :2])
+                latentsProjSignal.append(np.diag(egsOrth[[0]]) @ Co[:,[0]].T @ dirs[:, :2])
 
 
             projFirstLatentBySubset = [np.abs(xMn.T @ L[:,[0]])/np.sqrt(xMn.T @ xMn) for xMn, L in zip(condAvgs, latents)] 
@@ -332,6 +354,26 @@ def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, log
 
             projSignalFirstLatentBySubset = [np.abs(dsEgs[0][:,[0]].T @ L[:,[0]]) for dsEgs, L in zip(dirsEigs, latents)]
             projAllSignalAllLatentBySubset = [np.diag(np.sqrt(dsEgs[0].T @ L @ L.T @ dsEgs[0])) for dsEgs, L in zip(dirsEigs, latents)]
+            # note that in the below, the indexing by projKp works to grab only
+            # the lower triangular portion of the projections, and the vstack
+            # serves to order them so you get the projections onto mean
+            # diffences using the first condition, then the remaining using the
+            # second, etc (i.e. first col of lower triangle, then second col,
+            # etc)
+            # projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs(mD[projKp+1:] @ dsEgs[0].T @ L[:,[0]]*Leigs[0]/nmD[projKp+1:,None]) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs, dsEgs in zip(meanDiffsProjNormSigSp, meanDiffsProjNormFactor, latents, eigsSharedOrth, dirsEigs)]
+            sigToNoiseDiff = [np.hstack([dDfs[stdNum+1:]/stdDfs[stdNum+1:] for stdNum, (stdDfs, dDfs) in enumerate(zip(stdDffs, distDffs))]) for stdDffs, distDffs in zip(stdActMnDiffs, meanDiffsNormFactor)]
+            # sigToNoiseDiff = [np.vstack([np.abs(mDfs[stdNum+1:] @ L[:,[0]] * Leigs[0]/stdDfs[stdNum+1:, None]) for stdNum, (stdDfs, mDfs) in enumerate(zip(stdDffs, mnDffs))]) for stdDffs, mnDffs, L, Leigs in zip(stdActMnDiffs, meanDiffsNorm, latents, eigsSharedOrth)]
+            # sigToNoiseDiff = [np.vstack([stdDfs[stdNum+1:, None] for stdNum, (stdDfs, mDfs) in enumerate(zip(stdDffs, mnDffs))]) for stdDffs, mnDffs, L, Leigs in zip(stdActMnDiffs, meanDiffsNorm, latents, eigsSharedOrth)]
+            # np.vstack([np.abs(mD[projKp+1:] @ dirsEigs[0][0].T @ latents[0][:,[0]]*eigsSharedOrth[0][0]/nmD[projKp+1:,None]) for mD, nmD, projKp in zip(meanDiffsProjNormSigSp[0], meanDiffsProjNormFactor[0], range(meanDiffsProjNormSigSp[0].shape[0]))])
+            # breakpoint()
+            breakpoint()
+            projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs((mD[projKp+1:] @ L[:,[0]] * Leigs[0])/nmD[projKp+1:,None]) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)]
+            # projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.log(np.abs(nmD[projKp+1:,None]/(mD[projKp+1:] @ L[:,[0]] * Leigs[0]))) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)]
+            # projFirstLatentOnConditionDiffsBySubset = [np.vstack([dDfs[stdNum+1:, None] for stdNum, (stdDfs, dDfs) in enumerate(zip(stdDffs, distDffs))]) for stdDffs, distDffs, L, Leigs in zip(stdActMnDiffs, meanDiffsNormFactor, latents, eigsSharedOrth)]
+            # projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs(mD[projKp+1:] @ L[:,[0]] ) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)]
+            # breakpoint()
+            # projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs(mD[projKp+1:] @ L[:,[0]]) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)][0].squeeze()
+            projFirstLatent95pctPCBySubset = [np.diag(np.sqrt(L[:,[0]].T @ dsEgs[0][:,:(np.where(dsEgs[1].cumsum()/dsEgs[1].sum()>0.95)[0][0]+1)] @ dsEgs[0][:,:(np.where(dsEgs[1].cumsum()/dsEgs[1].sum()>0.95)[0][0]+1)].T @ L[:,[0]] )) for dsEgs, L in zip(dirsEigs, latents)]
             projFirstLatentIncSignalBySubset = [np.diag(np.sqrt(L[:,[0]].T @ dsEgs[0][:,:(sigUse+1)] @ dsEgs[0][:,:(sigUse+1)].T @ L[:,[0]] )) for dsEgs, L in zip(dirsEigs, latents) for sigUse in range(dsEgs[0].shape[1])]
 
             varAccountedForLastSignalPCBySubset = [dsEgs[1][-1]/dsEgs[1].sum() for dsEgs in dirsEigs]
@@ -344,6 +386,9 @@ def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, log
         varExpLatentOnlyByExParams.append(np.array(varExpLatentOnlyBySubset))
         projSignalFirstLatentByExParams.append(np.array(projSignalFirstLatentBySubset))
         projAllSignalAllLatentByExParams.append(np.array(projAllSignalAllLatentBySubset))
+        projFirstLatentOnConditionDiffsByExParams.append(np.array(projFirstLatentOnConditionDiffsBySubset))
+        sigToNoiseDiffByExParams.append(np.array(sigToNoiseDiff))
+        projFirstLatent95pctPCByExParams.append(np.array(projFirstLatent95pctPCBySubset))
         projFirstLatentIncSignalByExParams.append(np.array(projFirstLatentIncSignalBySubset))
         varAccountedForLastSignalPCByExParams.append(np.array(varAccountedForLastSignalPCBySubset))
         ratioVarMnAccForVarShLatAccForByExParams.append(np.array(ratioVarMnAccForVarShLatAccForBySubset))
@@ -360,6 +405,9 @@ def computeProjectionMetrics(binnedSpikeList, gpfaResultsByExtractionParams, log
         # 'mean proj on all latents/mean size' : [np.hstack(var) for var in varExpLatentOnlyByExParams],
         # 'max signal pca on 1st latent' : [np.hstack(proj) for proj in projSignalFirstLatentByExParams],
         # 'all signal pca on all latent' : [np.hstack(proj) for proj in projAllSignalAllLatentByExParams],
+        'log((cond diff mag)/(proj noise from 1st latent))' : [np.hstack(proj) for proj in projFirstLatentOnConditionDiffsByExParams],
+        'cond mean diff to std noise' : [np.hstack(proj) for proj in sigToNoiseDiffByExParams],
+        'first latent on 95% PCA' : [np.hstack(proj) for proj in projFirstLatent95pctPCByExParams],
         'first latent on inc signal pca' : [np.hstack(proj) for proj in projFirstLatentIncSignalByExParams],
         'last signal pc var acc for' : [np.hstack(varAcc) for varAcc in varAccountedForLastSignalPCByExParams],
         'ratio mean var to first lat var' : [np.hstack(ratMnSh) for ratMnSh in ratioVarMnAccForVarShLatAccForByExParams], 
