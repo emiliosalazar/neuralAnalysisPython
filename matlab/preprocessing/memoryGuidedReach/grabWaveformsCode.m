@@ -1,5 +1,6 @@
 %% saving all the waveforms in one matrix
 mtFls = dir('*.mat');
+mtFls = dir('Quincy20210324_04_memoryGuided_HC_01_SI_SW_translated.mat')
 outputMat = [];
 snInfoMat = [];
 for flNum = 1:length(mtFls)
@@ -18,9 +19,9 @@ end
 
 waveData = outputMat';
 
-yr = '2020';
-mnth = '12';
-dy = '04';
+yr = '2021';
+mnth = '03';
+dy = '24';
 animal = 'Quincy';
 save(sprintf('%s%s%s%s_sessionWv_Sorts.mat',animal, yr,mnth,dy), 'waveData', '-v7.3')
 save(sprintf('%s%s%s%s_sessionInf_Sorts.mat',animal,yr,mnth,dy), 'snInfoMat', '-v7.3')
@@ -87,8 +88,10 @@ end
 % filenameInf = 'wvInfo/Quincy_EmilioSort20201020_sessionInf_Sorts.mat';
 % filename = 'Quincy20201202_sessionWv_Sorts.mat';
 % filenameInf = 'Quincy20201202_sessionInf_Sorts.mat';
-filename = 'Quincy20201204_sessionWv_Sorts.mat';
-filenameInf = 'Quincy20201204_sessionInf_Sorts.mat';
+% filename = 'Quincy20201204_sessionWv_Sorts.mat';
+% filenameInf = 'Quincy20201204_sessionInf_Sorts.mat';
+filename = 'Quincy20210324_sessionWv_Sorts.mat';
+filenameInf = 'Quincy20210324_sessionInf_Sorts.mat';
 
 gamma = 0.5; 
 net_name = '~/../../project/nspg/esalazar/nasTests/trainedNasPmdLinc/nas_PmdLincoln_NickSortsProbs';
@@ -101,7 +104,7 @@ fileWv = load(filename);
 close all
 numPltPer = 9;
 wvsPlt = 200;
-gammaSel = 0.05; gamma;
+gammaSel = 0.3; gamma;
 snInfAuto = gammaWv > gammaSel;
 snInf = fileInf.snInfoMat;
 snWv = fileWv.waveData';
@@ -237,3 +240,4 @@ Data = DataPMd;save('Array2_PMd/processedData.mat', 'Data', 'processDate')
 
 
 % gamma 0.5 10/20, 0.2 for next two days, and 0.5 for 11/07 on Quincy
+% gamma 0.3 for 3/24/21

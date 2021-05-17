@@ -639,6 +639,46 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             axByDim.set_ylim(0, 1.05)
     return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
 
+def incaComputation(bssExpConditionPairs, numNeuronsInNetwork = 25, cvalFracTrain = 0.75, numCrossvalidations = 4, xDimInNetTest = [[[2,2],[5,5]],[[5,5],[5,5]]], plotOutput=True):
+    
+    from classes.InputNetworkCovarAnalysis import INCA
+    bsi = BinnedSpikeSetInfo()
+    dsi = DatasetInfo()
+
+    dimResAll = []
+    for bssPair in bssExpConditionPairs:
+        print("** Running dataset '{}' **".format(dsi[bssPair[0]]['dataset_name'][0]))
+
+        bssCondA = bssPair[0].grabBinnedSpikes()[0]
+        bssCondB = bssPair[1].grabBinnedSpikes()[0]
+
+
+        if bssCondA.shape[1] != bssCondB.shape[1]:
+            raise Exception("Data from both conditions have to come from the same set of neurons! And at the very least here the populations have different numbers of neurons!")
+
+        if numNeuronsInNetwork*2 > bssCondA.shape[1]:
+            raise Exception("For the moment network subsets chosen will be for *distinct* populations of neurons, so the number of neurons in the binned spike set must be at least twice the size of the explore network!")
+
+        randNeurs = np.random.permutation(bssCondA.shape[1])
+        neursInNetX = randNeurs[:numNeuronsInNetwork]
+        neursInNetY = randNeurs[numNeuronsInNetwork:2*numNeuronsInNetwork]
+        bssNetXCondA = bssCondA[:,neursInNetX]
+        bssNetXCondB = bssCondB[:,neursInNetX]
+        bssNetYCondA = bssCondA[:,neursInNetY]
+        bssNetYCondB = bssCondB[:,neursInNetY]
+        pairInca = INCA(bssNetXCondA, bssNetXCondB, bssNetYCondA, bssNetYCondB)
+
+        dimRes = []
+        for xDimInNet in xDimInNetTest:
+            print("Testing inputs dims {} and network dims {}".format(xDimInNet[0], xDimInNet[1]))
+            res = pairInca.runIncaInMatlab(Path('test'), xDimInNet = xDimInNet, cvalFracTrain = cvalFracTrain, crossvalidationNum = numCrossvalidations)
+            dimRes.append(res)
+
+
+        dimResAll.append(dimRes)
+
+    return dimResAll
+
 # NOTE: this function does not act on any of the binned spikes (computing
 # residuals, etc) before computing the relevant r_sc vals
 def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels = True, normalize = False, plotResid = False):
@@ -844,23 +884,52 @@ def decodeComputations(listBSS,descriptions, labelUse):
 
     decodeAcc = []
     decodeAccZSc = []
+    pairedDecAcc = []
+    pairedSvmDprime = []
     for bnSpCnt in listBSS:
         decAccHere = []
         decAccZScHere = []
+        pairedDecAccHere = []
+        pairedSvmDprimeHere = []
         for bSp in bnSpCnt:
             labelOrig = bSp.labels[labelUse]
-            labelCategory = np.unique(labelOrig, axis=0, return_inverse=True)[1]
-            acc = bSp.decode(labels=labelCategory)
+            unLabs, labelCategory = np.unique(labelOrig, axis=0, return_inverse=True)
+
+            # compute decoding accuracy of all categories
+            acc, stdAcc = bSp.decode(labels=labelCategory)
             decAccHere.append(acc)
-            accZsc = bSp.decode(labels=labelCategory, zScoreRespFirst = True)
+
+            # compute decoding accuracy of all categories after the spikes have
+            # been z-scored per-category
+            accZsc, accZscStd = bSp.decode(labels=labelCategory, zScoreRespFirst = True)
             decAccZScHere.append(accZsc)
+
+            # compute decoding accuracy for pairs of categories
+            prdDecAcc = []
+            prdSvmDprime = []
+            for unLabNum, unLabInit in enumerate(unLabs):
+                for unLabComp in unLabs[unLabNum+1:]:
+                    bSpPairedLabs = bSp[np.all((labelOrig==unLabInit) | (labelOrig==unLabComp), axis=1)]
+                    pairedLabelCategory = labelCategory[np.all((labelOrig==unLabInit) | (labelOrig==unLabComp), axis=1)]
+                    pairedAcc, pairedAccStd = bSpPairedLabs.decode(labels=pairedLabelCategory, decodeType = 'naiveBayes', zScoreRespFirst = True)
+                    prdDecAcc.append(pairedAcc)
+
+                    dprime, _ = bSpPairedLabs.decode(labels=pairedLabelCategory, decodeType = 'linearSvm', zScoreRespFirst = True)
+                    prdSvmDprime.append(dprime)
+
+            pairedDecAccHere.append(prdDecAcc)
+            pairedSvmDprimeHere.append(prdSvmDprime)
 
         decodeAcc.append(decAccHere)
         decodeAccZSc.append(decAccZScHere)
+        pairedDecAcc.append(pairedDecAccHere)
+        pairedSvmDprime.append(prdSvmDprime)
 
     decodeDict = {
         'main label decode accuracy' : decodeAcc,
         'main label dec acc z-sc first' : decodeAccZSc,
+        'decoding accuracy of pairs of conditions' : pairedDecAcc,
+        'svm dprime of pairs of conditions' : pairedSvmDprime,
     }
 
     return decodeDict 
