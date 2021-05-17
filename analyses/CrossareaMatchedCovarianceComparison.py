@@ -231,7 +231,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         latentsOnSignalZscByExParams = projPtsForPlotDict['noise latents into signal PCs']
         plotPointProjections(projOnSignalZscByExParams, meanOnSignalByExParams, latentsOnSignalZscByExParams, descriptions)
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotProjParams['pdfnameSt'],plotParams['analysisIdentifier'])))
-    breakpoint()
+        plt.close('all')
 
     # Population metrics
     popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims, binnedSpikeSetGenerationParamsDict['binSizeMs'])
