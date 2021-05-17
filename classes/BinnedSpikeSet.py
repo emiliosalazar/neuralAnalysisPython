@@ -917,10 +917,12 @@ class BinnedSpikeSet(np.ndarray):
         
         return ldaModel
     
-    def decode(self, labels=None, trainFrac = 0.75, zScoreRespFirst = False, plot=True):
+    def decode(self, labels=None, decodeType = 'naiveBayes', trainFrac = 0.75, zScoreRespFirst = False, plot=True, numCVal = 5):
         # this is going to use a Gaussian naive Bayes classifier to try and
         # predict the labels of a held out set...
         from sklearn.naive_bayes import GaussianNB
+        from sklearn.svm import LinearSVC
+
 
         if labels is None:
             labels = self.labels['stimulusMainLabel']
@@ -929,9 +931,14 @@ class BinnedSpikeSet(np.ndarray):
             if labels.ndim > 1:
                 breakpoint() # this function should only take in a 1D list of labels...
             labelGroup = labels[:,None]
-            grpSpksNpArr, _ = self.groupByLabel(labelGroup) 
-            grpSpksNpArr = [(g - g.mean(axis=(0,2))[:,None])/g.std(axis=(0,2))[:,None] for g in grpSpksNpArr]
+            grpSpksNpArr, lblPerGrp = self.groupByLabel(labelGroup) 
+            # grpSpksNpArr = [(g - g.mean(axis=(0,2))[:,None])/g.std(axis=(0,2))[:,None] for g in grpSpksNpArr]
+            # turns out that Bayes classification makes use of the mean...  so
+            # subtracting it out is dumb.  Honestly should also be resistant to
+            # scaled differences of variances, but who knows
+            grpSpksNpArr = [g/g.std(axis=(0,2))[:,None] for g in grpSpksNpArr]
             spksUse = np.concatenate(grpSpksNpArr, axis=0) 
+            labels = np.hstack([np.full(g.shape[0], lbl) for g, lbl in zip(grpSpksNpArr, lblPerGrp)])
             # here we get rid of any channels that didn't respond to any
             # particular condition basically (at that point its z-score ends up
             # as nan because its standard deviation for that condition (which
@@ -954,19 +961,52 @@ class BinnedSpikeSet(np.ndarray):
         tmAvgBins = tmAvgBins[:, ~np.any(np.isnan(tmAvgBins), axis=0)]
         trls, chans = tmAvgBins.shape # trials are samples, channels are features
 
-        randomizedIndOrder = np.random.permutation(idxUse)
-        trainInds = randomizedIndOrder[:round(trainFrac*trls)]
-        testInds = randomizedIndOrder[round(trainFrac*trls):]
+        if decodeType == 'naiveBayes':
+            cvalAccuracies = []
+            for cv in range(numCVal):
+                randomizedIndOrder = np.random.permutation(idxUse)
+                trainInds = randomizedIndOrder[:round(trainFrac*trls)]
+                testInds = randomizedIndOrder[round(trainFrac*trls):]
 
-        bayesClassifier = GaussianNB()
-        bayesClassifier.fit(tmAvgBins[trainInds], labels[trainInds])
+                bayesClassifier = GaussianNB()
+                bayesClassifier.fit(tmAvgBins[trainInds], labels[trainInds])
+                # breakpoint()
 
-        testLabels = labels[testInds]
+                testLabels = labels[testInds]
 
-        predVals = bayesClassifier.predict(tmAvgBins[testInds])
-        accuracy = (predVals == testLabels.squeeze()).sum()/predVals.shape[0]
+                accuracy = bayesClassifier.score(tmAvgBins[testInds], labels[testInds])
+                cvalAccuracies.append(accuracy)
 
-        return accuracy
+            meanAccuracy = np.mean(cvalAccuracies)
+            stdAccuracy = np.std(cvalAccuracies)
+
+            out1 = meanAccuracy
+            out2 = stdAccuracy
+        elif decodeType == 'linearSvm':
+            clf = LinearSVC(max_iter=10000) # didn't work with default 1000
+            clf.fit(tmAvgBins, labels)
+            decFunc = clf.decision_function(self.timeAverage())
+
+            unLbs = np.unique(labels)
+            if unLbs.size>2:
+                # haven't yet implemented/thought about SVM for >2 categories
+                breakpoint()
+            
+            lb1 = decFunc<0
+            lb2 = decFunc>0
+
+            mnLb1 = np.abs(lb1).mean()
+            mnLb2 = np.abs(lb2).mean()
+
+            stdBoth = np.concatenate([lb1,lb2]).std()
+            dprime = ((mnLb2-mnLb1)/stdBoth)**2
+
+            out1 = dprime
+            out2 = []
+                
+
+
+        return out1, out2
 
     def numberOfDimensions(self, labels=None, title='', maxDims = None, baselineSubtract = False, plot=True):
         if labels is not None:
