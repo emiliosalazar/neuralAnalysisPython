@@ -247,25 +247,25 @@ class Dataset():
             
             self.spikeDatSort = np.stack([ch[:,1] for ch in annots['dat']['channels'][0]])
             
-            # NOTE the targetAgle misspelling is unfortunately necessary
-            # because the code for 'n' kept not passing through to the nev for
-            # some reason...
-            trlDat = [trl['trial'][0,0] for trl in annots['dat']['params'][0]]
-            mrkAngle = np.vstack([trl['targetAngle'][0,0] if 'targetAngle' in trl.dtype.names else trl['targetAgle'][0,0] for trl in trlDat])
-            for ind, ang in enumerate(mrkAngle):
-                try:
-                    newAngInt = int(ang)
-                    mrkAngle[ind] = newAngInt
-                except ValueError:
-                    for indAngStr in range(1,len(ang[0])):
-                        try:
-                            int(ang[0][:indAngStr])
-                            newAngInt = int(ang[0][:indAngStr])
-                        except ValueError:
-                            break
-                    mrkAngle[ind] = newAngInt
+            # # NOTE the targetAgle misspelling is unfortunately necessary
+            # # because the code for 'n' kept not passing through to the nev for
+            # # some reason...
+            # trlDat = [trl['trial'][0,0] for trl in annots['dat']['params'][0]]
+            # mrkAngle = np.vstack([trl['targetAngle'][0,0] if 'targetAngle' in trl.dtype.names else trl['targetAgle'][0,0] for trl in trlDat])
+            # for ind, ang in enumerate(mrkAngle):
+            #     try:
+            #         newAngInt = int(ang)
+            #         mrkAngle[ind] = newAngInt
+            #     except ValueError:
+            #         for indAngStr in range(1,len(ang[0])):
+            #             try:
+            #                 int(ang[0][:indAngStr])
+            #                 newAngInt = int(ang[0][:indAngStr])
+            #             except ValueError:
+            #                 break
+            #         mrkAngle[ind] = newAngInt
 
-            self.markerTargAngles = mrkAngle
+            # self.markerTargAngles = mrkAngle
 
             self.trialStatuses = np.stack([np.any(res==150) for res in annots['dat']['result'][0]]).astype('int8')
             
@@ -279,10 +279,24 @@ class Dataset():
             for ind,kin in enumerate(kinematicsTemp):
                 kinematicsCont[ind] = kin
 
-            # NOTE the following is meant to correct or missing codes
+            # NOTE the following is meant to correct codes or add missing ones
             behMatPath = dataMatPath.parent.parent / 'allCodes.mat'
             try:
+                breakpoint()
                 behDatForKin = LoadDataset(behMatPath)['allCodes'].squeeze()
+
+                mrkAng = []
+                for cds in behDatForKin:
+                    cdsTrl = cds['codes'][0,0][:, 0]
+                    asciiCodeTrlDat = (cdsTrl[(cdsTrl>=256) & (cdsTrl < 512)] - 256).astype('int')
+                    strCharArray = np.array([chr(x) for x in range(256)])[asciiCodeTrlDat]
+                    strChar = "".join(strCharArray)
+                    targAngSt = strChar.find('targetAngle=') + len('targetAngle=')
+                    lenOfAng = strChar[targAngSt:].find(';')
+                    targAng = int(strChar[targAngSt:targAngSt+lenOfAng])
+                    mrkAng.append(targAng)
+
+                self.markerTargAngles = np.array(mrkAng)[:,None]
                 # since these aren't uint32, the equivalent of checking for >50000
                 # is actually checking for the negative value...
                 self.kinematicsCenter = [0, 0]
@@ -311,7 +325,9 @@ class Dataset():
                 # check which ones to keep...
                 cursPosXandYUse = []
                 indStBeh = 0
-                for nevTrl in cursPosXandYNevTimesInMs:
+                for indNev, nevTrl in enumerate(cursPosXandYNevTimesInMs):
+                    # if indNev==1046:
+                    #     breakpoint()
                     if nevTrl.size == 0:
                         # I can see a corner case bug here where there was only
                         # a brief cursor motion, which the NEV missed, but the
@@ -332,6 +348,7 @@ class Dataset():
                                 cursPosXandYUse.append(cursorPosXandYFromBeh[indBeh])
                                 trialFound = True
                                 break
+                                
                         if not trialFound:
                             # probably an indication that the 3ms similarity
                             # is too conservative...
@@ -346,7 +363,7 @@ class Dataset():
                             # as well... but since that's weird I'm breakpointing
                             if indBeh < indStBeh:
                                 breakpoint()
-                            indStBeh = indBeh
+                            indStBeh = indBeh+1
 
                 reqShift = np.array([-10000, -10000])
                 kinematicsTemp = [np.vstack((cPXY[0:-1:2, 0]-reqShift[0], cPXY[1::2, 0]-reqShift[1], cPXY[0:-1:2, 1]*sToMsConv)).T if cPXY.size>0 else np.array([]) for cPXY in cursPosXandYUse]
@@ -356,6 +373,7 @@ class Dataset():
             except OSError:
                 raise Exception('Remember to upload the relevate allCodes behavior file!')
 
+            breakpoint()
             self.kinematics = kinematicsCont
 
             
