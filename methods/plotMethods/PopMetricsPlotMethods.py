@@ -303,7 +303,6 @@ def splitMetricVals(metricVal, colSplit, unLabForSplit, groupItemSplit):
 
 
 def plotTimeEvolution(descriptions, timeShiftMetricDict, labelForMarkers, labelForColors, supTitle = ''):
-    colorsUse = BinnedSpikeSet.colorset
 
     times = []
 
@@ -333,10 +332,11 @@ def plotTimeEvolution(descriptions, timeShiftMetricDict, labelForMarkers, labelF
         plt.suptitle(supTitle)
         ax=plt.subplot(1,1,1)
         
+        colorsUse = plt.cm.Set3(np.arange(len(unLabForCol)))
         for dset, labDesc, colN, mcN in zip(metricTmMat, descriptions, colNum, mcNum):
             # plot one for the label...
             ax.plot(times[0], np.nan, label=labDesc, color=colorsUse[colN, :], marker=markerCombos[mcN], linestyle='-')
-            ax.plot(times, dset.T, color=colorsUse[colN, :], marker=markerCombos[mcN], linestyle='-')
+            ax.plot(times, dset.T, color=colorsUse[colN, :], marker=markerCombos[mcN], linestyle='-', alpha=0.5)
         
         ax.set_xlabel('time (ms)')
         ax.set_ylabel(metricName)
@@ -352,7 +352,6 @@ def plotTimeEvolution(descriptions, timeShiftMetricDict, labelForMarkers, labelF
         ax.set_xlim(newXMin,newXMax)
         ax.plot(np.array([0,0]), axYlim, 'k--')
 
-    breakpoint()
 
 def plotMetricsBySeparation(metricDict, descriptions, separationName, labelForSeparation, labelForColors, labelForMarkers, supTitle = '', secondOrderGrouping = None, splitSecondOrderByLabel = None):
     colorsUse = BinnedSpikeSet.colorset
@@ -515,7 +514,7 @@ def plotMetricsBySeparation(metricDict, descriptions, separationName, labelForSe
             colLegElem = []
 
         # see above comment on unLabForCol
-        unLabForTup = unLabForTup[unLabForTup != 'nan']
+        # unLabForTup = unLabForTup[unLabForTup != 'nan']
         if len(scPts) > 2*unLabForTup.shape[0]:
             colGray = [0.5,0.5,0.5]
             mrkLegElem = [Line2D([0], [0], marker=markerCombos[lblOrd], label=unLabForTup[lblOrd], color='w', markeredgewidth=0.0, markerfacecolor=colGray, markersize=7) for lblOrd in orderForLabels.squeeze()]
