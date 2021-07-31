@@ -1677,12 +1677,21 @@ def stack(arrays, axis=0, out=None):
         if np.all(stackEnd==None):
             stackEnd = None
         
+        # unLabelKeys = np.unique([arr.labels.keys() for arr in arrays])
+        # newLabels = {}
+        # # breakpoint() # ermm... is this iterating correctly? Check how I did it in vstack?
+        # # NOTE ... replaced with vstack label coe for now...
+        # for key in unLabelKeys:
+        #     # might need to return to the below if keys start having to be lists...
+        #     keyVals = np.stack([arr.labels[list(key)[0]] for arr in arrays])
+        #     newLabels[list(key)[0]] = keyVals # list(chain(*keyVals))
         unLabelKeys = np.unique([arr.labels.keys() for arr in arrays])
         newLabels = {}
-        for key in unLabelKeys:
+        for key in unLabelKeys[0]:
             # might need to return to the below if keys start having to be lists...
-            keyVals = np.stack([arr.labels[list(key)[0]] for arr in arrays])
-            newLabels[list(key)[0]] = keyVals # list(chain(*keyVals))
+            # keyVals = np.concatenate([arr.labels[list(key)[0]] for arr in arrays])
+            keyVals = np.vstack([arr.labels[key] for arr in arrays])
+            newLabels[key] = keyVals # list(chain(*keyVals))
             
         stackAlBins = np.stack([arr.alignmentBins for arr in arrays])
         if np.all(stackAlBins == None):
