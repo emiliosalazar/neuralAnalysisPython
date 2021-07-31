@@ -1030,3 +1030,88 @@ class Dataset():
                     
         else:
             print('no kinematics sorry!')
+
+    def plotKeyStateInfo(self):
+        from methods.plotUtils.ScatterBar import scatterBar
+        statesToIgnore = self.metastates
+        # statesToIgnore.append('Target Appear')
+        # statesToIgnore.append('Target Reach')
+        stateDurations = []
+        binnedSpikesMn = []
+        binnedSpikesSem = []
+        for keyStateName, actualStateName in self.keyStates.items():
+            if type(actualStateName) is list:
+                startTmsPresTemp = []
+                for stateNameHere in actualStateName:
+                    startTmsPresTemp.append(self.timeOfState(state=stateNameHere, forRepeats='grabAll', ignoreStates = statesToIgnore))
+                
+                startTmsPres = [np.array(strtTms)[~np.isnan(strtTms)] for strtTms in zip(*startTmsPresTemp)]
+            else:
+                startTmsPres = self.timeOfState(state=actualStateName, forRepeats='grabAll', ignoreStates = statesToIgnore)
+
+            if type(self.keyStateEnds[keyStateName]) is list:
+                endTmsPresTemp = []
+                for endStateNamesHere in self.keyStateEnds[keyStateName]:
+                    endTmsPresTemp.append(self.timeOfState(state=endStateNamesHere, forRepeats='grabAll', ignoreStates = statesToIgnore))
+
+                endTmsPres = [np.array(endTms)[~np.isnan(endTms)] for endTms in zip(*endTmsPresTemp)]
+            else:
+                endTmsPres = self.timeOfState(state=self.keyStateEnds[keyStateName], forRepeats='grabAll', ignoreStates = statesToIgnore)
+
+            # this is making the assumption that the correct ordering of state
+            # start and end will only happen once, and that the shortest of
+            # those is the correct one
+            allStateSeparations = [nd[None,:]-st[:,None] for st,nd in zip(startTmsPres, endTmsPres)]
+            startIndsUse = np.asarray([np.meshgrid(np.arange(nd.shape[0]), np.arange(st.shape[0]))[1][stSep>0][np.nanargmin(stSep[stSep>0])] if np.any(stSep>0) else np.nan for st,nd,stSep in zip(startTmsPres, endTmsPres, allStateSeparations)])
+            endIndsUse = np.asarray([np.meshgrid(np.arange(nd.shape[0]), np.arange(st.shape[0]))[0][stSep>0][np.nanargmin(stSep[stSep>0])] if np.any(stSep>0) else np.nan for st,nd,stSep in zip(startTmsPres, endTmsPres, allStateSeparations)])
+            tmStState = np.asarray([st[int(stI)] if not np.isnan(stI) else np.nan for st,stI in zip(startTmsPres, startIndsUse)])
+            tmEndState = np.asarray([nd[int(ndI)] if not np.isnan(ndI) else np.nan for nd,ndI in zip( endTmsPres, endIndsUse)])
+            thisStateDurations = np.asarray([np.nanmin(stSep[stSep>0]) if np.any(stSep>0) else np.nan for stSep in allStateSeparations])
+
+            stateDurations.append(thisStateDurations)
+            
+            binSizeMs = 50
+            filterHasStateTrials = ~np.isnan(tmStState) & ~np.isnan(tmEndState)
+            tmStState = tmStState[filterHasStateTrials]
+            tmEndState = tmEndState[filterHasStateTrials]
+            selfOnlyStateTrials = self.filterTrials(filterHasStateTrials)[0]
+            timeBefore = -500
+            timeAfter = 500
+            breakpoint()
+            binnedSpikesHere = selfOnlyStateTrials.binSpikeData(startMs = list(tmStState+timeBefore), endMs = list(tmStState+timeAfter+binSizeMs/20), binSizeMs=binSizeMs, alignmentPoints = list(zip(tmStState, tmStState)))
+            binnedSpikesMn.append(binnedSpikesHere.trialAverage())
+            binnedSpikesSem.append(binnedSpikesHere.trialSem())
+
+        scatterXY, _ = scatterBar(stateDurations)
+        fig = plt.figure(constrained_layout=True)
+        gs = fig.add_gridspec(4, len(stateDurations))
+        axDur = fig.add_subplot(gs[:3, :])
+        durationList = np.arange(len(stateDurations))
+        ptColors = plt.cm.Pastel2(durationList)
+        scPtsInit = [axDur.scatter(mtrcWX[:,0], mtrcWX[:,1], color=col) for mtrcWX, col in zip(scatterXY.transpose(2,0,1), ptColors)]
+
+        axDur.set_xticks(np.arange(len(stateDurations)))
+        axDur.set_xticklabels(self.keyStates.keys())
+        ylm = axDur.get_ylim()
+        axDur.set_yticks(np.arange(ylm[1], step=100), minor=True)
+        axDur.set_ylabel('duration')
+        axDur.set_xlabel('key states')
+        axDur.grid(axis='y', linestyle='--', linewidth=0.2, alpha=0.5, which='minor')
+        axDur.grid(axis='y', linestyle='--', linewidth=0.5, alpha=0.5, which='major')
+
+        for pltNum, mnTmcoursePerChan in enumerate(binnedSpikesMn):
+            gspcTmcourse = gs[-1, pltNum]
+            axTimecourse = fig.add_subplot(gspcTmcourse)
+            timeBefore = -(mnTmcoursePerChan.alignmentBins[0]*binSizeMs)
+            timeAfter = binSizeMs*(mnTmcoursePerChan.shape[1] - mnTmcoursePerChan.alignmentBins[0])
+            mnTmcourse = np.nanmean(mnTmcoursePerChan, axis=0)
+            tmsAll = np.arange(timeBefore, timeAfter, binSizeMs)
+            axTimecourse.plot(tmsAll, mnTmcourse)
+            semTmcourse = mnTmcoursePerChan.std(axis=0)/np.sqrt(mnTmcourse.shape[0])
+            axTimecourse.fill_between(tmsAll, mnTmcourse - semTmcourse, mnTmcourse+semTmcourse, alpha=0.2)
+
+            axTimecourse.set_xlim([timeBefore, timeAfter])
+            axTimecourse.axvline(x=0, linestyle='--', color='k')
+            
+
+
