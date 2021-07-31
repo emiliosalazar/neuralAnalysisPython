@@ -60,9 +60,9 @@ class FA:
                 concatTrlTrain = np.concatenate(bnSp[trnInd, :], axis=1)
                 concatTrlTest = np.concatenate(bnSp[tstInd, :], axis=1)
 
-            if gpfaResultsPath is not None:
             fullRank.append(np.linalg.matrix_rank(concatTrlTest) >= concatTrlTest.shape[0])
 
+            if gpfaResultsPath is not None:
                 cValGpfaResultsPath = gpfaResultsPath / ("%s_xDim%02d_cv%02d.mat" % ("gpfa", numDim, cVal))
 
             if gpfaResultsPath is None or not cValGpfaResultsPath.exists():
@@ -104,7 +104,10 @@ class FA:
                 })
                 
             else:
-                breakpoint()
+                breakpoint() 
+                # NOTE: forget why the breakpoint is here, but I think we want
+                # to do something with ratio changes/etc that is expected in
+                # allEstParams?
                 cValGpfaResults = LoadMatFile(cValGpfaResultsPath)
                 faParams =  cValGpfaResults['faParams']
                 ll =  np.append(ll, cValGpfaResults['faLL'][0,-1])
