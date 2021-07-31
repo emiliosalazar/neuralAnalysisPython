@@ -150,7 +150,7 @@ def subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition(bssKeys, maxNumT
 def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMainLabel'):
     
     groupedSpikesAll = []
-    groupedSpikesTrialAvg = []
+    groupedSpikesTrialAvgAndSem = []
     grpLabels = []
     for binnedSpikes in binnedSpikesListToGroup:
     
@@ -197,11 +197,11 @@ def generateLabelGroupStatistics(binnedSpikesListToGroup, labelUse = 'stimulusMa
         
         # groupedSpikesTrialShortStartAvg.append([targTmTrcShrtStartAvgArr, targTmTrcShrtStartStdArr])
         groupedSpikesAll.append(groupedSpikes)
-        groupedSpikesTrialAvg.append([targTmTrcAvgArr, targTmTrcSemArr])
+        groupedSpikesTrialAvgAndSem.append([targTmTrcAvgArr, targTmTrcSemArr])
         # groupedSpikesEndTrialAvg.append([targTmTrcAvgEndArr, targTmTrcStdEndArr])
         grpLabels.append(uniqueLabel)
     
-    return groupedSpikesTrialAvg, groupedSpikesAll, grpLabels
+    return groupedSpikesTrialAvgAndSem, groupedSpikesAll, grpLabels
     
 
 def dimensionalityComputation(listBSS, descriptions, labelUse='stimulusMainLabel', maxDims = 30, baselineSubtract = True, useAllGroupings = False, minWiGroupFR = 0.5, numberNeuronsMatch = None, plot=True):
