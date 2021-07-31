@@ -20,7 +20,7 @@ def scatterBar(Ys):
     XYPos = np.zeros((numPoints,2,numBars))
     indScrambles = np.zeros((numPoints,numBars))
     for ii in range(numBars):
-        XYPos[:,:,ii] = scatterPoints(Ys[:,ii],Ys.max() - Ys.min()) + np.array([ii,0])
+        XYPos[:,:,ii] = scatterPoints(Ys[:,ii],np.nanmax(Ys) - np.nanmin(Ys)) + np.array([ii,0])
         indsToSortInput = np.argsort(Ys[:,ii], axis=0)
         # I feel like I'm missing something and being dumb here, but sorting
         # the inds to sort the array tells you how to unsort the array to its
@@ -60,6 +60,11 @@ def scatterPoints(Ys,plotRange):
             XYPos[:,0] = XYPos[:,0] + kickMagnitude*(0.95**(ii+1))*(4*np.tanh(forces/4))
 
     XYPos[:,0] = 2*XYPos[:,0]
+    # points for different categories are spaced by 1 by default, so you want to
+    # only stretch 0.4 on each side to not go into another categories points!
+    if np.any(np.abs(XYPos[:, 0])>0.4):
+        maxHalfRatio = 0.5/np.abs(XYPos[:,0]).max()
+        XYPos[:,0] = XYPos[:,0] * maxHalfRatio
     return XYPos 
 
 def generateEnergies(XYPos,plotRange):
