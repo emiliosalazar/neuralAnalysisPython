@@ -51,19 +51,19 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                         bnSpSegB4Avg = np.stack([bnSp[trl:trl+1,:,aBb4:aB].timeAverage() for trl, (aBb4, aB) in enumerate(zip(alBinsB4, alBins))])
 
                 else:
-                    alBins = np.unique(bnSp.alignmentBins, axis=0)
-                    if alBins.shape[0]>1:
+                    alBins = np.unique(bnSp.alignmentBins, axis=0)[0].astype(int)
+                    if alBins.ndim>1 and alBins.shape[0]>1:
                         raise Exception("Do the same as you would for an object dtype here...")
                     else:
                         alB = alBins[seg]
-                    segSt = np.max(alB-binsAroundAlign, 0) # can't go less than the bss start heh...
-                    segEnd = np.min(alB+binsAroundAlign, bnSp.shape[2]) # can't go over bss end...
-                    bnSpSeg = bnSp[:, :, segSt:segEnd]
+                    segSt = np.maximum(alB-binsAroundAlign, 0) # can't go less than the bss start heh...
+                    segEnd = np.minimum(alB+binsAroundAlign, bnSp.shape[2]) # can't go over bss end...
+                    bnSpSeg = bnSp[:, :, int(segSt):int(segEnd)]
                     if seg == 0:
-                        bnSpSegB4Avg = bnSp[:,:,:alB].timeAverage()
+                        bnSpSegB4Avg = bnSp[:,:,:int(alB)].timeAverage()
                     else:
-                        alBb4 = alBins[seg-1].astype(int)
-                        bnSpSegB4Avg = bnSp[:,:,alBb4:alB].timeAverage()
+                        alBb4 = alBins[seg-1]
+                        bnSpSegB4Avg = bnSp[:,:,int(alBb4):int(alB)].timeAverage()
 
                 grpSpkTrlAvgSemHere, groupedSpikesHere, grpLabels = genBSLLabGrp([bnSpSeg], labelUse='stimulusMainLabel')
                 grpSpkTrlAvgSem.append(grpSpkTrlAvgSemHere[0])
@@ -72,7 +72,7 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                 if seg==0:
                     zeroBins.append(alBins[0])
                 else:
-                    zeroBins.append(binsAroundAlign)
+                    zeroBins.append(int(np.minimum(alBins[seg], binsAroundAlign)))
 
                 grpSpkTrlAvgSemAll, _, _ = genBSLLabGrp([bnSpSegB4Avg], labelUse='stimulusMainLabel')
                 chanTmAvgs.append(grpSpkTrlAvgSemAll[0][0])
@@ -82,14 +82,14 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                 # dimension...
                 bnSpSegAftAvg = np.stack([bnSp[trl:trl+1,:,aB:].timeAverage() for trl, aB in enumerate(alBins)])
             else:
-                bnSpSegAftAvg = bnSp[:,:,alB:].timeAverage()
+                bnSpSegAftAvg = bnSp[:,:,int(alB):].timeAverage()
             grpSpkTrlAvgSemAll, _, _ = genBSLLabGrp([bnSpSegAftAvg], labelUse='stimulusMainLabel')
             chanTmAvgs.append(grpSpkTrlAvgSemAll[0][0])
         else:
             # note that this pops out as a list from the function, much
             # like the main if, so we don't need to change anything!
             numAlignmentBins = 1
-            zeroBins = bnSp.alignmentBins[0]
+            zeroBins = bnSp.alignmentBins[0].astype(int)
             grpSpkTrlAvgSem, groupedSpikes, grpLabels = genBSLLabGrp([bnSp], labelUse='stimulusMainLabel')
 
         grpLabels = grpLabels[0]
