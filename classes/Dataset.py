@@ -793,21 +793,61 @@ class Dataset():
         
         return groupedSpikes
     
-    def timeOfState(self, state):
+    def timeOfState(self, state, forRepeats = 'grabLongest', ignoreStates = []):
         stNm = self.stateNames
         if len(stNm)==1: # otherwise there's already a unique name per trial
             stNm = np.repeat(stNm, len(self.statesPresented), axis=0)
         
         stateTmPres = []
-        for stNames, statesPres in zip(stNm, self.statesPresented):
-            statePresNum = np.nonzero(stNames == state)[0][0]+1 # remember Matlab is 1-indexed
+        if state == 'Start of trial':
+            stateTmPres = [np.array([0])]*len(self.statesPresented)
+        elif state == 'End of trial':
+            for statesPres in self.statesPresented:
+                stateTmPres.append(np.array([statesPres[1,-1]]))
+        else:
+            for stNames, statesPres in zip(stNm, self.statesPresented):
+                statePresNum = np.nonzero(stNames == state)[0]
+                if statePresNum.size>0:
+                    statePresNum = statePresNum[0]
+                    locStateLog = statesPres[0,:]==(statePresNum+1) # remember Matlab is 1-indexed
+                else:
+                    locStateLog = []
 
-            locStateLog = statesPres[0,:]==(statePresNum) # remember Matlab is 1-indexed
-            if np.any(locStateLog):
-                locState = np.where(locStateLog)[0][0]
-                stateTmPres.append(statesPres[1, locState])
-            else:
-                stateTmPres.append(np.nan)
+                if np.any(locStateLog):
+                    # initialize a 0 length duration, so that we can start
+                    # comparing and pick the *longest* state presentation
+                    # (right?)
+                    durationOfStatePres = -1 
+                    stTimeUse = []
+                    for locStateStrtSt in locStateLog.nonzero()[0]:
+                        # locStateStrtSt = np.where(locStateLog)[0][0]
+                        # delayStartSt = locStateStrtSt
+                        locStateEndSt = locStateStrtSt + 1
+
+                        stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
+                        # go to next state until we find one not to ignore
+                        while stNames[stNumPres] in ignoreStates:
+                            locStateEndSt = locStateEndSt + 1 
+                            stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
+
+                        durationOfThisStatePres = statesPres[1, locStateEndSt] - statesPres[1,locStateStrtSt]
+
+                        if forRepeats=='grabLongest':
+                            if durationOfThisStatePres>durationOfStatePres:
+                                durationOfStatePres = durationOfThisStatePres
+                                # locStateStrtStChoose = locStateStrtSt
+                                stTimeUse = statesPres[1, locStateStrtSt]
+                        elif forRepeats=='grabAll':
+                            stTimeUse.append(statesPres[1,locStateStrtSt])
+
+                    stateTmPres.append(np.array(stTimeUse))
+                    # locState = np.where(locStateLog)[0][0]
+                    # stateTmPres.append(statesPres[1, locState])
+                else:
+                    if forRepeats=='grabLongest':
+                        stateTmPres.append(np.array(np.nan))
+                    elif forRepeats=='grabAll':
+                        stateTmPres.append(np.array([np.nan]))
                 
         return stateTmPres
             
@@ -856,20 +896,33 @@ class Dataset():
                 else:
                     locStateLog = []
                 if np.any(locStateLog):
-                    locStateStrtSt = np.where(locStateLog)[0][0]
-                    delayStartSt = locStateStrtSt
-                    locStateEndSt = locStateStrtSt + 1
+                    # initialize a 0 length duration, so that we can start
+                    # comparing and pick the *longest* state presentation
+                    # (right?)
+                    durationOfStatePres = -1 
+                    for locStateStrtSt in locStateLog.nonzero()[0]:
+                        # locStateStrtSt = np.where(locStateLog)[0][0]
+                        # delayStartSt = locStateStrtSt
+                        locStateEndSt = locStateStrtSt + 1
 
-                    stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
-                    # go to next state until we find one not to ignore
-                    while stNames[stNumPres] in ignoreStates:
-                        locStateEndSt = locStateEndSt + 1 
                         stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
+                        # go to next state until we find one not to ignore
+                        while stNames[stNumPres] in ignoreStates:
+                            locStateEndSt = locStateEndSt + 1 
+                            stNumPres = int(statesPres[0, locStateEndSt] - 1) # go back to Python 0-indexing
 
-                    stateNameStatesEnd.append(stNames[stNumPres][0]) # result of how mats are loaded >.>
+                        durationOfThisStatePres = statesPres[1, locStateEndSt] - statesPres[1,locStateStrtSt]
 
-                    startTmsPres.append(statesPres[1, delayStartSt])
-                    endTmsPres.append(statesPres[1, locStateEndSt])
+                        if durationOfThisStatePres>durationOfStatePres:
+                            durationOfStatePres = durationOfThisStatePres
+                            locStateStrtStChoose = locStateStrtSt
+                            locStateEndStChoose = locStateEndSt
+                            stNumPresChoose = stNumPres
+
+                    stateNameStatesEnd.append(stNames[stNumPresChoose][0]) # result of how mats are loaded >.>
+
+                    startTmsPres.append(statesPres[1, locStateStrtStChoose])
+                    endTmsPres.append(statesPres[1, locStateEndStChoose])
                 else:
                     startTmsPres.append(np.nan)
                     endTmsPres.append(np.nan)
