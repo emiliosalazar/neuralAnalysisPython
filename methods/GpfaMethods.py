@@ -144,7 +144,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             shCovPropByLatent = [np.mean(np.diag(eVal**2 * C[:,None] @ C[:,None].T) / (np.diag(Call @ np.diag(eigAll) @ np.diag(eigAll) @ Call.T) + np.diag(R))) for Call, eigAll, Rall in CERorth for C, eVal in zip(Call.T, eigAll)] 
             shCovPropNeurStd = [np.std(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
             shCovPropNeurNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))/C.shape[1] for C, R in CR] 
-            shCovPropNeurGeoNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))**(1/C.shape[1]) for C, R in CR] 
+            shCovPropNeurGeoNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))**(1/C.shape[1]) if C.shape[1]>0 else np.array([0]) for C, R in CR] 
             privVarSpread = [np.diag(R).max()-np.diag(R).min() for C, R in CR]
 
             
@@ -155,7 +155,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             #
             # Also remember that Python is zero-indexed for grabbing that first
             # one >.>
-            Cnorm1 = [C[:,0]/np.sqrt((C[:,0]**2).sum()) for C in Corth]
+            Cnorm1 = [C[:,0]/np.sqrt((C[:,0]**2).sum()) if C.shape[1]>0 else np.array([np.nan]) for C in Corth]
             firstFactorLoadingSimilarity = [1-Cn1.size*Cn1.var() for Cn1 in Cnorm1]
             Cnorm = [C/np.sqrt((C**2).sum()) for C in Corth]
             overallLoadingSimilarity = [1-Cn.size*Cn.var() for Cn in Cnorm]
@@ -182,7 +182,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             # themselves XD
             if np.linalg.slogdet(C.T @ C)[0] != 1:
                 breakpoint() # determinant suggests shrinking!
-            shVarGeoMnVsMn = [(np.trace(C @ C.T)/C.shape[1]) / np.exp(1/C.shape[1]*np.linalg.slogdet(C.T @ C)[1])   for C, R in CR]
+            shVarGeoMnVsMn = [(np.trace(C @ C.T)/C.shape[1]) / np.exp(1/C.shape[1]*np.linalg.slogdet(C.T @ C)[1]) if C.shape[1]>0 else np.array(np.nan)  for C, R in CR]
             participationRatio = [np.trace(C @ C.T)**2 / (np.trace(C @ C.T @ C @ C.T)) for C, R in CR] 
             participationRatioRawCov = [np.trace(C @ C.T + R)**2 / (np.trace((C @ C.T + R) @ (C @ C.T + R) )) for C, R in CR] 
 
@@ -236,14 +236,14 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
         '%sv mean' : [np.hstack(shPropN) for shPropN in shCovPropNeurAvgByExParams],
         '%sv std' : [np.hstack(shPropN) for shPropN in shCovPropNeurStdByExParams],
         '%sv norm dim' : [np.hstack(shPropNormDim) for shPropNormDim in shCovPropNeurNormDimByExParams],
-        '%sv by latent' : [np.hstack(shCovByLatent) for shCovByLatent in shCovPropByLatentByExParams],
+        '%sv by latent' : [np.hstack(shCovByLatent) if shCovByLatent.size>0 else shCovByLatent for shCovByLatent in shCovPropByLatentByExParams],
 #        '%sv geonorm dim' : [np.hstack(shPropGNormDim) for shPropGNormDim in shCovPropNeurGeoNormDimExParams],
         # 'priv var spread' : [np.hstack(privVar) for privVar in privVarSpreadExParams],
         'dimensionality' : [np.hstack(dm) for dm in dimensionalityExtractionParams],
         # 'sh pop cov' : [np.hstack(shProp) for shProp in shCovPropPopByExParams],
         '1st factor load sim' : [np.hstack(ffLdSim) for ffLdSim in ffLoadingSimByExParams],
         # 'all factor load sim' : [np.hstack(allLdSim) for allLdSim in overallLoadingSimByExParams],
-        'each factor load sim' : [np.stack(efLdSim) for efLdSim in efLoadingSimByExParams],
+        'each factor load sim' : [np.stack(efLdSim) if efLdSim.size>0 else efLdSim for efLdSim in efLoadingSimByExParams],
         # 'mean timescales' : [np.hstack(tmsc) for tmsc in tmscMnsByExParams],
         # 'std timescales' : [np.hstack(tmsc) for tmsc in tmscStdsByExParams],
         'mean/geomean sh var' : [np.hstack(gMvMShV) for gMvMShV in shVarGeoMnVsMnByExParams],
@@ -492,12 +492,16 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
         Cparams = [prm['C'] for prm in dimResultsHere[xDimScoreBest]['allEstParams']]
         if len(Cparams) == 0:
             continue
+
         shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
         percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
         
-        meanPercAcc = np.mean(percAcc, axis=0)
-        stdPercAcc = np.std(percAcc, axis = 0)
-        xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
+        if xDimScoreBest > 0:
+            meanPercAcc = np.mean(percAcc, axis=0)
+            stdPercAcc = np.std(percAcc, axis = 0)
+            xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
+        else:
+            xDimBest = 0
 
         # these should be the same for each dimensionality, so only append once
         # per condition
@@ -614,9 +618,12 @@ def crunchFaResults(faResultsDictOfDicts, cvApproach = "logLikelihood", shCovThr
         shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
         percAcc = np.stack([np.cumsum(eVals)/np.sum(eVals) for eVals in shEigs])
         
-        meanPercAcc = np.mean(percAcc, axis=0)
-        stdPercAcc = np.std(percAcc, axis = 0)
-        xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
+        if xDimScoreBest>0:
+            meanPercAcc = np.mean(percAcc, axis=0)
+            stdPercAcc = np.std(percAcc, axis = 0)
+            xDimBest = np.where(meanPercAcc>shCovThresh)[0][0]+1
+        else:
+            xDimBest = 0
 
         # these should be the same for each dimensionality, so only append once
         # per condition
