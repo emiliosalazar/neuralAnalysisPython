@@ -279,11 +279,18 @@ def splitMetricVals(metricVal, colSplit, unLabForSplit, groupItemSplit):
     metricVal = [np.array(m).flatten() for m in metricVal]
     metricValSplitInit = [list(np.array(metricVal)[colSplit==uLfS]) for uLfS in unLabForSplit]
 
+    unGroupItemSplits = np.unique(groupItemSplit)
+    whereUnGrp = [np.nonzero([np.any(gpSp==unG) for gpSp in groupItemSplit])[0][0] for unG in unGroupItemSplits]
     groupSplitLens = np.array([len(mVSI) for mVSI in metricValSplitInit])
     groupLargest = groupSplitLens.argmax()
-    metricValSplit = [[mVSplit[(gISplit == gI).nonzero()[0][0]] if np.any(gISplit == gI) else np.full_like(metricValSplitInit[groupLargest][(groupItemSplit[groupLargest]==gI).nonzero()[0][0]], np.nan, dtype=np.double) for gI in groupItemSplit[groupLargest]] for mVSplit, gISplit in zip(metricValSplitInit, groupItemSplit)]
+    unGroupItemLargest = np.unique(groupItemSplit[groupLargest])
+    if np.array_equal(unGroupItemLargest,unGroupItemSplits):
+        metricValSplit = [[mVSplit[(gISplit == gI).nonzero()[0][0]] if np.any(gISplit == gI) else np.full_like(metricValSplitInit[groupLargest][(groupItemSplit[groupLargest]==gI).nonzero()[0][0]], np.nan, dtype=np.double) for gI in groupItemSplit[groupLargest]] for mVSplit, gISplit in zip(metricValSplitInit, groupItemSplit)]
+        sortingOfGroups = groupLargest
+    else:
+        metricValSplit = [[mVSplit[(gISplit == gI).nonzero()[0][0]] if np.any(gISplit == gI) else np.full_like(metricValSplitInit[wUG][(groupItemSplit[wUG]==gI).nonzero()[0][0]], np.nan, dtype=np.double) for gI, wUG in zip(unGroupItemSplits, whereUnGrp)] for mVSplit, gISplit in zip(metricValSplitInit, groupItemSplit)]
+        sortingOfGroups = whereUnGrp
         
-    sortingOfGroups = groupLargest
 #    if len(metricValSplit1Init) > len(metricValSplit2Init):
 #        metricValSplit1 = metricValSplit1Init
 #        metricValSplit2 = [metricValSplit2Init[(pairItemSplit2 == pI1).nonzero()[0][0]] if np.any(pairItemSplit2 == pI1) else np.full_like(metricValSplit1[(pairItemSplit1==pI1).nonzero()[0][0]], np.nan, dtype=np.double) for pI1 in pairItemSplit1]
@@ -612,7 +619,12 @@ def plotAllVsAllExtractionParamShift(descriptions, metricDict, splitNameDesc, la
                     breakpoint() # erm...
 #                labelForColSp = np.array(labelForCol)[colSplit == unLabForSplit[grpSort]]
 #                labelForMarkerSp = np.array(labelForMarker)[colSplit == unLabForSplit[grpSort]]
-                descriptionsSp = np.array(descriptions)[colSplit == unLabForSplit[grpSort]]
+                if np.array(grpSort).size==1:
+                    descriptionsSp = np.array(descriptions)[colSplit == unLabForSplit[grpSort]]
+                else:
+                    unGrpItm,inds=np.unique(groupItemSplits,return_inverse=True)
+                    whereUnGrp = [np.nonzero([np.any(gpSp==unG) for gpSp in groupItemSplits])[0][0] for unG in unGrpItm]
+                    descriptionsSp = np.array([np.array(descriptions)[colSplit==wUG][groupItemSplits[wUG]==uG] for wUG, uG in zip(whereUnGrp, unGrpItm)])
 #
 
                 labelForColSpUnsort, _ = splitMetricVals(labelForCol, colSplit, unLabForSplit, groupItemSplits)
@@ -718,8 +730,13 @@ def plotAllVsAllExtractionParamShift(descriptions, metricDict, splitNameDesc, la
                 # what's in grpSort. But grpSort has been shuffled around
                 # based on the orderForLabels, so this serves to find where it
                 # has ended up
-                scPts = list(np.array(scPts)[(orderForLabels==grpSort).squeeze()].squeeze())
-
+                if np.array(grpSort).size==1:
+                    scPts = list(np.array(scPts)[(orderForLabels==grpSort).squeeze()].squeeze())
+                else:
+                    unGrpItm,inds=np.unique(groupItemSplits,return_inverse=True)
+                    whereUnGrp = [np.nonzero([np.any(gpSp==unG) for gpSp in groupItemSplits])[0][0] for unG in unGrpItm]
+                    scPts = [np.array(scPts)[:,colSplit==wUG][:,groupItemSplits[wUG]==uG] for wUG, uG in zip(whereUnGrp, unGrpItm)]
+                    scPts = list(np.vstack(scPts).squeeze())
                 # apparently running np.array() on a list that has a mix of
                 # strings and np.array(nan) types results in the nan being cast
                 # to the string 'nan', so this is what I search for here to
