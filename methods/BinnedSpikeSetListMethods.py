@@ -358,7 +358,9 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         # Can't say I reeeally like eval here, but I think I gotta do it...
         condNumsTested = [eval(pthAndCond[2]) for pthAndCond in gpfaResHere.keys()]
 
-        xDimRangeAroundTest = [0] + xDimTest + [(xDimTest[-1]+3)]
+        # NOTE by starting at -1 that means dimensionalities of 0 will be
+        # tested! MAKE SURE THIS WORKS!
+        xDimRangeAroundTest = [-1] + xDimTest + [(xDimTest[-1]+3)]
         testDimIndInRange = [int(np.nonzero(xDimRangeAroundTest==dm)[0]) for dm in bestDims]
         newDimsToTestPerCond = [np.arange(xDimRangeAroundTest[dmInd-1]+1, xDimRangeAroundTest[dmInd+1]) for dmInd in testDimIndInRange]
         newDimsToTestPerCond = [nD[nD!=cD] for nD, cD in zip(newDimsToTestPerCond, bestDims)]
@@ -562,7 +564,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         gpUnPathNum = [len(np.unique(gpP)) for gpP in gpPathPer]
         ncols = np.max(gpUnPathNum) # len(bssExp)
         # sorry for the hard code
-        brainAreas = ['V4', 'PFC', 'M1']
+        brainAreas = np.unique(dsi[bssExp]['brain_area'])
         dimArBest = [[],[],[]]
         ncols = len(brainAreas)
         # axs = figErr.subplots(nrows=3, ncols=ncols, squeeze=False, constrained_layout=True)
@@ -635,6 +637,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 plotInfo['lblLLErr'] = lblLLErr
                 plotInfo['description'] = description
                 tmVals = [tmValsStartBest, tmValsEndBest]
+                condLabels = [idx]
                 visualizeGpfaResults(plotInfo, dimResult,  tmVals, cvApproach, normalGpfaScoreAll, dimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins)
         
         for axCumul, axByDim, dmB in zip(axs[1], axs[2], dimArBest):
@@ -914,8 +917,8 @@ def decodeComputations(listBSS,descriptions, labelUse):
             prdSvmDprime = []
             for unLabNum, unLabInit in enumerate(unLabs):
                 for unLabComp in unLabs[unLabNum+1:]:
-                    bSpPairedLabs = bSp[np.all((labelOrig==unLabInit) | (labelOrig==unLabComp), axis=1)]
-                    pairedLabelCategory = labelCategory[np.all((labelOrig==unLabInit) | (labelOrig==unLabComp), axis=1)]
+                    bSpPairedLabs = bSp[np.all(labelOrig==unLabInit, axis=1) | np.all(labelOrig==unLabComp, axis=1)]
+                    pairedLabelCategory = labelCategory[np.all(labelOrig==unLabInit, axis=1) | np.all(labelOrig==unLabComp, axis=1)]
                     pairedAcc, pairedAccStd = bSpPairedLabs.decode(labels=pairedLabelCategory, decodeType = 'naiveBayes', zScoreRespFirst = True)
                     prdDecAcc.append(pairedAcc)
 
