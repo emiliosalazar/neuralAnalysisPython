@@ -90,12 +90,12 @@ def plotAllVsAll(descriptions, metricDict, labelForCol, labelForMarker, supTitle
                     mrkLegElem = []
 
                 if metricName.find('r_{sc}') != -1 or metricName.find('%sv') != -1 or metricName.find('sh pop') != -1:
-                    minMet1Val = mVlConc.min()
-                    maxMet1Val = mVlConc.max()
+                    minMet1Val = np.nanmin(mVlConc)
+                    maxMet1Val = np.nanmax(mVlConc)
 
                     if metric2Name.find('r_{sc}') != -1 or metric2Name.find('%sv') != -1 or metric2Name.find('sh pop') != -1:
-                        minMet2Val = mVl2Conc.min()
-                        maxMet2Val = mVl2Conc.max()
+                        minMet2Val = np.nanmin(mVl2Conc)
+                        maxMet2Val = np.nanmax(mVl2Conc)
                         min2Val = np.array([minMet2Val, 0]).min()
 
                         minVal = np.array([minMet1Val, minMet2Val, 0]).min()
@@ -107,8 +107,8 @@ def plotAllVsAll(descriptions, metricDict, labelForCol, labelForMarker, supTitle
                         ax.axvline(0, color='black', linestyle='--')
                 
                 if hasattr(ax, 'PolarTransform'):
-                    minMetRVal = np.hstack(metricValR).min()
-                    maxMetRVal = np.hstack(metricValR).max()
+                    minMetRVal = np.nanmin(np.hstack(metricValR))
+                    maxMetRVal = np.nanmax(np.hstack(metricValR))
                     breathingRoom = 0.1*(maxMetRVal-minMetRVal)
                     ax.set_rlim(minMetRVal, maxMetRVal+breathingRoom)
                     ax.set_thetalim(0, np.pi/2)
