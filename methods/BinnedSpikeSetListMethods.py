@@ -942,6 +942,36 @@ def decodeComputations(listBSS,descriptions, labelUse):
 
     return decodeDict 
 
+def informationComputations(listBSS, labelUse):
+
+    informationCond = []
+    for bnSpCnt in listBSS:
+        infoCondHere = []
+        for bSp in bnSpCnt:
+            labelOrig = bSp.labels[labelUse]
+            unLabs, labelCategory = np.unique(labelOrig, axis=0, return_inverse=True)
+
+            # compute Fisher information for pairs of categories
+            fishInfo = []
+            for unLabNum, unLabInit in enumerate(unLabs):
+                for unLabComp in unLabs[unLabNum+1:]:
+                    bSpPairedLabs = bSp[np.all(labelOrig==unLabInit, axis=1) | np.all(labelOrig==unLabComp, axis=1)]
+                    pairedLabelCategory = labelCategory[np.all(labelOrig==unLabInit, axis=1) | np.all(labelOrig==unLabComp, axis=1)]
+                    info = bSpPairedLabs.fisherInformation(labels=pairedLabelCategory)
+                    fishInfo.append(info)
+
+            # infoCondHere.append(np.stack(fishInfo))
+            infoCondHere.append(fishInfo)
+
+
+        informationCond.append(infoCondHere)
+        # breakpoint()
+
+    infoDict = {
+        'fisher information' : [np.hstack(iC) for iC in informationCond],
+    }
+
+    return infoDict 
 #%% Plotting and descriptive
 def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
     
