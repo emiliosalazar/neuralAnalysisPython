@@ -78,7 +78,7 @@ def plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesPlotList, axesOthe
         else:  
             axesHere.set_xlabel('time (ms)')
     
-        if (pltNum % colsPlt) != 1:
+        if (pltNum % colsPlt) != 1 and colsPlt != 1:
             axesHere.set_yticklabels('')
             axesHere.yaxis.set_visible(False)
             axesHere.spines['left'].set_visible(False)
@@ -112,6 +112,9 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
             xDimScoreBest = xDimTest[np.argmax(gpfaScoreMn)]
         elif cvApproach is "squaredError":
             xDimScoreBest = xDimTest[np.argmin(gpfaScoreMn)]
+        
+        if xDimScoreBest == 0:
+            continue
         
         Cparams = [prm['C'] for prm in dimResult[xDimScoreBest]['allEstParams']]
         shEigs = [np.flip(np.sort(np.linalg.eig(C.T @ C)[0])) for C in Cparams]
@@ -198,19 +201,20 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
             axesEnd = []
             axVals = np.empty((0,4))
             figSep = plt.figure()
-            figSep.suptitle(description + " cond " + str(idx) + "")
+            figSep.suptitle(description + " cond " + str(condLabel) + "")
+
             if xDimBest>2:
                 figTraj = plt.figure()
                 axStartTraj = plt.subplot(1,3,1,projection='3d')
                 axEndTraj = plt.subplot(1,3,2,projection='3d')
                 axAllTraj = plt.subplot(1,3,3,projection='3d')
-                figTraj.suptitle(description + " cond " + str(idx) + "")
+                figTraj.suptitle(description + " cond " + str(condLabel) + "")
             elif xDimBest>1:
                 figTraj = plt.figure()
                 axStartTraj = plt.subplot(1,3,1)
                 axEndTraj = plt.subplot(1,3,2)
                 axAllTraj = plt.subplot(1,3,3)
-                figTraj.suptitle(description + " cond " + str(idx) + "")
+                figTraj.suptitle(description + " cond " + str(condLabel) + "")
         
             plt.figure()
             plt.imshow(np.abs(dimResult[xDimScoreBest]['allEstParams'][cValUse]['C']),aspect="auto")
@@ -237,7 +241,11 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
             for k, (sq, tstInd) in enumerate(zip(seqTestUse,testInds[cValUse])):
                 # if k>5:
                     # break
-                alB = alBins[tstInd]
+                if alBins.shape[0] > 1:
+                    alB = alBins[tstInd]
+                else:
+                    # might happen if there's the same alignment bin for all trials...
+                    alB = alBins[0]
                 # sq = {}
                 # sq['xorth'] = np.concatenate((sq2['xorth'][1:], sq2['xorth'][:1]), axis=0)
                 # gSp = grpSpks[tstInd]
@@ -452,7 +460,7 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
                     pltNum = 1
                     pltListNum = 0
                     plt.figure(figSep.number)
-                    plt.suptitle(description + " cond " + str(idx) + "")
+                    plt.suptitle(description + " cond " + str(condLabel) + "")
                     try:
                         zip(sq['xorth'])
                     except TypeError:
