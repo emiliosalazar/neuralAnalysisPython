@@ -1705,6 +1705,60 @@ def stack(arrays, axis=0, out=None):
     else:
         raise(Exception("Not really sure what concatenating in more than 3 dims means... let's talk later"))
 
+# implementation of vstack for BinnedSpikeSetObjects
+@implements(np.vstack)
+def vstack(arrays):
+    binSizes = np.stack([arr.binSize for arr in arrays])
+    units = np.stack([arr.units for arr in arrays])
+    if not np.all(binSizes == binSizes[0]):
+        raise(Exception("Can't (shouldn't?) concatenate BinnedSpikeSets with different bin sizes!"))
+    if not np.all(units == units[0]):
+        raise(Exception("Can't (shouldn't?) concatenate BinnedSpikeSets with different units!"))
+
+    if type(arrays) in [list, tuple]:
+        # Convert tuples into lists again... np.stack on ndarrays handles them the same, methinks...
+        arrayNd = [arr.view(np.ndarray) for arr in arrays]
+    elif  type(arrays) is BinnedSpikeSet and arrays.dtype=='object':
+        # we're converting from a BinnedSpikeSet trl x chan object whose elements
+        # are spike trains, into a # trials length list of single trials 1 x trl x chan
+        arrayNd = [np.stack(arr.tolist())[None,:,:] for arr in arrays]
+    elif type(arrays) is BinnedSpikeSet: # and it's not an object
+        arrayNd = arrays.view(np.ndarray)
+    else:
+        raise(Exception("Stacking anything but lists of BinnedSpikeSet not implemented yet!"))
+        
+    vstackTrad = np.vstack(arrayNd)
+
+    # not sure why, but a concatenate works here where a stack doesn't...
+    try:
+        stackStart = np.concatenate([arr.start for arr in arrays]) 
+    except ValueError:
+        stackStart = np.vstack([arr.start for arr in arrays])
+        if np.all(stackStart==None):
+            stackStart = None
+
+    # not sure why, but a concatenate works here where a stack doesn't...
+    try:
+        stackEnd = np.concatenate([arr.end for arr in arrays])
+    except ValueError:
+        stackEnd = np.vstack([arr.end for arr in arrays])
+        if np.all(stackEnd==None):
+            stackEnd = None
+    
+    unLabelKeys = np.unique([arr.labels.keys() for arr in arrays])
+    newLabels = {}
+    for key in unLabelKeys[0]:
+        # might need to return to the below if keys start having to be lists...
+        # keyVals = np.concatenate([arr.labels[list(key)[0]] for arr in arrays])
+        keyVals = np.vstack([arr.labels[key] for arr in arrays])
+        newLabels[key] = keyVals # list(chain(*keyVals))
+        
+    stackAlBins = np.vstack([arr.alignmentBins for arr in arrays])
+    if np.all(stackAlBins == None):
+        stackAlBins = None
+
+    return BinnedSpikeSet(vstackTrad, start=stackStart, end=stackEnd, binSize=binSizes[0], labels=newLabels, alignmentBins=stackAlBins, units = units[0])
+
 # implementation of squeeze for BinnedSpikeSet objects
 @implements(np.squeeze)
 def squeeze(array, axis=None):
