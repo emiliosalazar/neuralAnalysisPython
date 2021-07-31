@@ -53,7 +53,42 @@ function gpfaEngine(seqTrain, seqTest, fname, varargin)
   fprintf('Initializing parameters using factor analysis...\n');
   
   yAll             = [seqTrainCut.y];
-  [faParams, faLL] = fastfa(yAll, xDim, extraOpts{:});
+  if xDim == 0
+    estParams = indepGaussFit(yAll);        
+    LLtrain = [];
+    estParams.C = [];
+    estParams.R = diag(estParams.Ph);
+    estParams.converge = 1;
+    estParams.finalRatioChange = 0;
+    estParams.finalDiffChange = 0;
+    estParams.notes.learnKernelParams = true;
+    estParams.notes.learnGPNoise      = false;
+    estParams.notes.RforceDiagonal    = true;
+    testAll = [seqTest.y];
+    [LL, sse] = indepGaussEval(testAll, estParams);
+    LLtest = LL(end);
+    LLcut = LL;
+    iterTime = 0;
+    for seqInd = 1:length(seqTrain)
+      seqTrain(seqInd).xsm = [];
+      seqTrainCut(seqInd).xsm = [];
+      seqTrainCut(seqInd).Vsm = [];
+      seqTrainCut(seqInd).VsmGP = [];
+    end
+    for seqInd = 1:length(seqTest)
+      seqTest(seqInd).xsm = [];
+    end
+
+    faLL = [];
+    faParams = estParams; % same in this case
+    currentParams = estParams;
+    vars = who;
+    fprintf('Saving %s...\n', fname);
+    save(fname, vars{~ismember(vars, {'yAll', 'blah'})}, '-v7.3');
+    return
+  else
+    [faParams, faLL] = fastfa(yAll, xDim, extraOpts{:});
+  end
   
   startParams.d = mean(yAll, 2);
   startParams.C = faParams.L;

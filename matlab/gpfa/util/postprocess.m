@@ -61,10 +61,14 @@ function [estParams, seqTrain, seqTest] = postprocess(ws, varargin)
     if ~isempty(ws.seqTest)
       fprintf('Extracting neural trajectories for test data...\n');
       
-      ws.seqTest     = exactInferenceWithLL(ws.seqTest, estParams);
-      X              = [ws.seqTest.xsm];
-      [Xorth, Corth] = orthogonalize(X, C);
-      seqTest        = segmentByTrial(ws.seqTest, Xorth, 'xorth');            
+      if ~isempty(estParams.C)
+        ws.seqTest     = exactInferenceWithLL(ws.seqTest, estParams);
+        X              = [ws.seqTest.xsm];
+        [Xorth, Corth] = orthogonalize(X, C);
+        seqTest        = segmentByTrial(ws.seqTest, Xorth, 'xorth');            
+      else
+        seqTest        = segmentByTrial(ws.seqTest, [], 'xorth');            
+      end
     end
   
   elseif ismember(ws.method, {'fa', 'ppca'})

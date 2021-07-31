@@ -25,7 +25,11 @@ function seq = segmentByTrial(seq, X, fn)
   for n = 1:length(seq)
     T   = seq(n).T;
     idx = (ctr+1) : (ctr+T);
-    seq(n).(fn) = X(:, idx);
+    if ~isempty(X)
+      seq(n).(fn) = X(:, idx);
+    else
+      seq(n).(fn) = [];
+    end
     
     ctr = ctr + T;
   end

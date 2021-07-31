@@ -573,14 +573,31 @@ def cvalWrap(seqsTest, paramsEst, eng):
     else:
         raise Exception("GPFA:RforceDiagonal", "Dunno what to do if the diagonal's not forced...")
         
-    CRinv  = paramsEst["C"].T @ Rinv;
-    CRinvC = CRinv @ paramsEst["C"];
-    
-    llT = []
-    for uniqueT in unT:
-        llT.append(cvalRun(paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=eng))
-       
-    llT = np.sum(llT)/2 # following Matlab GPFA code, but unsure why there's a divide-by-2 here...
+    if xDim == 0:
+        # this bit of code takes care of the corner case of testing dimensionality of 0
+        llT = []
+        for uniqueT in unT:
+            uniqueT = int(uniqueT)
+            seqsUse = [seq for seq in seqsTest if seq['T'] == uniqueT]
+            Xr = np.hstack([seq['y'] for seq in seqsUse]) - paramsEst['d']
+            Xr = Xr.T
+            Xstd = Xr**2/diagR
+
+            n_obs, n_features = Xr.shape
+
+            llT.append(-0.5 * (n_obs*n_features*np.log(2*np.pi) + n_obs*np.sum(np.log(diagR)) + np.sum(Xstd)));
+
+        llT = np.sum(llT)
+    else:
+
+        CRinv  = paramsEst["C"].T @ Rinv;
+        CRinvC = CRinv @ paramsEst["C"];
+        
+        llT = []
+        for uniqueT in unT:
+            llT.append(cvalRun(paramsEst, seqsTest, uniqueT,  Rinv, CRinv, CRinvC, logdetR, xDim, yDim, eng=eng))
+        
+        llT = np.sum(llT)/2 # following Matlab GPFA code, but unsure why there's a divide-by-2 here...
     
     return llT
 

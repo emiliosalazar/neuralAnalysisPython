@@ -145,6 +145,7 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         self.copy = copy
         self.tol = tol
         self.max_iter = max_iter
+        self.fit_style_ = 'fa'
         if svd_method not in ['lapack', 'randomized']:
             raise ValueError('SVD method %s is not supported. Please consider'
                              ' the documentation' % svd_method)
@@ -174,6 +175,28 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         n_components = self.n_components
         if n_components is None:
             n_components = n_features
+        elif n_components==0:
+            var = np.var(X, axis=0)
+            covX = np.cov(X, rowvar=False, ddof=0)
+
+            self.mean_ = np.mean(X, axis=0)
+            self.fit_style_ = "independent Gaussian"
+            self.components_ = np.zeros((n_features, 0))
+            self.noise_variance_ = var
+
+            n_features = X.shape[1]
+            n_obs = X.shape[0]
+            Xr = X - self.mean_
+            Xstd = Xr**2/self.noise_variance_
+            log_like = -0.5 * (n_obs*n_features*np.log(2*np.pi) + n_obs*np.sum(np.log(self.noise_variance_)) + np.sum(Xstd));
+
+            self.loglike_ = [log_like]
+            self.n_iter_ = 0
+            self.finalRatioChange_ = np.nan
+            self.finalDiffChange_ = np.nan
+            return self
+
+
         self.mean_ = np.mean(X, axis=0)
         X -= self.mean_
 
@@ -181,7 +204,7 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         nsqrt = sqrt(n_samples)
         llconst = -n_features/2 * log(2. * np.pi)
         var = np.var(X, axis=0)
-        covX = np.cov(X, rowvar=False)
+        covX = np.cov(X, rowvar=False, ddof=0)
 
         # if self.noise_variance_init is None:
         #     psi = np.ones(n_features, dtype=X.dtype)
@@ -381,9 +404,15 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         check_is_fitted(self, 'components_')
 
         Xr = X - self.mean_
-        precision = self.get_precision()
         n_features = X.shape[1]
         n_obs = X.shape[0]
+
+        if self.fit_style_ == "independent Gaussian":
+            Xstd = Xr**2/self.noise_variance_
+            log_like = -0.5 * (n_obs*n_features*np.log(2*np.pi) + n_obs*np.sum(np.log(self.noise_variance_)) + np.sum(Xstd));
+            return log_like
+
+        precision = self.get_precision()
 
         const = -n_features/2*np.log(2*np.pi)
 
