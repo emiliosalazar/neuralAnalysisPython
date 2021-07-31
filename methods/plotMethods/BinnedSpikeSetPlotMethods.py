@@ -102,6 +102,7 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
             # Prep figure
             plt.figure()
             plt.suptitle(dsName + ': channel ' + str(chan))
+            axMn = None
             grpLabels = grpLabels.astype('float64')
             if grpLabels.astype('float64').max()>2*np.pi:
                 sbpltAngs = np.arange(135, -225, -45)
@@ -128,12 +129,23 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                 chanRespMean = np.squeeze(grpSpkTrlAvgSemHere[0][:,[chan]])
                 chanRespSem = np.squeeze(grpSpkTrlAvgSemHere[1][:,[chan]])
 
+                if chanRespMean.ndim == 1: 
+                    # the squeeze can get rid of the condition dimension if
+                    # there was only one condition...
+                    chanRespMean = chanRespMean[None, :]
+                    chanRespSem = chanRespSem[None, :]
+
+
                 colSt = bnSp.colorset[alB, :]
                 colEnd = bnSp.colorset[alB+1, :]
 
                 for idx in range(0, len(grpLabels)):
                     chanSpkBinsByTrial = groupedSpikes[alB][idx][:,chan]
-                    subplotChooseCond = np.where([np.allclose(grpLabels.astype('float64')[idx] % (modulusFullRot), sbpltAngs[i] % (modulusFullRot)) for i in range(0,len(sbpltAngs))])[0]
+                    if grpLabels.shape[1]==1:
+                        subplotChooseCond = np.where([np.allclose(grpLabels.astype('float64')[idx] % (modulusFullRot), sbpltAngs[i] % (modulusFullRot)) for i in range(0,len(sbpltAngs))])[0]
+                    else:
+                        grpLocs = np.arange(modulusFullRot, step=modulusFullRot/grpLabels.shape[0])
+                        subplotChooseCond = np.where([np.allclose(grpLocs.astype('float64')[idx] % (modulusFullRot), sbpltAngs[i] % (modulusFullRot)) for i in range(0,len(sbpltAngs))])[0]
 
                     if not subplotChooseCond.size:
                         subplotChooseCond = np.where(sbpltAngs==modulusFullRot/2*(grpLabels[idx]-2))[0]
