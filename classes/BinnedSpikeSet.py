@@ -267,14 +267,39 @@ class BinnedSpikeSet(np.ndarray):
     def trialAverage(self):
         if self.size > 0:
             if self.dtype == 'object':
-                if np.unique(self.alignmentBins, axis=0).shape[0] == 1:
+                unAlignBins = np.unique(self.alignmentBins, axis=0)
+                if unAlignBins.shape[0] == 1:
+                    # here we're averaging trials whose alignment is in the
+                    # *same* place, but whose length might be different (say the
+                    # end was cut off differently)
                     trlsAsObj = [np.stack(trl) for trl in self]
                     mxLen = np.max([trl.shape[1] for trl in trlsAsObj])
                     padSelf = np.stack([np.pad(trl, ((0,0),(0,mxLen-trl.shape[1])), constant_values=np.nan) for trl in trlsAsObj])
+                    meanOut = np.nanmean(padSelf.view(BinnedSpikeSet), axis=0)
+                    meanOut.alignmentBins = unAlignBins[0]
+                    return meanOut
+                elif np.unique(np.diff(unAlignBins, axis=1)).size == 1:
+                    # here we're averaging a bunch of trials whose alignment is
+                    # in different places, *but* which have equal spacing (so
+                    # maybe some binned spikes start earlier or something, so
+                    # the start is cutoff)
+                    trlsAsObj = [np.stack(trl) for trl in self]
+                    trlAlBinFirst = [trl.alignmentBins[0].astype(int) for trl in self]
+                    mxFirstAlign = np.max(trlAlBinFirst)
+                    finalAlignmentBins = self[np.argmax(trlAlBinFirst)].alignmentBins
+                    padSelfInit = [np.pad(trl, ((0,0), (mxFirstAlign-tABF, 0)), constant_values=np.nan) for trl, tABF in zip(trlsAsObj,trlAlBinFirst)]
+                    # whereas in the previous if statement we knew all trials
+                    # had the same number of values before the first alignment
+                    # bin but not after the final one, here we don't know either
+                    # way--so we pad on the end as well in case its needed!
+                    mxLen = np.max([trl.shape[1] for trl in padSelfInit])
+                    padSelf = np.stack([np.pad(trl, ((0,0), (0, mxLen-trl.shape[1])), constant_values=np.nan) for trl in padSelfInit])
+                    meanOut = np.nanmean(padSelf.view(BinnedSpikeSet), axis=0)
+                    meanOut.alignmentBins = finalAlignmentBins
                     #NOTE check about labels field...
-                    return np.nanmean(padSelf,axis=0)
+                    return meanOut
                 else:
-                    raise Exception('Can only trial average trials of different lengths if they are all aligned!')
+                    raise Exception('Can only trial average trials of different lengths if they have equally spaced alignment points!')
             else:
                 return np.average(self, axis=0)
         else:
@@ -283,13 +308,47 @@ class BinnedSpikeSet(np.ndarray):
         
     def trialStd(self):
         if self.size > 0:
-            return np.std(self, axis=0, ddof=1)
+            if self.dtype == 'object':
+                unAlignBins = np.unique(self.alignmentBins, axis=0)
+                if unAlignBins.shape[0] == 1:
+                    # here we're averaging trials whose alignment is in the
+                    # *same* place, but whose length might be different (say the
+                    # end was cut off differently)
+                    trlsAsObj = [np.stack(trl) for trl in self]
+                    mxLen = np.max([trl.shape[1] for trl in trlsAsObj])
+                    padSelf = np.stack([np.pad(trl, ((0,0),(0,mxLen-trl.shape[1])), constant_values=np.nan) for trl in trlsAsObj])
+                    #NOTE check about labels field...
+                    return np.nanstd(padSelf,axis=0)
+                elif np.unique(np.diff(unAlignBins, axis=1)).size == 1:
+                    # here we're averaging a bunch of trials whose alignment is
+                    # in different places, *but* which have equal spacing (so
+                    # maybe some binned spikes start earlier or something, so
+                    # the start is cutoff)
+                    trlsAsObj = [np.stack(trl) for trl in self]
+                    trlAlBinFirst = [trl.alignmentBins[0].astype(int) for trl in self]
+                    mxFirstAlign = np.max(trlAlBinFirst)
+                    finalAlignmentBins = self[np.argmax(trlAlBinFirst)].alignmentBins
+                    padSelfInit = [np.pad(trl, ((0,0), (mxFirstAlign-tABF, 0)), constant_values=np.nan) for trl, tABF in zip(trlsAsObj,trlAlBinFirst)]
+                    # whereas in the previous if statement we knew all trials
+                    # had the same number of values before the first alignment
+                    # bin but not after the final one, here we don't know either
+                    # way--so we pad on the end as well in case its needed!
+                    mxLen = np.max([trl.shape[1] for trl in padSelfInit])
+                    padSelf = np.stack([np.pad(trl, ((0,0), (0, mxLen-trl.shape[1])), constant_values=np.nan) for trl in padSelfInit])
+                    stdOut = np.nanstd(padSelf.view(BinnedSpikeSet), axis=0)
+                    stdOut.alignmentBins = finalAlignmentBins
+                    #NOTE check about labels field...
+                    return stdOut
+                else:
+                    raise Exception('Can only trial average trials of different lengths if they have equallys spaced alignment points!')
+            else:
+                return np.std(self, axis=0, ddof=1)
         else:
             return None
 
     def trialSem(self):
         if self.size > 0:
-            return np.std(self, axis=0, ddof=1)/np.sqrt(self.shape[0])
+            return self.trialStd()/np.sqrt(self.shape[0])
         else:
             return None
         
