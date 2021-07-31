@@ -69,7 +69,7 @@ def BlueWhiteRedColormap(figs=None, lowPt = None, midPt = 0, highPt = None):
                     img.set_cmap(cmapVals)
                     img.set_clim(lowPt, highPt)
     
-# this function more speicifcally moves the *axes* of the original figure to
+# this function more specifcally moves the *axes* of the original figure to
 # the subplot--I'm actually not sure whether titles and legends and labels move
 # alongside, but I hope they do?       
 # 
@@ -80,7 +80,7 @@ def MoveFigureToSubplot(origFig, newFig, newSubplotToCopyInto):
     
     oldFigAx = origFig.axes
     newFigPos = newSubplotToCopyInto.get_position().bounds
-    newSubplotToCopyInto.remove()
+    newGeo = newSubplotToCopyInto.get_geometry()
     
     for ax in oldFigAx:
         ax.remove() # remove axis from the old figure
@@ -89,10 +89,19 @@ def MoveFigureToSubplot(origFig, newFig, newSubplotToCopyInto):
         newFig.add_axes(ax) # either or both? Not sure
         
         origPos = ax.get_position().bounds # this is still saved even though the axis was deleted from the old figure...
+        print(origPos)
+        newAxPosShift = [newFigPos[0]+origPos[0]*newFigPos[2]-0.5, newFigPos[1]+origPos[1]*newFigPos[3]-0.5, origPos[2]*newFigPos[2], origPos[3]*newFigPos[3]]
         newAxPos = [newFigPos[0]+origPos[0]*newFigPos[2], newFigPos[1]+origPos[1]*newFigPos[3], origPos[2]*newFigPos[2], origPos[3]*newFigPos[3]]
-        ax.set_position(newAxPos, which='both')
+        print(newAxPosShift)
+        print(newAxPos)
+        # ax.set_position(newAxPos, which='both')
+        # ax.get_transform().transform_bbox(newSubplotToCopyInto.get_position())
+        print(ax.get_position().bounds)
+        ax.change_geometry(*newGeo)
 #        breakpoint()
+    newSubplotToCopyInto.remove()
         
+    newFig.canvas.draw()
     plt.close(origFig)
 
 
@@ -112,11 +121,13 @@ def MoveAxisToSubplot(axToMove, newFig, newSubplotToCopyInto, removeOldFig = Fal
 
     # assign axis to new figure and vice-versa
     axToMove.figure = newFig
-    newFig.axes.append(axToMove) # add new axis to the figure also has to be done
+    # newFig.axes.append(axToMove) # add new axis to the figure also has to be done
     newFig.add_axes(axToMove)
+
 
     # set its position to the correct subplot
     axToMove.set_position(newSubplotToCopyInto.get_position())
+    axToMove.change_geometry(*newSubplotToCopyInto.get_geometry())
 
     # remove the temporary subplot
     newSubplotToCopyInto.remove()

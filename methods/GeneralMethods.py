@@ -95,7 +95,7 @@ def pMat(mlabEng):
     return k
     
 
-def saveFiguresToPdf(pdfname=None,analysisDescription = None,figNumsToSave=None):
+def saveFiguresToPdf(pdfname=None,analysisDescription = None,figNumsToSave=None, subplotsMoved = False):
     from matplotlib.backends.backend_pdf import PdfPages
     from matplotlib import pyplot as plt
     import datetime
@@ -119,7 +119,10 @@ def saveFiguresToPdf(pdfname=None,analysisDescription = None,figNumsToSave=None)
         figNumsToSave = plt.get_fignums()
         
     with PdfPages(pdfname) as pdf:
-        for fig in figNumsToSave: ## will open an empty extra figure :(
-            pdf.savefig( fig )
+        for fig in figNumsToSave: 
+            if subplotsMoved:
+                pdf.savefig( fig ,bbox_inches="tight",pad_inches=2)
+            else: 
+                pdf.savefig( fig ,bbox_inches="tight")
 
     return str(pdfname.relative_to(savePath))
