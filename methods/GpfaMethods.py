@@ -9,6 +9,8 @@ import numpy as np
 def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensionality, dimensionalityExtractionParams, binSizeMs):
 
     # prep the outputs we're getting
+    coefDetLowDByExParams = []
+    coefDetByLatentByExParams = []
     shCovPropPopByExParams = []
     shCovPropNeurAvgByExParams = []
     shCovPropNeurStdByExParams = []
@@ -34,6 +36,8 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
         if type(gpfaResult) is not list:
             gpfaResult = [gpfaResult]
 
+        coefDetLowDBySubset = []
+        coefDetByLatentBySubset = []
         shCovPropPopBySubset = []
         shCovPropNeurAvgBySubset = []
         shCovPropNeurStdBySubset = []
@@ -58,6 +62,8 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             CERorth = []
             Corth = []
             timescales = []
+            coefDetLowD = []
+            coefDetByLatent = []
             varExpTog = []
             varExpByDim = []
             for gpfaCond, llDim in zip(gpSubset, dGU):
@@ -94,8 +100,21 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
                 # out of how xsm is made... so I'll just leave this here
                 # for now
                 lowDSeqsNonorth = [seq['xsm'] if hasattr(seq['xsm'], 'shape') else np.array(seq['xsm'])[None,None] for seq in testSeqsOrigAndInferred]
+                lowDSeqsOrth = [seq['xorth'] if hasattr(seq['xorth'], 'shape') else np.array(seq['xorth'])[None,None] for seq in testSeqsOrigAndInferred]
 
                 highDReprojAll = [C@xsm for xsm in lowDSeqsNonorth]
+                stackIndTrls = np.dstack(lowDSeqsOrth)
+                meanProj = stackIndTrls.mean(axis=2)
+                meanOfMeanInEachDim = meanProj.mean(axis=1)
+                varOfMean = ((meanProj.T - meanOfMeanInEachDim)**2).sum(axis=1).mean()
+                varOfTrialsToMeanTraj = ((stackIndTrls.T-meanProj.T)**2).sum()/np.prod(stackIndTrls.shape[1:])
+                varOfTrialsToOverallMean = ((stackIndTrls.T-meanOfMeanInEachDim)**2).sum()/np.prod(stackIndTrls.shape[1:])
+                coefDetLowD.append(1 - varOfTrialsToMeanTraj/varOfTrialsToOverallMean)
+
+                varOfTrialsToOverallByLatent = ((stackIndTrls.T-meanOfMeanInEachDim)**2).sum(axis=(0,1))/np.prod(stackIndTrls.shape[1:])
+                varOfTrialsToMeanTrajByLatent = ((stackIndTrls.T-meanProj.T)**2).sum(axis=(0,1))/np.prod(stackIndTrls.shape[1:])
+                coefDetByLatent.append(1 - varOfTrialsToMeanTrajByLatent/varOfTrialsToOverallByLatent)
+
                 
                 # the transpose on C lets me iterate through dimensions, the
                 # dimensional expansion of [:,None] on cDim then effectively
@@ -168,6 +187,8 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             participationRatioRawCov = [np.trace(C @ C.T + R)**2 / (np.trace((C @ C.T + R) @ (C @ C.T + R) )) for C, R in CR] 
 
             
+            coefDetLowDBySubset.append(np.array(coefDetLowD))
+            coefDetByLatentBySubset.append(np.array(coefDetByLatent).squeeze())
             shCovPropPopBySubset.append(np.array(shCovPropPop))
             shCovPropNeurAvgBySubset.append(np.array(shCovPropNeurAvg))
             shCovPropNeurStdBySubset.append(np.array(shCovPropNeurStd))
@@ -187,6 +208,8 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             participationRatioBySubset.append(np.array(participationRatio))
             participationRatioRawCovBySubset.append(np.array(participationRatioRawCov))
         
+        coefDetLowDByExParams.append(coefDetLowDBySubset)
+        coefDetByLatentByExParams.append(np.hstack(coefDetByLatentBySubset))
         shCovPropPopByExParams.append(shCovPropPopBySubset)
         shCovPropNeurAvgByExParams.append(shCovPropNeurAvgBySubset)
         shCovPropNeurStdByExParams.append(shCovPropNeurStdBySubset)
@@ -208,6 +231,8 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
 
 
     resultsDict = {
+        'R^2 for overall mean in low-d' : [np.hstack(coefDet) for coefDet in coefDetLowDByExParams],
+        'R^2 for mean by latent in low-d' : [np.hstack(coefDetByL) if coefDetByL.size>0 else coefDetByL for coefDetByL in coefDetByLatentByExParams],
         '%sv mean' : [np.hstack(shPropN) for shPropN in shCovPropNeurAvgByExParams],
         '%sv std' : [np.hstack(shPropN) for shPropN in shCovPropNeurStdByExParams],
         '%sv norm dim' : [np.hstack(shPropNormDim) for shPropNormDim in shCovPropNeurNormDimByExParams],
