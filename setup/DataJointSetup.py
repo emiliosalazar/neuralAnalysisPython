@@ -1383,6 +1383,7 @@ class GpfaAnalysisParams(dj.Lookup):
     # gpfa analyses parameters
     gpfa_params_id : int auto_increment # gpfa params id
     ---
+    method_used='gpfa' : enum('gpfa', 'fa') # this allows database storage of FA results
     dimensionality : int # extraction dimensionality
     overall_fr_thresh : float # the firing rate thresh for all the spikes before splitting by condition, where -1 lets all through (this would need to happen if residuals are being input -- though note that residuals could be calculated in function after this threshold, so this would not be -1)
     balance_conds : enum(0, 1) # whether to have equal trials from each condition
@@ -1441,9 +1442,9 @@ class GpfaAnalysisInfo(dj.Manual):
         bsi = BinnedSpikeSetInfo()
 
         if order:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', order_by='dataset_id,dimensionality', as_dict=True)
+            gpfaInfo = (self * gap * dsi)['method_used="{}"'.format('fa' if useFa else 'gpfa')].fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', order_by='dataset_id,dimensionality', as_dict=True)
         else:
-            gpfaInfo = (self * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', as_dict=True)
+            gpfaInfo = (self * gap * dsi)['method_used="{}"'.format('fa' if useFa else 'gpfa')].fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', 'cval_train_converged', as_dict=True)
 
         for info in gpfaInfo:
             bssPath = Path(info['bss_relative_path'])
@@ -1518,7 +1519,7 @@ class GpfaAnalysisInfo(dj.Manual):
                     # for the moment we're only running if it hasn't been done at 2000 yet
                     unconvergedGpfa.computeGpfaResults(gap[unconvergedGpfa],bsi[unconvergedGpfa], expMaxIterationMaxNum = expMaxIterationMaxNum, tolerance = tolerance, tolType = tolType, forceNewGpfaRun=True, **gpfaRunArgsMap)
 
-            if not useFa:
+            if True:#not useFa:
                 print('Loading %s' % fullPath)
                 try:
                     with np.load(fullPath, allow_pickle=True) as gpfaRes:
@@ -1526,6 +1527,8 @@ class GpfaAnalysisInfo(dj.Manual):
                             zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
                         )
                 except FileNotFoundError:
+                    if useFa:
+                        breakpoint()
                     print('GPFA saved file not found even though it was in the database, recomputing extraction')
                     unsavedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
 
@@ -1668,7 +1671,10 @@ class GpfaAnalysisInfo(dj.Manual):
         retValsAll = []
         for key in bssKeys:
             relPath = Path(key['bss_relative_path']).parent 
-            gpfaRelPathFromBss = Path('gpfa') / ('params_%s' % gpfaParamsHash[:5] ) 
+            if useFa:
+                gpfaRelPathFromBss = Path('fa') / ('params_%s' % gpfaParamsHash[:5] ) 
+            else:
+                gpfaRelPathFromBss = Path('gpfa') / ('params_%s' % gpfaParamsHash[:5] ) 
             fullPathToConditions = dataPath / relPath / gpfaRelPathFromBss
             binnedSpikeSet = bsiOrFsi[key].grabBinnedSpikes()
 
@@ -1678,13 +1684,14 @@ class GpfaAnalysisInfo(dj.Manual):
 
             groupedBalancedSpikes, condDescriptors, condsUse = bss.prepareGpfaOrFa(**gpfaPrepParamsForCall)
             if useFa:
-                retVals = {}
-                retVals['faRes'] = bss.fa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams)
-                retVals['groupedBalancedSpikes'] = groupedBalancedSpikes
-                retVals['pathToCond'] = fullPathToConditions
-                retVals['condDescriptors'] = condDescriptors
+                retVals = bss.fa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams)
+                # retVals = {}
+                # retVals['faRes'] = bss.fa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams)
+                # retVals['groupedBalancedSpikes'] = groupedBalancedSpikes
+                # retVals['pathToCond'] = fullPathToConditions
+                # retVals['condDescriptors'] = condDescriptors
                 retValsAll.append(retVals)
-                continue
+                # continue
             else:
                 retVals = bss.gpfa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams, forceNewGpfaRun = forceNewGpfaRun)
                 retValsAll.append(retVals)

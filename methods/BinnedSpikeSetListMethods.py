@@ -264,8 +264,11 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
     gai = GpfaAnalysisInfo()
     gap = GpfaAnalysisParams()
     bsi = BinnedSpikeSetInfo()
+    dsi = DatasetInfo()
+
 
     gpfaParams = dict(
+        method_used = 'gpfa' if not useFa else 'fa',
         overall_fr_thresh = overallFiringRateThresh,
         balance_conds = balanceConds,
         sqrt_spikes = sqrtSpikes,
@@ -286,16 +289,18 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
 
         if type(bssExp) is list:
             for subExp in bssExp:
-                if not useFa:
-                    bssExpComputed = subExp[gai[gap[gpfaParams]]]
-                    bssExpToCompute = subExp - gai[gap[gpfaParams]]
-                
-                    # note that this *adds* values to GpfaAnalysisInfo, so we can't
-                    # just filter gai by bssExpToCompute (nothing will be there!)
-                    gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
+                # if dimensionality != 0:#True: #not useFa:
+                bssExpComputed = subExp[gai[gap[gpfaParams]]]
+                bssExpToCompute = subExp - gai[gap[gpfaParams]]
+            
+                # note that this *adds* values to GpfaAnalysisInfo, so we can't
+                # just filter gai by bssExpToCompute (nothing will be there!)
+                gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
+
 
         else:
-            if not useFa:
+            if True: #not useFa:
+                breakpoint() # just wondering if we ever get here...
                 bssExpComputed = bssExp[gai[gap[gpfaParams]]]
                 bssExpToCompute = bssExp - gai[gap[gpfaParams]]
 #            # NOTE CHANGE
@@ -328,8 +333,6 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
     else:
         gpfaRes, gpfaInfo = gai[bssExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
 
-# could probably make this work... but better to just keep the above, no?
-#    gpfaRes2, gpfaInfo2 = gai[bssExp].grabGpfaResults(returnInfo=True, order=True)
 
 
     if type(gpfaRes) is not list:
@@ -374,10 +377,12 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 if len(gaiCompleted) == 0:
                     # outVals aren't quite what we need unless this is FA which
                     # is handled in the try statement below
+                    # DOUBLE NOTE: FA can now run separately from GPFA, so we're
+                    # back to setting useFa
                     # NOTE: we set useFa to False here because GPFA *HAS* to be
                     # run to get it input into the database... not the best
                     # work flow, but FA has never been in my code ;_;
-                    outVals = gai.computeGpfaResults(gap[gpfaParams], bssNewDimExp, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParams['combine_conditions'] == 'all' else condNum, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=False) 
+                    outVals = gai.computeGpfaResults(gap[gpfaParams], bssNewDimExp, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParams['combine_conditions'] == 'all' else condNum, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa) 
 
                 try:
                     gpfaResH, gpfaInfoH = gaiCompleted.grabGpfaResults(returnInfo=True, useFa=useFa)
@@ -504,10 +509,12 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             # just filter gai by bssExpToCompute (nothing will be there!)
             perConditionGroupFiringRateThresh = gpfaAnalysisInfoConds['condition_grp_fr_thresh'][0]
             labelUse = gpfaAnalysisInfoConds['label_use'][0]
+            # DOUBLE NOTE: FA now can run separately from GPFA, so now we use
+            # input useFa
             # NOTE: we set useFa to FALSE here because EVEN IF we're extracting
             # the FA parameters, GPFA still needs to be run (the way that this
             # is constructed...)
-            gai.computeGpfaResults(gap[gpfaParamsNoCval], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParamsNoCval['combine_conditions'] == 'all' else cond, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=False)
+            gai.computeGpfaResults(gap[gpfaParamsNoCval], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParamsNoCval['combine_conditions'] == 'all' else cond, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
 
             # Not the prettiest, but we rerun this to account for the fact
             # that the correct gpfaHash is now different...
@@ -531,8 +538,6 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             gpfaResBestExp.update(gpfaResBestCond)
 
         gpfaResBest.append(gpfaResBestExp)
-
-    
 
     for gpfaResHere, gpfaInfoHere in zip(gpfaResBest, gpfaInfo):
         gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
