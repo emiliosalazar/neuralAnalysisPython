@@ -1044,15 +1044,15 @@ class BinnedSpikeSet(np.ndarray):
         elif decodeType == 'linearSvm':
             clf = LinearSVC(max_iter=10000) # didn't work with default 1000
             clf.fit(tmAvgBins, labels)
-            decFunc = clf.decision_function(self.timeAverage())
+            decFunc = clf.decision_function(tmAvgBins)
 
             unLbs = np.unique(labels)
             if unLbs.size>2:
                 # haven't yet implemented/thought about SVM for >2 categories
                 breakpoint()
             
-            lb1 = decFunc<0
-            lb2 = decFunc>0
+            lb1 = decFunc[decFunc<0]
+            lb2 = decFunc[decFunc>0]
 
             mnLb1 = np.abs(lb1).mean()
             mnLb2 = np.abs(lb2).mean()
@@ -1066,6 +1066,73 @@ class BinnedSpikeSet(np.ndarray):
 
 
         return out1, out2
+
+    def fisherInformation(self, labels=None):
+        # this computation is based on
+        # Kanitscheider et al. "Measuring Fisher Information Accurately in Correlated Neural Populations",
+        # https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004218#pcbi.1004218.e007
+        # which allows me to use few trials to get a semi-valid information number
+
+        if labels is None:
+            labels = self.labels['stimulusMainLabel']
+
+        unLbs, labsPres = np.unique(labels, return_inverse=True)
+        if unLbs.size>2:
+            raise(Exception("Fisher information is not really well defined for more than two categories I don't think..."))
+
+        if self.shape[2]>1:
+            breakpoint() # not sure what to do with multiple-timepoint data...
+        else:
+            bSpUse = self.timeAverage() # squashes time dimension...
+
+        # get rid of nonresponsive channels...
+        bSpUse = bSpUse[:, ~np.all(bSpUse==0, axis=0)]
+
+        trls, chans = bSpUse.shape # trials are samples, channels are features
+
+        condOne = bSpUse[labsPres == 0]
+        condTwo = bSpUse[labsPres == 1]
+
+        condOneMn = condOne.trialAverage()
+        condTwoMn = condTwo.trialAverage()
+
+        mnDiff = (condOneMn - condTwoMn)[:, None] # give it back a dimension to make it an n x 1 vector
+
+        conds = self.labels['stimulusMainLabel']
+        condOneLab = np.unique(conds[labsPres==0])
+        condTwoLab = np.unique(conds[labsPres==1])
+        diffCond = condOneLab - condTwoLab
+        
+        condOneCov = np.cov(condOne.T, ddof=1)
+        condTwoCov = np.cov(condTwo.T, ddof=1)
+        mnCov = (condOneCov + condTwoCov)/2
+
+        try:
+            invCov = np.linalg.inv(mnCov)
+        except np.linalg.LinAlgError:
+            # NOTE: this feels... mathematically... inappropriate...
+            condOneMnSub = condOne - condOneMn
+            condTwoMnSub = condTwo - condTwoMn
+            condConcat = np.vstack([condOneMnSub, condTwoMnSub])
+            mnCov = np.cov(condConcat.T)
+            invCov = np.linalg.inv(mnCov)
+
+
+
+
+        invCov = np.array(invCov)
+        mnDiff = np.array(mnDiff)
+        infoRaw = mnDiff.T @ invCov @ mnDiff / diffCond**2
+
+        biasCorrScaling = (2*trls - chans - 3) / (2*trls - 2)
+        biasCorrShift = 2*chans/(trls*diffCond**2)
+
+        biasCorrInfo = infoRaw*biasCorrScaling - biasCorrShift
+
+        return biasCorrInfo.squeeze()[None]
+
+        
+
 
     def numberOfDimensions(self, labels=None, title='', maxDims = None, baselineSubtract = False, plot=True):
         if labels is not None:
