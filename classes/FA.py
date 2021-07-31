@@ -46,6 +46,7 @@ class FA:
         allEstParams = []
         seqsTrainNew = []
         seqsTestNew = []
+        fullRank = []
         for cVal, (trnInd, tstInd) in enumerate(zip(trainInds, testInds)):
             fA = FactorAnalysis(n_components = numDim)
 
@@ -60,6 +61,8 @@ class FA:
                 concatTrlTest = np.concatenate(bnSp[tstInd, :], axis=1)
 
             if gpfaResultsPath is not None:
+            fullRank.append(np.linalg.matrix_rank(concatTrlTest) >= concatTrlTest.shape[0])
+
                 cValGpfaResultsPath = gpfaResultsPath / ("%s_xDim%02d_cv%02d.mat" % ("gpfa", numDim, cVal))
 
             if gpfaResultsPath is None or not cValGpfaResultsPath.exists():
@@ -85,16 +88,23 @@ class FA:
                 L = fA.components_
                 psi = fA.noise_variance_
                 d = fA.mean_
+                converged = fA.n_iter_ < fA.max_iter
+                finalRatioChange = fA.finalRatioChange_
+                finalDiffChange = fA.finalDiffChange_
                 Lorth, singVal, rightSingVec = np.linalg.svd(L)
                 Lorth = Lorth[:, :L.shape[1]]
                 allEstParams.append({
                     'C': L, # here I'm matching GPFA naming of C
                     'Corth': Lorth, # here I'm matching GPFA naming of C
                     'd': d,
-                    'R': np.diag(psi) # here I'm matching GPFA naming of R...
+                    'R': np.diag(psi), # here I'm matching GPFA naming of R...
+                    'converge' : converged, # keeping track of whether we converged...
+                    'finalRatioChange' : finalRatioChange,
+                    'finalDiffChange' : finalDiffChange,
                 })
                 
             else:
+                breakpoint()
                 cValGpfaResults = LoadMatFile(cValGpfaResultsPath)
                 faParams =  cValGpfaResults['faParams']
                 ll =  np.append(ll, cValGpfaResults['faLL'][0,-1])
@@ -129,10 +139,10 @@ class FA:
             seqsTestNew.append([{'trialId' : trlNum, 'xsm' : trlProj, 'y': trlOrig} for trlNum, (trlProj, trlOrig) in enumerate(zip(projTestBnSp, bnSp[tstInd, :].view(np.ndarray)))])
 
 
-        self.dimOutput[numDim] = {}
         self.dimOutput[numDim]['allEstParams'] = allEstParams
         self.dimOutput[numDim]['seqsTrainNew'] = seqsTrainNew
         self.dimOutput[numDim]['seqsTestNew'] = seqsTestNew
+        self.dimOutput[numDim]['fullRank'] = fullRank
 
-        return faScore, allEstParams, seqsTrainNew, seqsTestNew
+        return faScore, allEstParams, seqsTrainNew, seqsTestNew, fullRank
 

@@ -269,6 +269,8 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         self.noise_variance_ = psi
         self.loglike_ = loglike
         self.n_iter_ = i + 1
+        self.finalRatioChange_ = (ll_new-ll_base)/(old_ll-ll_base) - 1;
+        self.finalDiffChange_ = (ll_new-old_ll);
         return self
 
     def transform(self, X):

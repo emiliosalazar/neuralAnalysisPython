@@ -1375,7 +1375,7 @@ class BinnedSpikeSet(np.ndarray):
         return residualSpikesGoodChans, corrSpksCondMn, corrSpksPerCond, geoMeanCnt
     
     def prepareGpfaOrFa(self, sqrtSpikes = False,
-             labelUse = 'stimulusMainLabel', condNums=1, combineConds = False, overallFiringRateThresh = 1, perConditionGroupFiringRateThresh = 1, balanceConds = True, 
+             labelUse = 'stimulusMainLabel', condNums=[0], combineConds = False, overallFiringRateThresh = 1, perConditionGroupFiringRateThresh = 1, balanceConds = True, 
              computeResiduals = True):
               
 
@@ -1532,6 +1532,7 @@ class BinnedSpikeSet(np.ndarray):
         xDimScoreBestAll = []
         gpfaPrepAll = []
         loadedSaved = []
+        faRunFinalDetails = []
         faScoreAll = []
         faPrepAll = []
 
@@ -1560,12 +1561,20 @@ class BinnedSpikeSet(np.ndarray):
                 fullOutputPath = outputPathToConditions /  ("cond" + str(condDescriptors[idx]))
                 faScoreCond[0, :] = faPrep.runFa( numDim=xDim, gpfaResultsPath = fullOutputPath )[0]
 
+                converged = [estParam['converge'] for estParam in faPrep.dimOutput[xDim]['allEstParams']]
+                finalRatioChange = [estParam['finalRatioChange'] for estParam in faPrep.dimOutput[xDim]['allEstParams']]
+                finalDiffChange = [estParam['finalDiffChange'] for estParam in faPrep.dimOutput[xDim]['allEstParams']]
+                trainIsFullRank = faPrep.dimOutput[xDim]['fullRank']
+
+                faRunFinalDetails.append([trainIsFullRank,converged,finalRatioChange,finalDiffChange])
+
                 faScoreAll.append(faScoreCond)
 
                 print("FA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
                         
                 preSavedDataPath = fullOutputPath / ("faResultsDim%d.npz" % xDim)
                 preSavedDataPath.parent.mkdir(parents=True, exist_ok = True)
+                condSavePaths.append(preSavedDataPath)
                 np.savez(preSavedDataPath, dimOutput=faPrep.dimOutput[xDim], testInds = faPrep.testInds, trainInds=faPrep.trainInds, score=faScoreCond[0,:], alignmentBins = grpSpks.alignmentBins, condLabel = grpSpks[0].labels[labelUse], binSize = grpSpks.binSize  )
 
         print("All FA training done in %d seconds" % (time()-tSt))
@@ -1577,7 +1586,8 @@ class BinnedSpikeSet(np.ndarray):
         faTestIndsAll = [getattr(fa, 'testInds', None) for fa in faPrepAll]
         faTrainIndsAll = [getattr(fa, 'trainInds', None) for fa in faPrepAll]
 
-        return faPrepDimOutputAll, faTestIndsAll, faTrainIndsAll, faScoreAll
+        return faPrepDimOutputAll, faTestIndsAll, faTrainIndsAll, faScoreAll, faRunFinalDetails, condSavePaths
+
 
     def gpfa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio', forceNewGpfaRun = False):
         from classes.GPFA import GPFA
