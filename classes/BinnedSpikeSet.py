@@ -136,11 +136,11 @@ class BinnedSpikeSet(np.ndarray):
     def __getitem__(self,item):
         try:
             # print(type(self))
-            if isinstance(item, (list,slice, int, np.ndarray)) or np.issubdtype(type(item), np.integer):
+            if isinstance(item, (list,slice, int, np.ndarray,range)) or np.issubdtype(type(item), np.integer):
                 # print('test')
                 self._new_label_index = item
                 #setattr(self,'_new_label_index', item)
-            elif isinstance(item[0], (list,slice, int, np.ndarray)) or np.issubdtype(type(item[0]), np.integer):
+            elif isinstance(item[0], (list,slice, int, np.ndarray, range)) or np.issubdtype(type(item[0]), np.integer):
                 # print('test2')
                 # print(str(item))
                 # print(type(item))
