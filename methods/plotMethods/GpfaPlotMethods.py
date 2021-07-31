@@ -238,6 +238,8 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
             lblNoDelayStart = 'delay start outside traj'
             lblNoDelayEnd = 'delay end outside traj'
             lblNeuralTraj = 'neural trajectories'
+            trainInds = [sq['trialId'] for sq in dimResult[xDimScoreBest]['seqsTrainNew'][0]]
+            mxInd = np.max(np.hstack([trainInds, testInds[cValUse]]))
             for k, (sq, tstInd) in enumerate(zip(seqTestUse,testInds[cValUse])):
                 # if k>5:
                     # break
@@ -476,8 +478,11 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
                         except TypeError:
                             dim = [dim]
                         
+                        mxColorInd = 255
+                        thisColorInd = np.round(tstInd/mxInd*255)
+                        timeLineColor = plt.cm.viridis(int(thisColorInd))
                         if tmValsStart.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, colorset[idx,:], lblNeuralTraj, axTitle = 'Start')
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesStart, axesEnd, rowsPlt, colsPlt, tmValsStart, dim[:tmValsStart.shape[0]], dimNum, xDimBest, timeLineColor, lblNeuralTraj, axTitle = 'Start')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesStart.append(axesHere)
@@ -512,7 +517,7 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
                             pltNum += 1
                         
                         if tmValsEnd.size:
-                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, colorset[idx,:], lblNeuralTraj, axTitle = 'End')
+                            axUsed = plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesEnd, axesStart, rowsPlt, colsPlt, tmValsEnd, dim[-tmValsEnd.shape[0]:], dimNum, xDimBest, timeLineColor, lblNeuralTraj, axTitle = 'End')
                             # if len(axesStart) + len(axesEnd) <rowsPlt*colsPlt:
                             #     axesHere = figSep.add_subplot(rowsPlt, colsPlt, pltNum)
                             #     axesEnd.append(axesHere)
@@ -556,7 +561,10 @@ def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll,
                 lblNoDelayEnd = None
                 lblNeuralTraj = None
 
-
+            m = plt.cm.ScalarMappable(cmap=plt.cm.viridis)
+            m.set_array(testInds)
+            figSep.colorbar(m)
+            
             # now I'm gonna plot the shuffles
             if computeShuffles:
                 lblShuffle = 'shuffles'
