@@ -21,7 +21,7 @@ import json
 import dill as pickle
 
 from methods.GpfaMethods import crunchGpfaResults, computeBestDimensionality
-from methods.plotUtils.GpfaPlotMethods import visualizeGpfaResults
+from methods.plotMethods.GpfaPlotMethods import visualizeGpfaResults
 
 def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToStateEnd = False, setEndToStateStart = False, returnResiduals = False,  firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None, trialFilterLambda = None):
 

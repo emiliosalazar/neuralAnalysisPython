@@ -4,7 +4,7 @@ flux as I move thing to their final destinations...
 """
 import numpy as np
 from classes.BinnedSpikeSet import BinnedSpikeSet
-from methods.plotUtils.ScatterBar import scatterBar
+from methods.plotMethods.ScatterBar import scatterBar
 
 from matplotlib import pyplot as plt
 from matplotlib.patches import Patch

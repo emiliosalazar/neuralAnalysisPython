@@ -12,7 +12,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from classes.FactorAnalysis import FactorAnalysis
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
-from methods.plotUtils.GpfaPlotMethods import visualizeGpfaResults
+from methods.plotMethods.GpfaPlotMethods import visualizeGpfaResults
 #from mayavi import mlab
 
 
