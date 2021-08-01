@@ -39,11 +39,11 @@ from methods.BinnedSpikeSetListMethods import gpfaComputation
 from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as genBSLLabGrp
 
 # for computing metrics
-from methods.BinnedSpikeSetListMethods import rscComputations
-from methods.GpfaMethods import computePopulationMetrics
+from methods.BinnedSpikeSetListMethods import rscComputations, decodeComputations, informationComputations
+from methods.GpfaMethods import computePopulationMetrics, computeProjectionMetrics
 
 # for plotting the metrics
-from methods.plotUtils.UnsortedPlotMethods import plotTimeEvolution
+from methods.plotUtils.PopMetricsPlotMethods import plotTimeEvolution
 
 
 @saveCallsToDatabase
@@ -76,35 +76,85 @@ def covarianceTimeEvolutionAnalysis(datasetSqlFilter, timeShifts, binnedSpikeSet
 
     # subsamples will have at least this many neurons
     minNumNeurons = subsampleParams['minNumNeurons']
-    minNumTrlPerCond = subsampleParams['minNumTrlPerCond']
-    chTrlNums = fsp[bssiKeysTimeShift]['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)].fetch('ch_num', 'trial_num_per_cond_min')
 
-    # now, in order to prevent small changes in what datasets get in making
-    # everything get reextracted because of different neuron numbers, I'm
-    # taking these as set by the input
-    if np.min(chTrlNums[0]) < minNumNeurons:
-        breakpoint() # should never be reached, really
+    combineConditions = gpfaParams['combineConditions']
+    balanceConds = gpfaParams['balanceConds']
+    if combineConditions:
+        minNumTrlAll = subsampleParams['minNumTrlAll']
+        if balanceConds:
+            # bssKeys = bsi[bssiKeysTimeShift][fsp['ch_num>=%d AND condition_num*trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
+            bssKeys = [bsi[bssTSOneKey][fsp['ch_num>=%d AND condition_num*trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')[0] for bssTS in bssiKeysTimeShift for bssTSOneKey in bssTS]
+        else:
+            # bssKeys = bsi[bssiKeysTimeShift][fsp['ch_num>=%d AND trial_num>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
+            bssKeys = [bsi[bssTSOneKey][fsp['ch_num>=%d AND trial_num>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')[0] for bssTS in bssiKeysTimeShift for bssTSOneKey in bssTS]
+        fspNumInfo = list(zip(*[fsp[bsi[bK]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num') for bK in bssKeys]))
+        minTrlPerCond = np.stack(fspNumInfo[1]).squeeze()
+        trialNum = np.stack(fspNumInfo[2]).squeeze()
+        condNum = np.stack(fspNumInfo[3]).squeeze()
+
+        maxNumTrlPerCond = minNumTrlAll/condNum
+        if np.any(minTrlPerCond < maxNumTrlPerCond):
+            if balanceConds:
+                # should never be reached if balanceConds is True; otherwise,
+                # might indicate that conditions weren't evenly presented, so
+                # one was presented less than the average
+                breakpoint() 
+            else:
+                # gotta change this to a list and an int to match what following
+                # functions expect...
+                maxNumTrlPerCond = list(minTrlPerCond.astype(int))
+        else:
+            # gotta change this to a list and an int to match what following
+            # functions expect...
+            maxNumTrlPerCond = list(maxNumTrlPerCond.astype(int))
+
+        if np.min(fspNumInfo[0]) < minNumNeurons:
+            breakpoint() # should never be reached, really
+        else:
+            maxNumNeuron = minNumNeurons # np.min(chTrlNumPerCond[0])
     else:
-        maxNumNeuron = minNumNeurons # np.min(chTrlNums[0])
+        minNumTrlPerCond = subsampleParams['minNumTrlPerCond']
+        bssKeys = [bsi[bssTSOneKey][fsp['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)]].fetch('KEY')[0] for bssTS in bssiKeysTimeShift for bssTSOneKey in bssTS]
+        fspNumInfo = list(zip(*[fsp[bsi[bK]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num') for bK in bssKeys]))
+        chTrlNumPerCond = fspNumInfo[:2]
+        chTrlNumPerCond = [np.stack(ctnp).squeeze() for ctnp in chTrlNumPerCond]
 
-    if np.min(chTrlNums[1]) < minNumTrlPerCond:
-        breakpoint() # should never be reached, really
-    else:
-        maxNumTrlPerCond = minNumTrlPerCond # np.min(chTrlNums[1])
 
+        # now, in order to prevent small changes in what datasets get in making
+        # everything get reextracted because of different neuron numbers, I'm
+        # taking these as set by the input
+        if np.min(chTrlNumPerCond[1]) < minNumTrlPerCond:
+            breakpoint() # should never be reached, really
+        else:
+            maxNumTrlPerCond = minNumTrlPerCond 
+
+        if np.min(chTrlNumPerCond[0]) < minNumNeurons:
+            breakpoint() # should never be reached, really
+        else:
+            maxNumNeuron = minNumNeurons # np.min(chTrlNumPerCond[0])
+
+
+    breakpoint()
     timeShiftMetricDict = {}
 
+    # only doing one subsample for now...
+    numSubsamples = subsampleParams['numSubsamples']
+    extraOpts = subsampleParams['extraOpts']
+    labelName = subsampleParams['labelName']
+
     for timeShift, bssiKeys in zip(timeShifts, bssiKeysTimeShift):
-        # only doing one subsample for now...
-        numSubsamples = subsampleParams['numSubsamples']
-        extraOpts = subsampleParams['extraOpts']
-        labelName = 'stimulusMainLabel'
 
         # gotta make sure there are enough channels here or weird things
         # happen...
-        bssExp = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)]]
+        if combineConditions:
+            if balanceConds:
+                bssKeysThisTimeShift = bsi[bssiKeys][fsp['ch_num>=%d AND condition_num*trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
+            else:
+                bssKeysThisTimeShift = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
+        else:
+            bssKeysThisTimeShift = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)]].fetch('KEY')
 
-        binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssExp, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
+        binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssKeysThisTimeShift, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
 
         print("Computing GPFA")
         """ These are the GPFA parameters """
@@ -127,6 +177,8 @@ def covarianceTimeEvolutionAnalysis(datasetSqlFilter, timeShifts, binnedSpikeSet
             else:
                 descStrName = ""
 
+            if timeShift==0:
+                breakpoint()
             dimsH, dimsLLH, gpfaDimOutH, gpfaTestIndsH, gpfaTrainIndsH = gpfaComputation(
                 subsampleExpressions, **gpfaParams
             )
@@ -184,22 +236,42 @@ def covarianceTimeEvolutionAnalysis(datasetSqlFilter, timeShifts, binnedSpikeSet
 
         # some descriptive data plots
         descriptions = dsNames #[data[idx]['description'] for idx in dataIndsProcess]
+
+        # Projection metrics
+        projMetricsDict, projPtsForPlotDict = computeProjectionMetrics(binnedResidShStOffSubsamples, gpfaDimOut, dimsLL, gpfaTestInds, gpfaParams)
             
         # Population metrics
-        popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims)
+        # popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims, binnedSpikeSetGenerationParamsDict['binSizeMs'])
 
         #%% Residual correlations
         plotResid = correlationParams['plotResid']
-        rscMetricDict = rscComputations(binnedResidShStOffSubsamples, descriptions, labelName, **correlationParams)
+        # rscMetricDict = rscComputations(binnedResidShStOffSubsamples, descriptions, labelName, **correlationParams)
 
         if plotParams['plotResid']:
             plotResidParams = plotParams['plotResid']
             outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotResidParams['pdfnameSt'],plotParams['analysisIdentifier'])))
             plt.close('all')
 
+        # Decode metrics
+        # decodeDict = decodeComputations(binnedResidShStOffSubsamples, descriptions, labelName)
+
+        # Info metrics
+        infoDict = informationComputations(binnedResidShStOffSubsamples, labelName)
+        from numpy.polynomial import Polynomial
+        infoDict.update({
+            'fisher mn' : [np.mean(iC) for shOnMnDff, iC in zip(projMetricsDict['log((cond diff mag)/(proj noise from 1st latent))'], infoDict['fisher information'])],
+            'fisher / (noise-to-mean diff)' : [Polynomial.fit(iC.squeeze(),shOnMnDff.squeeze(), 1).coef[1] for shOnMnDff, iC in zip(projMetricsDict['log((cond diff mag)/(proj noise from 1st latent))'], infoDict['fisher information'])],
+        })
+        infoDict.update({
+            'fisher mn / (linear slope b/t fisher vs ns-mn)' : [rel/inf for inf,rel in zip(infoDict['fisher mn'], infoDict['fisher / (noise-to-mean diff)'])],
+        })
+
         metricDict = {}
-        metricDict.update(popMetricsDict)
-        metricDict.update(rscMetricDict)
+        # metricDict.update(projMetricsDict)
+        # metricDict.update(popMetricsDict)
+        # metricDict.update(rscMetricDict)
+        metricDict.update(infoDict)
+        # metricDict.update(decodeDict)
 
         timeShiftMetricDict[timeShift] = metricDict
         timeShiftMetricDict[timeShift]['timeCenterPoint'] = timeShift+(segmentLengthMs)/2 
