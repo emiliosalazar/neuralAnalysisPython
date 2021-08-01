@@ -50,8 +50,8 @@ from methods.GpfaMethods import computePopulationMetrics
 from methods.plotUtils.PlotUtils import MoveFigureToSubplot, MoveAxisToSubplot
 
 
-@saveCallsToDatabase
-def datasetDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsDict, plotParams):
+# @saveCallsToDatabase
+def binnedSpikesDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsDict, plotParams):
 
     dsgl = DatasetGeneralLoadParams()
     dsi = DatasetInfo()
@@ -145,7 +145,6 @@ def datasetDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsD
             saveFiguresToPdf(pdfname=pdfName+'new', analysisDescription="overviewPlot")
 
             plt.close('all')
-
 
 #            outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotGenericMetricParams['pdfnameSt'],plotParams['analysisIdentifier'])))
 #            plt.close('all')
@@ -310,7 +309,7 @@ def datasetDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationParamsD
 
             breakpoint()
 
-def coincidenceOverview(datasetSqlFilter):
+def datasetDescriptiveOverview(datasetSqlFilter, plotParams):
 
     dsgl = DatasetGeneralLoadParams()
     dsi = DatasetInfo()
@@ -324,16 +323,36 @@ def coincidenceOverview(datasetSqlFilter):
     else:
         dsiUse = dsi
 
-    for dsKey in dsi[datasetSqlFilter].fetch('KEY'):
-        ds = dsi[dsKey]
-        suptitle = ds['dataset_name'][0]
-        ds.createRawDataset().findCoincidentSpikeChannels(coincidenceTime=1, coincidenceThresh=0.2,checkNumTrls=1,plotResults=True)
+    if 'coincidenceOverview' in plotParams and plotParams['coincidenceOverview']:
+        coincidenceOverviewParams = plotParams['coincidenceOverview']
 
-        coincFig = plt.gcf()
-        coincFig.suptitle(suptitle)
+        for dsKey in dsi[datasetSqlFilter].fetch('KEY'):
+            ds = dsi[dsKey]
+            suptitle = ds['dataset_name'][0]
+            ds.createRawDataset().findCoincidentSpikeChannels(coincidenceTime=1, coincidenceThresh=0.2,checkNumTrls=1,plotResults=True)
 
-    saveFiguresToPdf(pdfname="coincidenceOverview", analysisDescription="coincidenceOverview")
-    plt.close('all')
+            coincFig = plt.gcf()
+            coincFig.suptitle(suptitle)
+
+        saveFiguresToPdf(pdfname="coincidenceOverview", analysisDescription="coincidenceOverview")
+        plt.close('all')
+
+    if 'keyStateOverview' in plotParams and plotParams['keyStateOverview']:
+        keyStateParams = plotParams['keyStateOverview']
+
+        for dsKey in dsi[datasetSqlFilter].fetch('KEY'):
+            dsInfo = dsi[dsKey]
+            ds = dsInfo.grabDatasets()[0]
+            suptitle = dsInfo['dataset_name'][0]
+            if keyStateParams['onlySuccessfulTrials']:
+                ds, _ = ds.successfulTrials()
+
+            ds.plotKeyStateInfo()
+            keyStateFig = plt.gcf()
+            keyStateFig.suptitle(suptitle)
+
+        saveFiguresToPdf(pdfname="keyStateOverview", analysisDescription="keyStateOverview")
+        plt.close('all')
 
 
 
