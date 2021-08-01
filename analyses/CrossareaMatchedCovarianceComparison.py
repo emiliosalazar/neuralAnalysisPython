@@ -17,7 +17,7 @@ from scipy.stats import binned_statistic
 
 from methods.GeneralMethods import saveFiguresToPdf
 # database stuff
-from setup.DataJointSetup import DatasetInfo, DatasetGeneralLoadParams, BinnedSpikeSetInfo, FilterSpikeSetParams
+from setup.DataJointSetup import * #DatasetInfo, DatasetGeneralLoadParams, BinnedSpikeSetInfo, FilterSpikeSetParams
 import datajoint as dj
 # the decorator to save these to a database!
 from decorators.AnalysisCallDecorators import saveCallsToDatabase
@@ -42,16 +42,16 @@ from methods.BinnedSpikeSetListMethods import plotStimDistributionHistograms
 from methods.BinnedSpikeSetListMethods import plotFiringRates
 
 # for computing metrics
-from methods.BinnedSpikeSetListMethods import rscComputations, decodeComputations
+from methods.BinnedSpikeSetListMethods import rscComputations, decodeComputations, informationComputations
 from methods.GpfaMethods import computePopulationMetrics, computeProjectionMetrics
 
 # for plotting the metrics
-from methods.plotUtils.PopMetricsPlotMethods import plotAllVsAll, plotMetricVsExtractionParams, plotMetricsBySeparation
-from methods.plotUtils.UnsortedPlotMethods import plotPointProjections
+from methods.plotMethods.PopMetricsPlotMethods import plotAllVsAll, plotMetricVsExtractionParams, plotMetricsBySeparation
+from methods.plotMethods.UnsortedPlotMethods import plotPointProjections
 
 
 # @saveCallsToDatabase
-def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerationParamsDict, subsampleParams, gpfaParams, correlationParams,plotParams):
+def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerationParamsDict, subsampleParams, gpfaParams, correlationParams,plotParams,binnedSpikeSetGenerationParamsDictBaseline = None):
 
     dsgl = DatasetGeneralLoadParams()
     dsi = DatasetInfo()
@@ -66,10 +66,15 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         dsiUse = dsi
 
     print("Computing/loading binned spike sets")
-    offshift = binnedSpikeSetGenerationParamsDict.pop('offshift')
     _, bssiKeys = genBSLAroundState(dsiUse,
                                         **binnedSpikeSetGenerationParamsDict
                                         )
+
+
+    if binnedSpikeSetGenerationParamsDictBaseline is not None:
+        _, bssiKeysBaseline = genBSLAroundState(dsiUse,
+                                            **binnedSpikeSetGenerationParamsDictBaseline
+                                            )
 
 
     # only doing one subsample for now...
@@ -84,20 +89,36 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
 
     combineConditions = gpfaParams['combineConditions']
+    balanceConds = gpfaParams['balanceConds']
     if combineConditions:
         minNumTrlAll = subsampleParams['minNumTrlAll']
-        bssKeys = bsi[bssiKeys][fsp['ch_num>=%d AND condition_num*trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
-        fspNumInfo = fsp[bsi[bssKeys]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num')
-        minTrlPerCond = fspNumInfo[1]
-        trialNum = fspNumInfo[2]
-        condNum = fspNumInfo[3]
+        if balanceConds:
+            bssKeys = bsi[bssiKeys][fsp['ch_num>=%d AND condition_num*trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
+        else:
+            bssKeys = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num>=%d' % (minNumNeurons, minNumTrlAll)]].fetch('KEY')
+        # fspNumInfo = fsp[bsi[bssKeys]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num')
+        fspNumInfo = list(zip(*[fsp[bsi[bK]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num') for bK in bssKeys]))
+        minTrlPerCond = np.stack(fspNumInfo[1]).squeeze()
+        trialNum = np.stack(fspNumInfo[2]).squeeze()
+        condNum = np.stack(fspNumInfo[3]).squeeze()
 
         maxNumTrlPerCond = minNumTrlAll/condNum
         if np.any(minTrlPerCond < maxNumTrlPerCond):
-            breakpoint() # should never be reached, really
+            if balanceConds:
+                # should never be reached if balanceConds is True; otherwise,
+                # might indicate that conditions weren't evenly presented, so
+                # one was presented less than the average
+                breakpoint() 
+            else:
+                breakpoint() # is this computing things right? Same number of output trials per session?
+                # gotta change this to a list and an int to match what following
+                # functions expect...
+                maxNumTrlPerCond = list(minTrlPerCond.astype(int))
         else:
             # gotta change this to a list and an int to match what following
             # functions expect...
+            if maxNumTrlPerCond.ndim == 0:
+                maxNumTrlPerCond = maxNumTrlPerCond[None]
             maxNumTrlPerCond = list(maxNumTrlPerCond.astype(int))
 
         if np.min(fspNumInfo[0]) < minNumNeurons:
@@ -107,8 +128,10 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
     else:
         minNumTrlPerCond = subsampleParams['minNumTrlPerCond']
         bssKeys = bsi[bssiKeys][fsp['ch_num>=%d AND trial_num_per_cond_min>=%d' % (minNumNeurons, minNumTrlPerCond)]].fetch('KEY')
-        fspNumInfo = fsp[bsi[bssKeys]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num')
+        fspNumInfo = list(zip(*[fsp[bsi[bK]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num') for bK in bssKeys]))
+        # fspNumInfo = fsp[bsi[bssKeys]].fetch('ch_num', 'trial_num_per_cond_min', 'trial_num', 'condition_num')
         chTrlNumPerCond = fspNumInfo[:2]
+        chTrlNumPerCond = [np.stack(ctnp).squeeze() for ctnp in chTrlNumPerCond]
 
 
         # now, in order to prevent small changes in what datasets get in making
@@ -126,6 +149,21 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
 
     binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssKeys, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
+    breakpoint()
+
+    if binnedSpikeSetGenerationParamsDict is not None:
+        trlFiltAll = []
+        chFiltAll = []
+        for subExp in subsampleExpressions:
+            trlFiltRev = []
+            chFiltRev = []
+            while fsp[subExp]['parent_bss_relative_path'][0] is not None:
+                trlFiltRev.append(fsp[subExp]['trial_filter'][0])
+                chFiltRev.append(fsp[subExp]['ch_filter'][0])
+                subExp = bsi['bss_relative_path="{}"'.format(fsp[subExp]['parent_bss_relative_path'][0])]
+        trlFiltAll.append(trlFiltRev)
+        chFiltAll.append(chFiltRev)
+
 
     print("Computing GPFA")
     """ These are the GPFA parameters """
@@ -139,6 +177,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
 
     bnSpOut, dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds, brainAreasResiduals, brainAreasNoResiduals = [],[],[],[],[], [], [], []
+    bnSpOutBaseline = []
     for paramSet in paramIterator:
         # we'll note that this basically means the for loop is for show when
         # we're not iterating
@@ -148,6 +187,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         else:
             descStrName = ""
 
+        # ** actually run GPFA **
         dimsH, dimsLLH, gpfaDimOutH, gpfaTestIndsH, gpfaTrainIndsH = gpfaComputation(
             subsampleExpressions, **gpfaParams
         )
@@ -162,6 +202,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         brainAreasNoResiduals += brainAreas
 
         bnSpSubsmp = []
+        bnSpSubsmpBaseline = []
         if iterateParams:
             for indAr, (bnSpArea) in enumerate(binnedResidShStOffSubsamples):
                 paramsIterated = {k : v for paramVal in paramSet for k,v in paramVal.items()}
@@ -172,11 +213,22 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
                     bnSpSubsmp.append([bnSp.baselineSubtract(labels=bnSp.labels[gpfaParams['labelUse']])[0] for bnSp in bnSpArea])
                 else:
                     bnSpSubsmp.append(bnSpArea)
+                
+                if binnedSpikeSetGenerationParamsDictBaseline is not None:
+                    chansUse = fsp[subsampleExpressions[indAr]]['ch_filter'][0]
+                    bssiKeyUse = bssiKeysBaseline[int(np.array([bs['dataset_relative_path']==subsampleExpressions[indAr]['dataset_relative_path'] for bs in bssiKeysBaseline]).nonzero()[0])]
+                    bnSpSubsmpBaseline.append([bsi[bssiKeyUse].grabBinnedSpikes()[0][:,chansUse]])
         else:
             for indAr, (bnSpArea) in enumerate(binnedResidShStOffSubsamples):
                 bnSpSubsmp.append(bnSpArea)
 
+                if binnedSpikeSetGenerationParamsDictBaseline is not None:
+                    chansUse = fsp[subsampleExpressions[indAr]]['ch_filter'][0]
+                    bssiKeyUse = bssiKeysBaseline[int(np.array([bs['dataset_relative_path']==subsampleExpressions[indAr]['dataset_relative_path'] for bs in bssiKeysBaseline]).nonzero()[0])]
+                    bnSpSubsmpBaseline.append([bsi[bssiKeyUse].grabBinnedSpikes()[0][:,chansUse]])
+
         bnSpOut += bnSpSubsmp
+        bnSpOutBaseline += bnSpSubsmpBaseline
 
 
     brainAreas = brainAreasResiduals
@@ -184,6 +236,8 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
     dsNames*=len(paramIterator)
     tasks*=len(paramIterator)
     binnedResidShStOffSubsamples = bnSpOut
+    binnedResidShStOffBaselineSubsamples = bnSpOutBaseline
+
 
     if plotParams and plotParams['plotGpfa']:
         plotGpfaParams = plotParams['plotGpfa']
@@ -222,7 +276,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         plt.close('all')
 
     # Projection metrics
-    projMetricsDict, projPtsForPlotDict = computeProjectionMetrics(binnedResidShStOffSubsamples, gpfaDimOut, dimsLL, gpfaTestInds, gpfaParams)
+    projMetricsDict, projPtsForPlotDict = computeProjectionMetrics(binnedResidShStOffSubsamples, binnedResidShStOffBaselineSubsamples, gpfaDimOut, dimsLL, gpfaTestInds, gpfaParams)
 
     if plotParams and plotParams['plotProjections']:
         plotProjParams = plotParams['plotProjections']
@@ -248,12 +302,24 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         plt.close('all')
 
     # Decode metrics
-    decodeDict = decodeComputations(binnedResidShStOffSubsamples, descriptions, labelName)
+    # decodeDict = decodeComputations(binnedResidShStOffSubsamples, descriptions, labelName)
+
+    # Info metrics
+    # infoDict = informationComputations(binnedResidShStOffSubsamples, labelName)
+    # from numpy.polynomial import Polynomial
+    # infoDict.update({
+    #     'fisher mn' : [np.mean(iC, axis=0) for shOnMnDff, iC in zip(projMetricsDict['(proj noise from 1st latent)/(cond diff mag)'], infoDict['fisher information'])],
+    #     'linear slope b/t fisher vs (sh var on mn diff)' : [np.array(Polynomial.fit(iC.squeeze(),shOnMnDff.squeeze(), 1).coef[1])[None] for shOnMnDff, iC in zip(projMetricsDict['(proj noise from 1st latent)/(cond diff mag)'], infoDict['fisher information'])],
+    # })
+    # infoDict.update({
+    #     'fisher mn / (linear slope b/t fisher vs (sh var on mn diff))' : [rel/inf for inf,rel in zip(infoDict['fisher mn'], infoDict['fisher / (noise-to-mean diff)'])],
+    # })
 
     metricDict = {}
-    metricDict.update(projMetricsDict)
+    # metricDict.update(projMetricsDict)
     metricDict.update(popMetricsDict)
     # metricDict.update(decodeDict)
+    # metricDict.update(infoDict)
     metricDict.update(rscMetricDict)
 
 
