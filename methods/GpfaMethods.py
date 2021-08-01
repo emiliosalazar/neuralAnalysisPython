@@ -379,17 +379,18 @@ def computeProjectionMetrics(binnedSpikeList, binnedSpikeListBaseline, gpfaResul
                 trlProjsOnSignal.append(trlProjSignal)
                 mnProjSignal = mnSubAvgs @ dirs[:, :2]
                 mnProjsOnSignal.append(mnProjSignal)
-                latentsProjSignal.append(np.diag(egsOrth[[0]]) @ Co[:,[0]].T @ dirs[:, :2])
+                latentsProjSignal.append(np.diag(egsOrth[[0]]) @ Co[:,[0]].T @ dirs[:, :2] if egsOrth.shape[0]>0 else np.array([[0,0]]))
 
 
-            projFirstLatentBySubset = [np.abs(xMn.T @ L[:,[0]])/np.sqrt(xMn.T @ xMn) for xMn, L in zip(condAvgs, latents)] 
-            varExpLatentOnlyBySubset = [np.sum(np.sqrt(xMn.T @ L @ L.T @ xMn)/np.sqrt(xMn.T @ xMn)) for xMn, L in zip(condAvgs, latents)] 
+            projFirstLatentBySubset = [np.abs(xMn.T @ L[:,[0]])/np.sqrt(xMn.T @ xMn) if L.shape[1]>0 else np.array([[0]]) for xMn, L in zip(condAvgs, latents)] 
+            snrFirstLatentBySubset = [np.abs(xMn.T @ L[:,[0]])/eigOrth[0] if L.shape[1]>0 else np.array([[0]]) for xMn, L, eigOrth in zip(condAvgs, latents, eigsSharedOrth)] 
+            varExpLatentOnlyBySubset = [np.sum(np.sqrt(xMn.T @ L @ L.T @ xMn)/np.sqrt(xMn.T @ xMn)) if L.shape[1]>0 else np.array([0]) for xMn, L in zip(condAvgs, latents)] 
             
             if np.any(np.array(varExpLatentOnlyBySubset) > 100):
                 breakpoint()
 
-            projSignalFirstLatentBySubset = [np.abs(dsEgs[0][:,[0]].T @ L[:,[0]]) for dsEgs, L in zip(dirsEigs, latents)]
-            projAllSignalAllLatentBySubset = [np.diag(np.sqrt(dsEgs[0].T @ L @ L.T @ dsEgs[0])) for dsEgs, L in zip(dirsEigs, latents)]
+            projSignalFirstLatentBySubset = [np.abs(dsEgs[0][:,[0]].T @ L[:,[0]]) if L.shape[1]>0 else np.array([[0]]) for dsEgs, L in zip(dirsEigs, latents)]
+            projAllSignalAllLatentBySubset = [np.diag(np.sqrt(dsEgs[0].T @ L @ L.T @ dsEgs[0])) if L.shape[1]>0 else np.array([[0]]) for dsEgs, L in zip(dirsEigs, latents)]
             # note that in the below, the indexing by projKp works to grab only
             # the lower triangular portion of the projections, and the vstack
             # serves to order them so you get the projections onto mean
@@ -402,21 +403,20 @@ def computeProjectionMetrics(binnedSpikeList, binnedSpikeListBaseline, gpfaResul
             # sigToNoiseDiff = [np.vstack([stdDfs[stdNum+1:, None] for stdNum, (stdDfs, mDfs) in enumerate(zip(stdDffs, mnDffs))]) for stdDffs, mnDffs, L, Leigs in zip(stdActMnDiffs, meanDiffsNorm, latents, eigsSharedOrth)]
             # np.vstack([np.abs(mD[projKp+1:] @ dirsEigs[0][0].T @ latents[0][:,[0]]*eigsSharedOrth[0][0]/nmD[projKp+1:,None]) for mD, nmD, projKp in zip(meanDiffsProjNormSigSp[0], meanDiffsProjNormFactor[0], range(meanDiffsProjNormSigSp[0].shape[0]))])
             # breakpoint()
-            breakpoint()
-            projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs((mD[projKp+1:] @ L[:,[0]] * Leigs[0])/nmD[projKp+1:,None]) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)]
+            projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs((mD[projKp+1:] @ L[:,[0]] * Leigs[0])/nmD[projKp+1:,None]) if L.shape[1]>0 else np.array([0]) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)]
             # projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.log(np.abs(nmD[projKp+1:,None]/(mD[projKp+1:] @ L[:,[0]] * Leigs[0]))) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)]
             # projFirstLatentOnConditionDiffsBySubset = [np.vstack([dDfs[stdNum+1:, None] for stdNum, (stdDfs, dDfs) in enumerate(zip(stdDffs, distDffs))]) for stdDffs, distDffs, L, Leigs in zip(stdActMnDiffs, meanDiffsNormFactor, latents, eigsSharedOrth)]
             # projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs(mD[projKp+1:] @ L[:,[0]] ) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)]
             # breakpoint()
             # projFirstLatentOnConditionDiffsBySubset = [np.vstack([np.abs(mD[projKp+1:] @ L[:,[0]]) for mD, nmD, projKp in zip(mnDff, normMnDff, range(mnDff.shape[0]))]) for  mnDff, normMnDff, L, Leigs in zip(meanDiffsNorm, meanDiffsNormFactor, latents, eigsSharedOrth)][0].squeeze()
-            projFirstLatent95pctPCBySubset = [np.diag(np.sqrt(L[:,[0]].T @ dsEgs[0][:,:(np.where(dsEgs[1].cumsum()/dsEgs[1].sum()>0.95)[0][0]+1)] @ dsEgs[0][:,:(np.where(dsEgs[1].cumsum()/dsEgs[1].sum()>0.95)[0][0]+1)].T @ L[:,[0]] )) for dsEgs, L in zip(dirsEigs, latents)]
-            projFirstLatentIncSignalBySubset = [np.diag(np.sqrt(L[:,[0]].T @ dsEgs[0][:,:(sigUse+1)] @ dsEgs[0][:,:(sigUse+1)].T @ L[:,[0]] )) for dsEgs, L in zip(dirsEigs, latents) for sigUse in range(dsEgs[0].shape[1])]
+            projFirstLatent95pctPCBySubset = [np.diag(np.sqrt(L[:,[0]].T @ dsEgs[0][:,:(np.where(dsEgs[1].cumsum()/dsEgs[1].sum()>0.95)[0][0]+1)] @ dsEgs[0][:,:(np.where(dsEgs[1].cumsum()/dsEgs[1].sum()>0.95)[0][0]+1)].T @ L[:,[0]] )) if L.shape[1]>0 else np.array([0]) for dsEgs, L in zip(dirsEigs, latents)]
+            projFirstLatentIncSignalBySubset = [np.diag(np.sqrt(L[:,[0]].T @ dsEgs[0][:,:(sigUse+1)] @ dsEgs[0][:,:(sigUse+1)].T @ L[:,[0]] )) if L.shape[1] else np.array([0]) for dsEgs, L in zip(dirsEigs, latents) for sigUse in range(dsEgs[0].shape[1])]
 
             varAccountedForLastSignalPCBySubset = [dsEgs[1][-1]/dsEgs[1].sum() for dsEgs in dirsEigs]
-            ratioVarMnAccForVarShLatAccForBySubset = [dsEgs[1].sum() / egsSh[0] for dsEgs, egsSh in zip(dirsEigs, eigsSharedOrth)]
+            ratioVarMnAccForVarShLatAccForBySubset = [dsEgs[1].sum() / egsSh[0] if egsSh.size>0 else np.array([np.nan]) for dsEgs, egsSh in zip(dirsEigs, eigsSharedOrth)]
 
-            onesDirProjFirstLatentBySubset = [np.abs(onesDir.T @ L[:,0]) for L in latents]
-            onesDirProjEachLatentBySubset = [np.abs(onesDir.T @ L) for L in latents]
+            onesDirProjFirstLatentBySubset = [np.abs(onesDir.T @ L[:,0]) if L.shape[1]>0 else np.array([0]) for L in latents]
+            onesDirProjEachLatentBySubset = [np.abs(onesDir.T @ L) if L.shape[1]>0 else np.array([[0]]) for L in latents]
 
         projFirstLatentByExParams.append(np.array(projFirstLatentBySubset))
         snrFirstLatentBySubsetByExParams.append(np.array(snrFirstLatentBySubset))
