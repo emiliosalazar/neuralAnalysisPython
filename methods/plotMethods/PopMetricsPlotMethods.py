@@ -312,12 +312,24 @@ def plotTimeEvolution(descriptions, timeShiftMetricDict, labelForMarkers, labelF
         for metricName, metricVal in tmMetricDict.items():
             # I'm actually not sure what squeeze() does here... it must be
             # useful for some situations and I ported it from above
-            metricVal = np.array([np.array(m).squeeze() for m in metricVal])
+            metricVal = np.array([np.array(m).squeeze() if len(np.array(m).squeeze().shape)>0 else np.array(m).squeeze()[None] for m in metricVal])
+            # metricVal = np.array([np.array(m) for m in metricVal])
             mxLen = np.max([m.shape[0] for m in metricVal])
             metricValNanPad = np.array([np.pad(m.astype('float'), ((0,mxLen-m.shape[0])), constant_values=(np.nan,)) for m in metricVal])
             if metricName in timeShiftMetricMats:
                 currVals = timeShiftMetricMats[metricName]
-                timeShiftMetricMats[metricName] = np.insert(currVals, -1, metricValNanPad, axis=2)
+                if currVals.shape[1] < metricValNanPad.shape[1]:
+                    nanInit = np.zeros_like(currVals)*np.nan
+                    numNans = metricValNanPad.shape[1] - currVals.shape[1]
+                    nanAppend = nanInit[:, :numNans]
+                    currVals = np.concatenate([currVals, nanAppend],axis=1)
+                elif currVals.shape[1] > metricValNanPad.shape[1]:
+                    nanInit = np.zeros_like(metricValNanPad)*np.nan
+                    numNans = currVals.shape[1] - metricValNanPad.shape[1] 
+                    nanAppend = nanInit[:, :numNans]
+                    metricValNanPad = np.concatenate([metricValNanPad, nanAppend],axis=1)
+                # timeShiftMetricMats[metricName] = np.insert(currVals, currVals.shape[1], metricValNanPad, axis=2)
+                timeShiftMetricMats[metricName] = np.dstack([currVals, metricValNanPad])
             else:
                 timeShiftMetricMats[metricName] = metricValNanPad[:,:,None] # make this a column vector
 
