@@ -403,6 +403,9 @@ class DatasetInfo(dj.Manual):
 
                 if len(bssi & binnedSpikeSetHereInfo) > 1:
                     raise Exception("we've saved this processing more than once...")
+                elif len(bssi & binnedSpikeSetHereInfo) == 1:
+                    breakpoint() # shouldn't really be here... means that the database entry was saved but the file had been deleted...?
+                    bssiKey = bssi[('bss_relative_path = "%s"' % str(saveBSSRelativePath))].fetch("KEY", as_dict=True)
                 elif len(bssi & binnedSpikeSetHereInfo) == 0:
                     bssHash = hashlib.md5(str(binnedSpikesHere).encode('ascii')).hexdigest()
 
@@ -1340,6 +1343,7 @@ class FilterSpikeSetParams(dj.Manual):
         fsp = FilterSpikeSetParams()
         fspProjBsiPathToParent = self.proj(parent_bss_relative_path = 'bss_relative_path')
         parentBsiPaths = fspProjBsiPathToParent.fetch('parent_bss_relative_path', as_dict=True)
+        breakpoint()
 
 
         for key in fspKeys:
