@@ -33,7 +33,7 @@ from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsAroundStat
 from methods.BinnedSpikeSetListMethods import subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition as subsmpMatchCond
 
 # for the gpfa...
-from methods.BinnedSpikeSetListMethods import gpfaComputation
+from methods.BinnedSpikeSetListMethods import gpfaComputation, slowDriftComputation
 
 # for descriptions of the data
 from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as genBSLLabGrp
@@ -43,7 +43,7 @@ from methods.BinnedSpikeSetListMethods import plotFiringRates
 
 # for computing metrics
 from methods.BinnedSpikeSetListMethods import rscComputations, decodeComputations, informationComputations
-from methods.GpfaMethods import computePopulationMetrics, computeProjectionMetrics
+from methods.GpfaMethods import computePopulationMetrics, computeProjectionMetrics, computeOverSessionMetrics
 
 # for plotting the metrics
 from methods.plotMethods.PopMetricsPlotMethods import plotAllVsAll, plotMetricVsExtractionParams, plotMetricsBySeparation
@@ -140,7 +140,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         if np.min(chTrlNumPerCond[1]) < minNumTrlPerCond:
             breakpoint() # should never be reached, really
         else:
-            maxNumTrlPerCond = minNumTrlPerCond 
+            maxNumTrlPerCond = np.min(chTrlNumPerCond[1])
 
         if np.min(chTrlNumPerCond[0]) < minNumNeurons:
             breakpoint() # should never be reached, really
@@ -149,11 +149,11 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
 
 
     binnedResidShStOffSubsamples, subsampleExpressions, dsNames, brainAreas, tasks = subsmpMatchCond(bssKeys, maxNumTrlPerCond = maxNumTrlPerCond, maxNumNeuron = maxNumNeuron, labelName = labelName, numSubsamples = numSubsamples, extraOpts = extraOpts)
-    breakpoint()
 
     if binnedSpikeSetGenerationParamsDict is not None:
         trlFiltAll = []
         chFiltAll = []
+        subExpParents = []
         for subExp in subsampleExpressions:
             trlFiltRev = []
             chFiltRev = []
@@ -161,8 +161,9 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
                 trlFiltRev.append(fsp[subExp]['trial_filter'][0])
                 chFiltRev.append(fsp[subExp]['ch_filter'][0])
                 subExp = bsi['bss_relative_path="{}"'.format(fsp[subExp]['parent_bss_relative_path'][0])]
-        trlFiltAll.append(trlFiltRev)
-        chFiltAll.append(chFiltRev)
+            subExpParents.append(subExp) # wait isn't this just bssi keys from above?
+            trlFiltAll.append(trlFiltRev)
+            chFiltAll.append(chFiltRev)
 
 
     print("Computing GPFA")
@@ -176,7 +177,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         paramIterator = [gpfaParams]
 
 
-    bnSpOut, dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds, brainAreasResiduals, brainAreasNoResiduals = [],[],[],[],[], [], [], []
+    bnSpOut, dims, dimsLL, gpfaDimOut, gpfaTestInds, gpfaTrainInds, gpfaCondLabels, brainAreasResiduals, brainAreasNoResiduals = [],[],[],[],[], [], [], [], []
     bnSpOutBaseline = []
     for paramSet in paramIterator:
         # we'll note that this basically means the for loop is for show when
@@ -188,7 +189,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
             descStrName = ""
 
         # ** actually run GPFA **
-        dimsH, dimsLLH, gpfaDimOutH, gpfaTestIndsH, gpfaTrainIndsH = gpfaComputation(
+        dimsH, dimsLLH, gpfaDimOutH, gpfaTestIndsH, gpfaTrainIndsH, *_, gpfaCondLabelsH = gpfaComputation(
             subsampleExpressions, **gpfaParams
         )
 
@@ -197,6 +198,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         gpfaDimOut += gpfaDimOutH
         gpfaTestInds += gpfaTestIndsH
         gpfaTrainInds += gpfaTrainIndsH
+        gpfaCondLabels += gpfaCondLabelsH
 
         brainAreasResiduals += [bA + ' {}'.format(','.join(descStrName)) for bA in brainAreas]
         brainAreasNoResiduals += brainAreas
@@ -275,8 +277,14 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotGenericMetricParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
+    # Population metrics
+    popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims, binnedSpikeSetGenerationParamsDict['binSizeMs'], subsampleExpressions)
+
+    # Over session metrics
+    # overSessionMetricsDict = computeOverSessionMetrics(subsampleExpressions, gpfaDimOut, dimsLL, gpfaTestInds, gpfaCondLabelsH, labelNameUse = gpfaParams['labelUse'])
+
     # Projection metrics
-    projMetricsDict, projPtsForPlotDict = computeProjectionMetrics(binnedResidShStOffSubsamples, binnedResidShStOffBaselineSubsamples, gpfaDimOut, dimsLL, gpfaTestInds, gpfaParams)
+    # projMetricsDict, projPtsForPlotDict = computeProjectionMetrics(binnedResidShStOffSubsamples, binnedResidShStOffBaselineSubsamples, gpfaDimOut, dimsLL, gpfaTestInds, gpfaParams)
 
     if plotParams and plotParams['plotProjections']:
         plotProjParams = plotParams['plotProjections']
@@ -287,8 +295,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
         outputFiguresRelativePath.append(saveFiguresToPdf(pdfname="{}{}".format(plotProjParams['pdfnameSt'],plotParams['analysisIdentifier'])))
         plt.close('all')
 
-    # Population metrics
-    popMetricsDict = computePopulationMetrics(gpfaDimOut, dimsLL, dims, binnedSpikeSetGenerationParamsDict['binSizeMs'])
+
 
     #%% Residual correlations
     plotResid = correlationParams['plotResid']
@@ -316,6 +323,7 @@ def crossareaMatchedCovarianceComparison(datasetSqlFilter, binnedSpikeSetGenerat
     # })
 
     metricDict = {}
+    # metricDict.update(overSessionMetricsDict)
     # metricDict.update(projMetricsDict)
     metricDict.update(popMetricsDict)
     # metricDict.update(decodeDict)
