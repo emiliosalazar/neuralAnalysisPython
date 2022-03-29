@@ -7,6 +7,7 @@ Created on Thu Feb 27 16:10:29 2020
 """
 import numpy as np
 import scipy as sp
+import matplotlib.pyplot as plt
 
 from classes.BinnedSpikeSet import BinnedSpikeSet
 
@@ -210,12 +211,17 @@ class GPFAGenerator:
                  startT = 0, endT = 1000, binSize = 25,
                  # Do note that since these times are all in ms, the default 0.1 neuronMean is actually 0.1 sp/ms = 100sp/s!
                  # The neuronNoiseStdScale tells us what the max percent (from a uniform distribution), the neuron mean the noise will b
-                 numNeurons = 100, neuronMeansFrMax = 0.1, neuronNoiseStdScaleMax = 1):
+                 numNeurons = 100, neuronMeansFrMax = 0.1, neuronNoiseStdScaleMax = 1, sharedVar = 0.2, randSeed = None):
         
+        if randSeed is not None:
+            initSt = np.random.get_state()
+            np.random.seed(seed=randSeed)
+
         self.time = np.arange(startT, endT, binSize) + binSize/2
-        self.start = startT
-        self.end = endT
+        self.start = np.array([startT])
+        self.end = np.array([endT])
         self.binSize = binSize
+        self.numGPs = numGPs
         
         
         self.gpTaus = np.random.uniform(high=maxTau, size = numGPs)
@@ -223,16 +229,32 @@ class GPFAGenerator:
         self.gpCovars = self.computeAllLowDimCovariances()
         
         neuronMeansCntMax = neuronMeansFrMax * binSize
-        self.neuronMeans = np.random.uniform(high=neuronMeansCntMax, size=numNeurons)
+        # self.neuronMeans = np.random.uniform(high=neuronMeansCntMax, size=numNeurons)
+        self.neuronMeans = np.ones((numNeurons,))*neuronMeansCntMax
+        self.neuronMeansFr = np.ones((numNeurons,)) * neuronMeansFrMax
         self.neuronNoise = np.random.uniform(high=neuronNoiseStdScaleMax,size=numNeurons)*self.neuronMeans
-        self.unorthoDirs = np.random.uniform(low=-1,high=1,size=(numNeurons, numGPs))
-#        self.unorthoDirs = np.random.multivariate_normal(np.zeros(numGPs),np.eye(numGPs), numGPs)
+        
+        unorthoDirsInit = np.random.uniform(low=-1,high=1,size=(numNeurons, numGPs))
+        unorthoDirsInitNorm = unorthoDirsInit / np.sqrt(np.sum(unorthoDirsInit**2, axis=0))
+        totVarInDirs = sharedVar*self.neuronNoise.sum()/(1-sharedVar)
+        gpVarSpread = 1/np.arange(1, numGPs+1)
+        gpVarSpread = gpVarSpread/gpVarSpread.sum()
+        varPerOrthoDir = totVarInDirs * gpVarSpread # currently a uniform variance per direction
+        orthoDirs, sv, _ = np.linalg.svd(unorthoDirsInit)
+        orthoDirs = orthoDirs[:,:numGPs]
+        orthoDirsScaled = orthoDirs * np.sqrt(varPerOrthoDir) # sqrt b/c variance comes from inner product of direction
+        varInUnorthoDirs = np.sum((orthoDirsScaled.T @ unorthoDirsInitNorm) ** 2,axis=0)
+        self.unorthoDirs = orthoDirsScaled # for now... ; np.sqrt(varInUnorthoDirs) * unorthoDirsInitNorm # self.unorthoDirs = np.random.multivariate_normal(np.zeros(numGPs),np.eye(numGPs), numGPs)
+
+        if randSeed is not None:
+            np.random.set_state(initSt)
         
         
     def computeAllLowDimCovariances(self):
         gpCovars = np.empty((self.gpTaus.shape[0],self.time.shape[0],self.time.shape[0]))
         for ind,tau in enumerate(self.gpTaus):
             gpCovars[ind, :, :] = self.computeLowDimCovariance(self.time, tau)
+            # gpCovars[ind, :, :] = self.computeLowDimCovariance(self.time, self.gpTaus[0])
             
         return gpCovars
     
@@ -260,7 +282,7 @@ class GPFAGenerator:
             
         return gpTraj
     
-    def computeNeuralTraj(self, gpTraj):
+    def computeNeuralTraj(self, gpTraj, underlyingMean=None):
         
         C = self.unorthoDirs # reflect naming of loading matrix in GPFA paper
         numNeurons = C.shape[0]
@@ -268,36 +290,84 @@ class GPFAGenerator:
         highDimProjBase = C @ gpTraj
         
         neuralTrajMean = highDimProjBase+self.neuronMeans[:,None]
+        # if underlyingMean is not None:
+        #     neuralTrajMean += underlyingMean
         neuralTrajNoise = np.diag(self.neuronNoise)
         
         neuralTrajObserved = np.empty((numNeurons,self.time.shape[0]))
         
-        for ind, trajTP in enumerate(neuralTrajMean.T):
-            # print("traj computed for time point " + str(ind))
-            neuralTrajObserved[:, ind] = np.random.multivariate_normal(trajTP, neuralTrajNoise)
+        timePeriod = self.end - self.start
+        for ind, trajNeur in enumerate(neuralTrajMean):
+            # neuralTrajObserved[ind, :] = np.random.normal(trajNeur, np.sqrt(neuralTrajNoise[ind,ind]))
+            # neuralTrajObserved[ind, :] = np.random.normal(trajNeur, np.sqrt(neuralTrajNoise[ind,ind]))
+            numSpPerNeuron = np.random.poisson(self.neuronMeansFr[ind]*timePeriod)
+            spTmsPerNeuron = [np.random.uniform(low=self.start, high=self.end, size = numSp) for numSp in numSpPerNeuron]
+            numSpPerBinPerNeuron = [np.bincount(np.digitize(spTms, np.arange(self.start, self.end+self.binSize/2, self.binSize))-1, minlength=np.arange(self.start, self.end+self.binSize/2, self.binSize).shape[0]-1) for spTms in spTmsPerNeuron]
+            numSpPerBinPerNeuron = np.stack(numSpPerBinPerNeuron)
+            neuralTrajObserved[ind, :] =  highDimProjBase[ind] + numSpPerBinPerNeuron # np.maximum(highDimProjBase[ind] + numSpPerBinPerNeuron, 0)
+        # for ind, trajTP in enumerate(neuralTrajMean.T):
+        #     # print("traj computed for time point " + str(ind))
+        #     neuralTrajObserved[:, ind] = np.random.multivariate_normal(trajTP, neuralTrajNoise)
+        #     # neuralTrajObserved[:, ind] = trajTP + np.random.poisson(self.neuronMeans)
+        #     # breakpoint()
+        #     # neuralTrajObserved[:, ind] = np.random.poisson(np.maximum(trajTP + self.neuronMeans, 0))
             
         return neuralTrajObserved
 
-    def runSimulation(self, numSimulations = 1):
+    def runSimulation(self, numSimulations = 1, underlyingMean = None, newGpPerSim = True, randSeed = None):
         
+        if randSeed is not None:
+            initSt = np.random.get_state()
+            np.random.seed(seed=randSeed)
+
         numGPs = self.gpTaus.shape[0]
         numNeurons = self.neuronMeans.shape[0]
         
         self.gpTraj = np.empty((numSimulations, numGPs, self.time.shape[0]))
         self.neuralTraj = np.empty((numSimulations, numNeurons, self.time.shape[0]))
         
+        if not newGpPerSim:
+            singleGp = self.computeGaussianProcess(numGPs = numGPs, means = self.gpMeans)
+
         for simNum in range(numSimulations):
-            print("done with simulation " + str(simNum+1))
-                
-            self.gpTraj[simNum, :, :] = self.computeGaussianProcess(numGPs = numGPs, means = self.gpMeans)
-            self.neuralTraj[simNum, :, :] = self.computeNeuralTraj(self.gpTraj[simNum])
+            if newGpPerSim:
+                self.gpTraj[simNum, :, :] = self.computeGaussianProcess(numGPs = numGPs, means = self.gpMeans)
+            else:
+                self.gpTraj[simNum, :, :] = singleGp
+            self.neuralTraj[simNum, :, :] = self.computeNeuralTraj(self.gpTraj[simNum], underlyingMean)
+
+            if not (simNum+1) % 10 and simNum>0:
+                print("done with simulation " + str(simNum+1))
             
         outNeuralTraj = self.neuralTraj.view(BinnedSpikeSet)
         outNeuralTraj.binSize = self.binSize
-        outNeuralTraj.start = self.start
-        outNeuralTraj.end = self.end
+        outNeuralTraj.start = np.repeat(self.start, numSimulations)
+        outNeuralTraj.end = np.repeat(self.end, numSimulations)
         outNeuralTraj.units = 'count'
         outNeuralTraj.labels['stimulusMainLabel'] = np.ones((outNeuralTraj.shape[0],1))
         outNeuralTraj.alignmentBins = np.hstack([np.zeros((outNeuralTraj.shape[0],1)),outNeuralTraj.shape[2]*np.ones((outNeuralTraj.shape[0],1))])
+
+        if randSeed is not None:
+            np.random.set_state(initSt)
             
         return outNeuralTraj
+
+    def drawGps(self):
+        if self.numGPs > 1:
+            numRows = 2
+            numCols = int(np.ceil(self.numGPs/numRows))
+            figH, axsH = plt.subplots(numRows, numCols)
+            axsH = axsH.flatten()
+        else:
+            numRows = 1
+            numCols = 1
+            figH, axsH = plt.subplots(numRows, numCols)
+            axsH = [axsH]
+
+        tms = np.arange(self.start, self.end, self.binSize)
+        for gpT, ax in enumerate(axsH):
+            if gpT < self.gpTraj.shape[1]:
+                ax.plot(tms, self.gpTraj[:,gpT, :].T)
+                ax.set_title('gp number {}'.format(gpT))
+                ax.set_xlabel('time (ms)')
+                ax.set_ylabel('spike count')
