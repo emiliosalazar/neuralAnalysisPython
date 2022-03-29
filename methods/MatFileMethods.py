@@ -99,10 +99,11 @@ def LoadHdf5Mat(matfilePath):
                 # function
                 deref = hdf5Group
                 if 'MATLAB_empty' in deref.attrs.keys(): # deal with empty arrays
-                    print('empty array')
-                    print(deref[()])
+                    # print('empty array')
+                    # print(deref[()])
                     if 'MATLAB_class' in deref.attrs.keys():
-                        print(deref.attrs['MATLAB_class'])
+                        pass
+                        # print(deref.attrs['MATLAB_class'])
                     out = np.ndarray(0)
                     return out.T
                 
@@ -114,24 +115,25 @@ def LoadHdf5Mat(matfilePath):
                         elif deref.attrs['MATLAB_class'] == b'logical':
                             pass # uint8, the default, is a fine type for logicals
                         else:
-                            print(deref.attrs['MATLAB_class'])
-                            print('int decode but class not char...')
+                            # print(deref.attrs['MATLAB_class'])
+                            # print('int decode but class not char...')
+                            pass
                     else:
-                        print('int decode but no class?')
+                        # print('int decode but no class?')
+                        pass
                 
                 out = deref[()]
                 out = out.T # for some reason Matlab transposes when saving...
         elif type(hdf5Group) is h5py.h5r.Reference:
             deref = hdf5Matfile[hdf5Group]
             
-            if deref.dtype == np.dtype('object'):
+            if type(deref) is h5py._hl.group.Group:
+                out = UnpackHdf5(hdf5Matfile, deref)
+            elif deref.dtype == np.dtype('object'):
                 try:
                     out = np.ndarray(deref.shape, dtype=object)
                 except (AttributeError) as err:
-                    if type(deref) is h5py._hl.group.Group:
-                        out = UnpackHdf5(hdf5Matfile, deref)
-                    else:
-                        raise RuntimeError('problem with forming iterator of a non-group a')
+                    raise RuntimeError('problem with forming iterator of a non-group a')
                         
                 else:
     #                    with np.nditer(out, ['refs_ok'], ['readwrite']) as iterRef:
@@ -144,7 +146,7 @@ def LoadHdf5Mat(matfilePath):
                             elif type(valIn[()]) is h5py.h5r.Reference:
                                 valOut[()] = UnpackHdf5(hdf5Matfile, valIn[()])
                             else:
-                                print('non-hdf5 object')
+                                # print('non-hdf5 object')
                                 if 'MATLAB_empty' in deref.attrs.keys(): # deal with empty arrays
                                     valOut[()] = np.ndarray(0)
                                 else:
@@ -153,10 +155,11 @@ def LoadHdf5Mat(matfilePath):
                         out = out.T # undo Matlab's weird transpose when saving...
             else:
                 if 'MATLAB_empty' in deref.attrs.keys(): # deal with empty arrays
-                    print('empty array')
-                    print(deref[()])
+                    # print('empty array')
+                    # print(deref[()])
                     if 'MATLAB_class' in deref.attrs.keys():
-                        print(deref.attrs['MATLAB_class'])
+                        # print(deref.attrs['MATLAB_class'])
+                        pass
                     out = np.ndarray(0)
                     return out.T
                 
@@ -225,7 +228,7 @@ def LoadMatFile(matfilePath):
     
     try:
         annots = tradLoadmat(matfilePath)
-    except NotImplementedError:
+    except (NotImplementedError, MemoryError):
         annots = LoadHdf5Mat(matfilePath)
     # out = hdf5.loadmat(str(matfilePath))
     # if pickleOnLoad:
