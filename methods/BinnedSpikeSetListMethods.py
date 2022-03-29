@@ -248,8 +248,8 @@ def ldaComputation(listBSS, plot=True):
 # of (-250,0) tells us that the *last* bin is aligned at the alignment point
 # for the end (whatever that may be--say, the delay end), and should be plotted
 # starting -250 ms before
-def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, labelUse = 'stimulusMainLabel', balanceConds = True, computeResiduals = True, numStimulusConditions = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
-                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], overallFiringRateThresh=0.5, perConditionGroupFiringRateThresh = 0.5, signalDescriptor = "",plotOutput=True, units='count', useFa = False):
+def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, labelUse = 'stimulusMainLabel', balanceConds = True, computeResiduals = True, conditionNumbers = 1,combineConditions = False, sqrtSpikes = False, forceNewGpfaRun=False,
+                    crossvalidateNumFolds = 4, xDimTest = [2,5,8], overallFiringRateThresh=0.5, perConditionGroupFiringRateThresh = 0.5,plotOutputInfo=None, units='count', useFa = False, relativePathsToSave = None):
     
     # from classes.GPFA import GPFA
     from mpl_toolkits.mplot3d import Axes3D # for 3d plotting
@@ -268,84 +268,130 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         overall_fr_thresh = overallFiringRateThresh,
         balance_conds = balanceConds,
         sqrt_spikes = sqrtSpikes,
-        num_conds = 1 if not combineConditions else (0 if numStimulusConditions is None else numStimulusConditions),
-        combine_conditions = 'no' if not combineConditions else ('all' if numStimulusConditions is None else 'subset'),
+        num_conds = 1 if not combineConditions else (0 if conditionNumbers is None else conditionNumbers),
+        combine_conditions = 'no' if not combineConditions else ('all' if conditionNumbers is None else 'subset'),
         num_folds_crossvalidate = crossvalidateNumFolds,
         on_residuals = computeResiduals,
         units = units
     )
 
 
+    if type(bssExp) is not list:
+        bssExp = [bssExp]
     
-    for idxXdim,dim in enumerate(xDimTest):
-        print("Testing/loading dimensionality %d. Left to test: " % dim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
-        gpfaParams.update(dict(dimensionality = dim))
-        if len(gap[gpfaParams]) == 0:
-            gap.insert1(gpfaParams)
+    # Um.... DataJoint can apparently handle bssExp being a list of expressions
+    # and that's nuts. Unfortunately for the nuttiness, I *do* need to be able
+    # to keep these grouped together.
+    gpfaRes = []
+    gpfaInfo = []
+    gpfaResBest = []
+    # lstSzs = []
 
-        if type(bssExp) is list:
-            for subExp in bssExp:
+    dimExp = []
+    dimMoreLL = []
+    scoreAll = []
+    gpfaOutDimAll = []
+    gpfaTestIndsOutAll = []
+    gpfaTrainIndsOutAll = []
+    gpfaBinSize = []
+    gpfaCondLabels = []
+    gpfaAlignmentBins = []
+    gpfaDimsTested = []
+
+    # ** first, compute GPFA using the initial test dimensionalities **
+    for expNum, subExp in enumerate(bssExp):
+        if type(subExp) is BinnedSpikeSet:
+            pthsOut = []
+            relativePathToSave = relativePathsToSave[expNum]
+        for idxXdim,dim in enumerate(xDimTest):
+            gpfaParams.update(dict(dimensionality = dim))
+            print("Testing/loading dimensionality %d. Left to test: " % dim + (str(xDimTest[idxXdim+1:]) if idxXdim+1<len(xDimTest) else "none"))
+            if type(subExp) is BinnedSpikeSet:
+                if relativePathToSave is None:
+                    raise('When gpfaComputation is run on a BinnedSpikeSet, relativePathToSave must be set')
+                defaultParams = loadDefaultParams()
+                dataPath = Path(defaultParams['dataPath'])
+
+                gpParamsInDb = gap[gpfaParams]
+                if len(gpParamsInDb) > 0:
+                    paramsHash = gpParamsInDb.hash()
+                else:
+                    gpfaParamsSpecific = gpfaParams.copy()
+                    gpfaParamsSpecific.pop('dimensionality')
+                    gpParamsAnyForAllDims = gap[gpfaParamsSpecific].fetch(as_dict=True)
+                    if len(gpParamsAnyForAllDims) == 0:
+                        gpParamsAnyForAllDims = gpfaParamsSpecific
+                    else:
+                        gpParamsAnyForAllDims = gpParamsAnyForAllDims[0]
+                    gpParamsAnyForAllDims.update({'dimensionality': dim})
+                    gpParamsAnyForAllDims.pop('gpfa_params_id', None)
+                    paramsHash = hashlib.md5(json.dumps(gpParamsAnyForAllDims, sort_keys=True).encode('ascii')).hexdigest()
+
+                outputPathToConditions = dataPath / relativePathToSave / 'gpfa' / 'params_{}'.format(paramsHash[:5]) 
+                gpfaPrepInputs = dict(labelUse = labelUse, condNums=conditionNumbers, combineConds = combineConditions, overallFiringRateThresh = overallFiringRateThresh, perConditionGroupFiringRateThresh = perConditionGroupFiringRateThresh,
+                    balanceConds = balanceConds, computeResiduals = computeResiduals)
+                groupedBalancedSpikes, condDescriptors, condsUse, *_ = subExp.prepareGpfaOrFa(**gpfaPrepInputs)
+                if not useFa:
+                    retVals = subExp.gpfa(groupedBalancedSpikes, outputPathToConditions, condDescriptors, dim, labelUse, crossvalidateNum = crossvalidateNumFolds, forceNewGpfaRun = forceNewGpfaRun) 
+                else:
+                    retVals = subExp.fa(groupedBalancedSpikes, outputPathToConditions, condDescriptors, dim, labelUse, crossvalidateNum = crossvalidateNumFolds) 
+                pthsOut.append(retVals[-1])
+            else:
+                if len(gap[gpfaParams]) == 0:
+                    gap.insert1(gpfaParams)
+
+
                 # if dimensionality != 0:#True: #not useFa:
-                bssExpComputed = subExp[gai[gap[gpfaParams]]]
-                bssExpToCompute = subExp - gai[gap[gpfaParams]]
-            
+                if not forceNewGpfaRun:
+                    bssExpComputed = subExp[gai[gap[gpfaParams]]]
+                    bssExpToCompute = subExp - gai[gap[gpfaParams]]
+                else:
+                    bssExpToCompute = subExp
+
                 # note that this *adds* values to GpfaAnalysisInfo, so we can't
                 # just filter gai by bssExpToCompute (nothing will be there!)
-                gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
+                gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = conditionNumbers, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa, forceNewGpfaRun=forceNewGpfaRun)
 
 
+        # this is gonna filter the GpfaAnalysisParams (gap) which will be used to
+        # filter the infos
+        # note that the dict function apparently does a gpfaParams.copy() first
+        gpfaParamsAll = [dict(gpfaParams, dimensionality = d) for d in xDimTest]
+
+        # ** second, grab the results of these GPFA runs **
+    # for subExp in bssExp: # merged to loop above
+        # lstSzs.append(len(gai[subExp]))
+        if type(subExp) is BinnedSpikeSet:
+            gpfaResHere = {}
+            for idxXdim,(dim,pthsGpfa) in enumerate(zip(xDimTest, pthsOut)):
+                for pthGpfa, condUse in zip(pthsGpfa, condsUse):
+                    # condStr = str(pthGpfa.parent.relative_to(pthGpfa.parent.parent))
+                    # condNum = condStr[4:]
+                    # condNumList = '[' + condNum + ']' # just matching what happens on the from-database pathway >.>
+                    import re
+                    condNumStr = re.sub(' ', ',',str(np.array(condUse)))
+                    relPathAndCond = (str(relativePathToSave), str(crossvalidateNumFolds), condNumStr)
+                    if relPathAndCond not in gpfaResHere:
+                        gpfaResHere[relPathAndCond] = {}
+                    gpfaResHere[relPathAndCond]['condition'] = np.array(condUse) # NOTE was int(condNum)
+                    with np.load(pthGpfa, allow_pickle=True) as gpfaResSaved:
+                        gpfaResLoaded = dict(
+                            zip((k for k in gpfaResSaved), (gpfaResSaved[k] for k in gpfaResSaved))
+                        )
+                    gpfaResHere[relPathAndCond][dim] = gpfaResLoaded
+                    gpfaInfoHere = [] # for now... I don't think I use this anymore...
         else:
-            if True: #not useFa:
-                breakpoint() # just wondering if we ever get here...
-                bssExpComputed = bssExp[gai[gap[gpfaParams]]]
-                bssExpToCompute = bssExp - gai[gap[gpfaParams]]
-#            # NOTE CHANGE
-#            bssExpToCompute = bssExpComputed
-#            forceNewGpfaRun = True
-            
-            # note that this *adds* values to GpfaAnalysisInfo, so we can't
-            # just filter gai by bssExpToCompute (nothing will be there!)
-                gai.computeGpfaResults(gap[gpfaParams], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = numStimulusConditions, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, forceNewGpfaRun = forceNewGpfaRun, useFa=useFa)
+            gpfaResHere, gpfaInfoHere = gai[subExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, useFa=useFa)
+
+        gpfaRes.append(gpfaResHere)
+        gpfaInfo.append(gpfaInfoHere)
+
+        cvApproach = "logLikelihood"
+        shCovThresh = 0.95
 
 
-    # this is gonna filter the GpfaAnalysisParams (gap) which will be used to
-    # filter the infos
-    gpfaParamsAll = [{'dimensionality' : d, 'num_folds_crossvalidate' : crossvalidateNumFolds} for d in xDimTest]
-    ind=0
-    if type(bssExp) is list:
-        # Um.... DataJoint can apparently handle bssExp being a list of expressions
-        # and that's nuts. Unfortunately for the nuttiness, I *do* need to be able
-        # to keep these grouped together.
-        gpfaRes = []
-        gpfaInfo = []
-        lstSzs = []
-        for subExp in bssExp:
-            ind+=1
-            lstSzs.append(len(gai[subExp]))
-            gpfaResH, gpfaInfoH = gai[subExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, useFa=useFa)
-
-            gpfaRes.append(gpfaResH)
-            gpfaInfo.append(gpfaInfoH)
-    else:
-        gpfaRes, gpfaInfo = gai[bssExp][gap[gpfaParamsAll]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
-
-
-
-    if type(gpfaRes) is not list:
-        gpfaRes = [gpfaRes] # for the for loop below
-        gpfaInfo = [gpfaInfo]
-
-#    breakpoint()
-    cvApproach = "logLikelihood"
-    shCovThresh = 0.95
-    lblLLErr = 'LL err over folds'
-    lblLL= 'LL mean over folds'
-
-    
-
-    crossValsUse = [0]
-
-    for gpfaInfoHere, gpfaResHere in zip(gpfaInfo, gpfaRes):
+    # ** third, find the best dimensionality by looking between the test dimensionalities
+    # for gpfaInfoHere, gpfaResHere in zip(gpfaInfo, gpfaRes):
         bestDims = computeBestDimensionality(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
         bssPth = np.unique([pthCvCnd[0] for pthCvCnd in gpfaResHere.keys()])
         assert bssPth.size == 1, "Not sure why there are multiple (or no O.o) paths for one GPFA run..."
@@ -359,7 +405,7 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         xDimRangeAroundTest = [-1] + xDimTest + [(xDimTest[-1]+3)]
         testDimIndInRange = [int(np.nonzero(xDimRangeAroundTest==dm)[0]) for dm in bestDims]
         newDimsToTestPerCond = [np.arange(xDimRangeAroundTest[dmInd-1]+1, xDimRangeAroundTest[dmInd+1]) for dmInd in testDimIndInRange]
-        newDimsToTestPerCond = [nD[nD!=cD] for nD, cD in zip(newDimsToTestPerCond, bestDims)]
+        newDimsToTestPerCond = [nD[nD!=cD].tolist() for nD, cD in zip(newDimsToTestPerCond, bestDims)]
 
         for newDimTestCond, condNum in zip(newDimsToTestPerCond, condNumsTested):
 
@@ -367,77 +413,84 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
                 gpfaParams.update(dict(
                     dimensionality = newDimTest,
                     ))
-                if len(gap[gpfaParams]) == 0:
-                    gap.insert1(gpfaParams)
+                if type(subExp) is BinnedSpikeSet:
+                    defaultParams = loadDefaultParams()
+                    dataPath = Path(defaultParams['dataPath'])
 
-                gaiCompleted = gai[bssNewDimExp][gap[gpfaParams]]['gpfa_rel_path_from_bss LIKE "%cond{}{}{}%"'.format('s' if len(condNum)>1 else '', '-'.join([str(cN) for cN in condNum]), 'Grpd' if gpfaParams['combine_conditions'] != 'no' else '')]
+                    gpParamsInDb = gap[gpfaParams]
+                    if len(gpParamsInDb) > 0:
+                        paramsHash = gpParamsInDb.hash()
+                    else:
+                        gpfaParamsSpecific = gpfaParams.copy()
+                        gpfaParamsSpecific.pop('dimensionality')
+                        gpParamsAnyForAllDims = gap[gpfaParamsSpecific].fetch(as_dict=True)
+                        if len(gpParamsAnyForAllDims) == 0:
+                            gpParamsAnyForAllDims = gpfaParamsSpecific
+                        else:
+                            gpParamsAnyForAllDims = gpParamsAnyForAllDims[0]
+                        gpParamsAnyForAllDims.update({'dimensionality': newDimTest})
+                        gpParamsAnyForAllDims.pop('gpfa_params_id', None)
+                        paramsHash = hashlib.md5(json.dumps(gpParamsAnyForAllDims, sort_keys=True).encode('ascii')).hexdigest()
 
-                if len(gaiCompleted) == 0:
-                    # outVals aren't quite what we need unless this is FA which
-                    # is handled in the try statement below
-                    # DOUBLE NOTE: FA can now run separately from GPFA, so we're
-                    # back to setting useFa
-                    # NOTE: we set useFa to False here because GPFA *HAS* to be
-                    # run to get it input into the database... not the best
-                    # work flow, but FA has never been in my code ;_;
-                    outVals = gai.computeGpfaResults(gap[gpfaParams], bssNewDimExp, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParams['combine_conditions'] == 'all' else condNum, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa) 
+                    outputPathToConditions = dataPath / relativePathToSave / 'gpfa' / 'params_{}'.format(paramsHash[:5]) 
+                    # I feel like this was already computed above, and redoing
+                    # here just leaves room for errors...
+                    # gpfaPrepInputs = dict(labelUse = labelUse, condNums=[0], combineConds = combineConditions, overallFiringRateThresh = overallFiringRateThresh, perConditionGroupFiringRateThresh = perConditionGroupFiringRateThresh,
+                        # balanceConds = balanceConds, computeResiduals = computeResiduals)
+                    # groupedBalancedSpikes, condDescriptors, condsUse, *_ = subExp.prepareGpfaOrFa(**gpfaPrepInputs)
+                    grpSpikesRun = np.nonzero(np.array([c==condNum for c in condsUse]))[0][0]
+                    if not useFa:
+                        retVals = subExp.gpfa(groupedBalancedSpikes[grpSpikesRun:grpSpikesRun+1], outputPathToConditions, condDescriptors[grpSpikesRun:grpSpikesRun+1], int(newDimTest), labelUse, crossvalidateNum = crossvalidateNumFolds, forceNewGpfaRun = forceNewGpfaRun) 
+                    else:
+                        retVals = subExp.fa(groupedBalancedSpikes[grpSpikesRun:grpSpikesRun+1], outputPathToConditions, condDescriptors[grpSpikesRun:grpSpikesRun+1], int(newDimTest), labelUse, crossvalidateNum = crossvalidateNumFolds)
 
-                try:
+                    pthNewDim = retVals[-1]
+
+                    gpfaResH = {}
+                    for pthND in pthNewDim:
+                        # condStr = str(pthND.parent.relative_to(pthND.parent.parent))
+                        # condNumStr = condStr[4:]
+                        # condNumList = '[' + condNumStr + ']'
+                        import re
+                        condNumStr = re.sub(' ', ',',str(np.array(condNum)))
+                        relPathAndCond = (str(relativePathToSave), str(crossvalidateNumFolds), condNumStr)
+                        if relPathAndCond not in gpfaResH:
+                            gpfaResH[relPathAndCond] = {}
+                        gpfaResH[relPathAndCond]['condition'] = np.array(condNum)
+                        with np.load(pthND, allow_pickle=True) as gpfaResSaved:
+                            gpfaResLoaded = dict(
+                                zip((k for k in gpfaResSaved), (gpfaResSaved[k] for k in gpfaResSaved))
+                            )
+                        gpfaResH[relPathAndCond][newDimTest] = gpfaResLoaded
+                        gpfaInfoHereNew = [] # for now... I don't think I use this anymore...
+                        keyRes = relPathAndCond
+                else:
+                    if len(gap[gpfaParams]) == 0:
+                        gap.insert1(gpfaParams)
+
+                    gaiCompleted = gai[bssNewDimExp][gap[gpfaParams]]['gpfa_rel_path_from_bss LIKE "%cond{}{}{}%"'.format('s' if len(condNum)>1 else '', '-'.join([str(cN) for cN in condNum]), 'Grpd' if gpfaParams['combine_conditions'] != 'no' else '')]
+
+                    if len(gaiCompleted) == 0 or forceNewGpfaRun:
+                        # DOUBLE NOTE: FA can now run separately from GPFA, so we're
+                        # back to setting useFa
+                        # NOTE: we set useFa to False here because GPFA *HAS* to be
+                        # run to get it input into the database... not the best
+                        # work flow, but FA has never been in my code ;_;
+                        gai.computeGpfaResults(gap[gpfaParams], bssNewDimExp, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParams['combine_conditions'] == 'all' else condNum, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa, forceNewGpfaRun=forceNewGpfaRun) 
+
                     gpfaResH, gpfaInfoH = gaiCompleted.grabGpfaResults(returnInfo=True, useFa=useFa)
                     keyRes = list(gpfaResH.keys())
                     assert len(keyRes)==1, "Should have one (and only one) key from the new dim runs..."
-                except AssertionError:
-                    breakpoint()
-                    if useFa:
-                        # sometimes GPFA hasn't been run, so I have another
-                        # pathway that runs FA through Python but as a result
-                        # doesn't exist in the database. This means that the
-                        # try statement doesn't come up with a keyRes... so we
-                        # try to recreate it here, because gpfaResHere *does*
-                        # exist... (I think?)
-                        import re
-                        # put in a list because that's how it would output from
-                        # the db
-                        keyRes = [(bssNewDimExp['bss_relative_path'][0], str(gpfaParams['num_folds_crossvalidate']) ,re.sub(' ', ',',str(np.array(condNum))))]
 
-                        faRunInfo = outVals[0]
-                        fullPath = faRunInfo['pathToCond'] / ("cond" + str(faRunInfo['condDescriptors'][0])) / ("faResultsDim{}.npz".format(newDimTest))
-
-
-                        print('Loading FA for %s' % fullPath)
-                        try:
-#                    raise(FileNotFoundError)
-                            with np.load(fullPath, allow_pickle=True) as faRes:
-                                gpfaResLoaded = dict(
-                                    zip((k for k in faRes), (faRes[k] for k in faRes))
-                                )
-                        except e:
-                            raise(e)
-
-                        gpfaResH[keyRes[0]] = {newDimTest : gpfaResLoaded}
-
-                keyRes = keyRes[0]
+                    keyRes = keyRes[0]
                 gpfaResHere[keyRes].update(gpfaResH[keyRes])
-                gpfaInfoHereNew = {k:gih1 + gih2 for  (k, gih1), (_, gih2) in zip(gpfaInfoHere.items(), gpfaInfoH.items())}
-                gpfaInfoHere.update(gpfaInfoHereNew)
+                if len(gpfaInfoHere)>0:
+                    gpfaInfoHereNew = {k:gih1 + gih2 for  (k, gih1), (_, gih2) in zip(gpfaInfoHere.items(), gpfaInfoH.items())}
+                    gpfaInfoHere.update(gpfaInfoHereNew)
 
 
-
-
-    dimExp = []
-    dimMoreLL = []
-    normScoreAll = []
-    gpfaOutDimAll = []
-    gpfaTestIndsOutAll = []
-    gpfaTrainIndsOutAll = []
-    gpfaBinSize = []
-    gpfaCondLabels = []
-    gpfaAlignmentBins = []
-    gpfaDimsTested = []
-
-    # NOTE If it happens that bssExp is not a list this'll break >.>
-    gpfaResBest = []
-    for gpfaInfoHere, gpfaResHere in zip(gpfaInfo, gpfaRes):
+    # ** fourth, run GPFA on this best dimensionality, but now using all the data (which is what num_folds_crossvalidate = 1 does)
+    # for gpfaInfoHere, gpfaResHere in zip(gpfaInfo, gpfaRes):
         gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
 
         bssPaths = [pthAndCond[0] for pthAndCond in gpfaCrunchedResults.keys()]
@@ -456,95 +509,144 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
             bssExpWithGpfa = bsi['bss_relative_path="%s"' % bssPath]
 
             gpfaAnalysisInfoConds = gpfaAnalysisInfoConds[gap[gpfaParams]]
-#            hsh, condNumsAllDb = gpfaAnalysisInfoConds.fetch('gpfa_hash', 'condition_nums')
-            hsh, condNumsAllDb = gpfaAnalysisInfoConds.fetch('gpfa_hash', 'condition_nums')
-            if len(cond)>1:
+            # hsh, condNumsAllDb = gpfaAnalysisInfoConds.fetch('gpfa_hash', 'condition_nums')
+            # if len(cond)>1:
                 # Mmk, I think this'll work; basically here we're checking
                 # about combined conditions, which makes cond have more than
                 # one value; to do so, we need to loop through the returned
                 # condNumsAllDb and check each array individually (well, all
                 # values in the array)
-                assert np.sum([np.all(cnd == cond) for cnd in condNumsAllDb]) == 1, "Too many GPFA analysis infos fit these parameters"
-                hshUseLog = np.array([np.all(cnd == cond) for cnd in condNumsAllDb])
-                hshThisCond = hsh[hshUseLog][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
-            else:
-                assert len(hsh[condNumsAllDb == cond]) == 1, "Too many GPFA analysis infos fit these parameters"
-                hshThisCond = hsh[condNumsAllDb == cond][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
-            gpfaAnalysisInfoThisCondDim = gpfaAnalysisInfoConds[dict(gpfa_hash = hshThisCond)]
-            gpParams = gap[gpfaAnalysisInfoThisCondDim]
+                # assert np.sum([np.all(cnd == cond) for cnd in condNumsAllDb]) == 1, "Too many GPFA analysis infos fit these parameters"
+                # hshUseLog = np.array([np.all(cnd == cond) for cnd in condNumsAllDb])
+                # hshThisCond = hsh[hshUseLog][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
+            # else:
+                # assert len(hsh[condNumsAllDb == cond]) == 1, "Too many GPFA analysis infos fit these parameters"
+                # hshThisCond = hsh[condNumsAllDb == cond][0] # haven't quite thought through the why of this [0] index... but I think we'd need it even if multiple conditions were used
+            # gpfaAnalysisInfoThisCondDim = gpfaAnalysisInfoConds[dict(gpfa_hash = hshThisCond)]
+            # gpParams = gap[gpfaAnalysisInfoThisCondDim]
 
             gpfaParamsNoCval = gpfaParams.copy()
             # note that 1-fold crossvalidation is effectively no
             # crossvalidation--which is what we want here because we've gotten
             # our optimal dimensionality to fit on!
-            gpfaParamsNoCval.update({'num_folds_crossvalidate' : 1})
+            num_folds_crossvalidate = 1
+            gpfaParamsNoCval.update({'num_folds_crossvalidate' : num_folds_crossvalidate})
 
-            if len(gap[gpfaParamsNoCval]) == 0:
-                gap.insert1(gpfaParamsNoCval)
+            if type(subExp) is BinnedSpikeSet:
+                defaultParams = loadDefaultParams()
+                dataPath = Path(defaultParams['dataPath'])
 
-#            if not useFa:
-            gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
-            gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
-            if len(cond)>1:
-                # need to dtype to Bool in case there *are* no computed
-                # gpHashes so gpHshUseLog ends up empty--if that happens
-                # it has no Bool to inherit from the list, it remains a
-                # float64, and using it to index gpHash errors
-                gpHshUseLog = np.array([np.all(cnd == cond) for cnd in condsComputed], dtype='Bool')
-                gpHashComp = gpHash[gpHshUseLog]
+                gpParamsInDb = gap[gpfaParamsNoCval]
+                if len(gpParamsInDb) > 0:
+                    paramsHash = gpParamsInDb.hash()
+                else:
+                    gpfaParamsSpecific = gpfaParamsNoCval.copy()
+                    noCvDim = gpfaParamsSpecific.pop('dimensionality')
+                    gpParamsAnyForAllDims = gap[gpfaParamsSpecific].fetch(as_dict=True)
+                    if len(gpParamsAnyForAllDims) == 0:
+                        gpParamsAnyForAllDims = gpfaParamsSpecific
+                    else:
+                        gpParamsAnyForAllDims = gpParamsAnyForAllDims[0]
+                    gpParamsAnyForAllDims.update({'dimensionality': noCvDim})
+                    gpParamsAnyForAllDims.pop('gpfa_params_id', None)
+                    paramsHash = hashlib.md5(json.dumps(gpParamsAnyForAllDims, sort_keys=True).encode('ascii')).hexdigest()
+
+                outputPathToConditions = dataPath / relativePathToSave / 'gpfa' / 'params_{}'.format(paramsHash[:5]) 
+                # gpfaPrepInputs = dict(labelUse = labelUse, condNums=conditionNumbers, combineConds = combineConditions, overallFiringRateThresh = overallFiringRateThresh, perConditionGroupFiringRateThresh = perConditionGroupFiringRateThresh,
+                #     balanceConds = balanceConds, computeResiduals = computeResiduals)
+                # groupedBalancedSpikes, condDescriptors, condsUse, *_ = subExp.prepareGpfaOrFa(**gpfaPrepInputs)
+                grpSpikesRun = np.nonzero(np.array([c==condNum for c in condsUse]))[0][0]
+                if not useFa:
+                    retVals = subExp.gpfa(groupedBalancedSpikes[grpSpikesRun:grpSpikesRun+1], outputPathToConditions, condDescriptors[grpSpikesRun:grpSpikesRun+1], dimHere, labelUse, crossvalidateNum = num_folds_crossvalidate, forceNewGpfaRun = forceNewGpfaRun) 
+                else:
+                    retVals = subExp.fa(groupedBalancedSpikes[grpSpikesRun:grpSpikesRun+1], outputPathToConditions, condDescriptors[grpSpikesRun:grpSpikesRun+1], dimHere, labelUse, crossvalidateNum = num_folds_crossvalidate) 
+
+                pthOneCV = retVals[-1][0] # we know there will only be one condition, so one path, here
+
+                # condStr = str(pthOneCV.parent.relative_to(pthOneCV.parent.parent))
+                # condNumStr = condStr[4:]
+                # condNumList = '[' + condNumStr + ']'
+                import re
+                condNumStr = re.sub(' ', ',',str(np.array(cond)))
+                relPathAndCond = (str(relativePathToSave), str(num_folds_crossvalidate), condNumStr)
+                if relPathAndCond not in gpfaResBestExp:
+                    gpfaResBestExp[relPathAndCond] = {}
+                gpfaResBestExp[relPathAndCond]['condition'] = np.array(cond)
+                with np.load(pthOneCV, allow_pickle=True) as gpfaResSaved:
+                    gpfaResLoaded = dict(
+                        zip((k for k in gpfaResSaved), (gpfaResSaved[k] for k in gpfaResSaved))
+                    )
+                gpfaResBestExp[relPathAndCond][dimHere] = gpfaResLoaded
+                gpfaInfoHereNew = [] # for now... I don't think I use this anymore...
+                keyRes = relPathAndCond
             else:
-                gpHashComp = gpHash[condsComputed==cond]
+                if len(gap[gpfaParamsNoCval]) == 0:
+                    gap.insert1(gpfaParamsNoCval)
 
-            if len(gpHashComp):
-                gpHashComp = gpHashComp[0]
+                gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
+                gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
+                if len(cond)>1:
+                    # need to dtype to Bool in case there *are* no computed
+                    # gpHashes so gpHshUseLog ends up empty--if that happens
+                    # it has no Bool to inherit from the list, it remains a
+                    # float64, and using it to index gpHash errors
+                    gpHshUseLog = np.array([np.all(cnd == cond) for cnd in condsComputed], dtype='Bool')
+                    gpHashComp = gpHash[gpHshUseLog]
+                else:
+                    gpHashComp = gpHash[condsComputed==cond]
 
-            bssExpComputed = bssExpWithGpfa[gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]]
-            bssExpToCompute = bssExpWithGpfa - gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]
-#                bssExpComputed = bssExpWithGpfa[gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]]
-#                bssExpToCompute = bssExpWithGpfa - gpfaAnalysisInfoThisCondDim[gap[gpfaParamsNoCval]]
+                if len(gpHashComp):
+                    gpHashComp = gpHashComp[0]
 
-            # note that this *adds* values to GpfaAnalysisInfo, so we can't
-            # just filter gai by bssExpToCompute (nothing will be there!)
-            perConditionGroupFiringRateThresh = gpfaAnalysisInfoConds['condition_grp_fr_thresh'][0]
-            labelUse = gpfaAnalysisInfoConds['label_use'][0]
-            # DOUBLE NOTE: FA now can run separately from GPFA, so now we use
-            # input useFa
-            # NOTE: we set useFa to FALSE here because EVEN IF we're extracting
-            # the FA parameters, GPFA still needs to be run (the way that this
-            # is constructed...)
-            gai.computeGpfaResults(gap[gpfaParamsNoCval], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParamsNoCval['combine_conditions'] == 'all' else cond, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa)
+                if not forceNewGpfaRun:
+                    bssExpComputed = bssExpWithGpfa[gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]]
+                    bssExpToCompute = bssExpWithGpfa - gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]
+                else:
+                    bssExpToCompute = bssExpWithGpfa
 
-            # Not the prettiest, but we rerun this to account for the fact
-            # that the correct gpfaHash is now different...
-            gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
-            gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
-            if len(cond)>1:
-                gpHshUseLog = np.array([np.all(cnd == cond) for cnd in condsComputed])
-                gpHashComp = gpHash[gpHshUseLog]
-            else:
-                gpHashComp = gpHash[condsComputed==cond]
+                # note that this *adds* values to GpfaAnalysisInfo, so we can't
+                # just filter gai by bssExpToCompute (nothing will be there!)
+                perConditionGroupFiringRateThresh = gpfaAnalysisInfoConds['condition_grp_fr_thresh'][0]
+                labelUse = gpfaAnalysisInfoConds['label_use'][0]
+                # DOUBLE NOTE: FA now can run separately from GPFA, so now we use
+                # input useFa
+                # NOTE: we set useFa to FALSE here because EVEN IF we're extracting
+                # the FA parameters, GPFA still needs to be run (the way that this
+                # is constructed...)
+                gai.computeGpfaResults(gap[gpfaParamsNoCval], bssExpToCompute, labelUse=labelUse, conditionNumbersGpfa = None if gpfaParamsNoCval['combine_conditions'] == 'all' else cond, perCondGroupFiringRateThresh = perConditionGroupFiringRateThresh, useFa=useFa, forceNewGpfaRun=forceNewGpfaRun)
 
-            if len(gpHashComp):
-                gpHashComp = gpHashComp[0]
+                # Not the prettiest, but we rerun this to account for the fact
+                # that the correct gpfaHash is now different...
+                gaiComputed = gai[bssExpWithGpfa][gap[gpfaParamsNoCval]]
+                gpHash, condsComputed = gaiComputed.fetch('gpfa_hash', 'condition_nums')
+                if len(cond)>1:
+                    gpHshUseLog = np.array([np.all(cnd == cond) for cnd in condsComputed])
+                    gpHashComp = gpHash[gpHshUseLog]
+                else:
+                    gpHashComp = gpHash[condsComputed==cond]
 
-            bssExpComputed = bssExpWithGpfa[gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]]
+                if len(gpHashComp):
+                    gpHashComp = gpHashComp[0]
 
-#gpfaInfo = (gai[bssExpComputed]['gpfa_hash="{hash}"'.format(hash=gpHashComp)] * gap * dsi).fetch('gpfa_rel_path_from_bss', 'bss_relative_path','condition_nums','num_folds_crossvalidate', 'dimensionality', 'dataset_name', order_by='dataset_id,dimensionality', as_dict=True)
+                bssExpComputed = bssExpWithGpfa[gai[gap[gpfaParamsNoCval]]['gpfa_hash="{hash}"'.format(hash=gpHashComp)]]
 
 
-            gpfaResBestCond, gpfaInfoBestCond = gai[bssExpComputed]['gpfa_hash="{hash}"'.format(hash=gpHashComp)][gap[gpfaParamsNoCval]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
-            gpfaResBestExp.update(gpfaResBestCond)
+
+                gpfaResBestCond, gpfaInfoBestCond = gai[bssExpComputed]['gpfa_hash="{hash}"'.format(hash=gpHashComp)][gap[gpfaParamsNoCval]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
+                gpfaResBestExp.update(gpfaResBestCond)
 
         gpfaResBest.append(gpfaResBestExp)
 
-    for gpfaResHere, gpfaInfoHere in zip(gpfaResBest, gpfaInfo):
-        gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
+    # ** finally, reformat the results for output and plotting **
+    # for gpfaResHere, gpfaInfoHere in zip(gpfaResBest, gpfaInfo):
+    #     gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
+        gpfaCrunchedResults = crunchGpfaResults(gpfaResBestExp, cvApproach = cvApproach, shCovThresh = shCovThresh)
 
         bssPaths = [pthAndCond[:2] for pthAndCond in gpfaCrunchedResults.keys()]
         _, smDimGrph = np.unique(bssPaths, return_inverse=True, axis=0)
         dimExp.append([d['xDimBestAll'] for _, d in gpfaCrunchedResults.items()])
         dimMoreLL.append([d['xDimScoreBestAll'] for _, d in gpfaCrunchedResults.items()])
-        normScoreAll.append([d['normalGpfaScoreAll'] for _, d in gpfaCrunchedResults.items()])
+        scoreAll.append([d['normalGpfaScoreAll'] for _, d in gpfaCrunchedResults.items()])
         gpfaOutDimAll.append([d['dimResults'] for _, d in gpfaCrunchedResults.items()])
         gpfaTestIndsOutAll.append([d['testInds'] for _, d in gpfaCrunchedResults.items()])
         gpfaTrainIndsOutAll.append([d['trainInds'] for _, d in gpfaCrunchedResults.items()])
@@ -553,95 +655,19 @@ def gpfaComputation(bssExp, timeBeforeAndAfterStart = None, timeBeforeAndAfterEn
         gpfaAlignmentBins.append([d['alignmentBins'] for _, d in gpfaCrunchedResults.items()])
         gpfaDimsTested.append([d['dimsTest'] for _, d in gpfaCrunchedResults.items()])
 
-    if plotOutput:
-        plotInfo = {}
-        # might have to go back on these lines for how to define ncols...
-        gpPathPer = [[Path(gpH[0]).parent for gpH in gp.keys()] for gp in gpfaRes]
-        gpUnPathNum = [len(np.unique(gpP)) for gpP in gpPathPer]
-        ncols = np.max(gpUnPathNum) # len(bssExp)
-        # sorry for the hard code
-        brainAreas = np.unique(dsi[bssExp]['brain_area'])
-        dimArBest = [[],[],[]]
-        ncols = len(brainAreas)
-        # axs = figErr.subplots(nrows=3, ncols=ncols, squeeze=False, constrained_layout=True)
-        figErr, axs = plt.subplots(nrows=3, ncols=ncols, squeeze=False, constrained_layout=True)
-        figErr.suptitle('dimensionality vs (GP)FA log likelihood/cumulative/individual variance accounted for')
-        
-        if type(bssExp) is list:
-            # Um.... DataJoint can apparently handle bssExp being a list of expressions
-            # and that's nuts. Unfortunately for the nuttiness, I *do* need to be able
-            # to keep these grouped together.
-            gpfaResAll = []
-            gpfaInfoAll = []
-            lstSzs = []
-            for subExp in bssExp:
-                ind+=1
-                lstSzs.append(len(gai[subExp]))
-                gpfaResH, gpfaInfoH = gai[subExp][gap['num_folds_crossvalidate={}'.format(crossvalidateNumFolds)]].grabGpfaResults(returnInfo=True, useFa=useFa)
-                
-                gpfaResAll.append(gpfaResH)
-                gpfaInfoAll.append(gpfaInfoH)
+    if plotOutputInfo is not None and plotOutputInfo:
+        if type(subExp) is BinnedSpikeSet:
+            descriptions = plotOutputInfo['descriptions']
+            brainAreas = plotOutputInfo['brainAreas']
+            bssPlotExp = None
         else:
-            gpfaResAll, gpfaInfoAll = gai[bssExp][gap['num_folds_crossvalidate={}'.format(crossvalidateNumFolds)]].grabGpfaResults(returnInfo=True, order=True, useFa=useFa)
-        
-        for gpfaResHere, gpfaInfoHere in zip(gpfaResAll, gpfaInfoAll):
-            gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
+            descriptions = [gI['datasetNames'] for gI in gpfaInfo]
+            brainAreas = np.unique(dsi[bssExp]['brain_area'])
+            bssPlotExp = bssExp
+        # plotGpfaResults(bssExp, gpfaRes, useFa, crossvalidateNumFolds, timeBeforeAndAfterStart, timeBeforeAndAfterEnd)
+        plotGpfaResults(gpfaRes, descriptions, brainAreas, timeBeforeAndAfterStart, timeBeforeAndAfterEnd, bssExp = bssPlotExp)
 
-            bssPaths = [pthAndCond[:2] for pthAndCond in gpfaCrunchedResults.keys()]
-            _, smDimGrph = np.unique(bssPaths, return_inverse=True, axis=0)
-            
-            dimExpAllTest = [d['xDimBestAll'] for _, d in gpfaCrunchedResults.items()]
-            normScoreAllTest = [d['normalGpfaScoreAll'] for _, d in gpfaCrunchedResults.items()]
-            gpfaOutDimAllTest = [d['dimResults'] for _, d in gpfaCrunchedResults.items()]
-            gpfaTestIndsOutAllTest = [d['testInds'] for _, d in gpfaCrunchedResults.items()]
-            gpfaBinSizeAllTest = [d['binSize'] for _, d in gpfaCrunchedResults.items()]
-            gpfaCondLabelsAllTest = [d['condLabel'] for _, d in gpfaCrunchedResults.items()]
-            gpfaAlignmentBinsAllTest = [d['alignmentBins'] for _, d in gpfaCrunchedResults.items()]
-            gpfaDimsTestedAllTest = [d['dimsTest'] for _, d in gpfaCrunchedResults.items()]
-
-
-            for idx, (description, dimsTest, testIndsCondAll, dimResult, normalGpfaScoreAll, binSize, condLabels, alignmentBins) in enumerate(zip(gpfaInfoHere['datasetNames'], gpfaDimsTestedAllTest, gpfaTestIndsOutAllTest, gpfaOutDimAllTest, normScoreAllTest, gpfaBinSizeAllTest, gpfaCondLabelsAllTest, gpfaAlignmentBinsAllTest)):
-
-                # grab first cval--they'll be the same for each cval, which is what
-                # these lists store
-                dimTest = dimsTest[0]
-                binSize = binSize[0]
-                testInds = testIndsCondAll[0]
-
-                axChs = np.array([description.find(bA)!=-1 for bA in brainAreas])
-                dimArBest[axChs.nonzero()[0][0]] += dimExpAllTest
-                axScore = axs[0][axChs][0]
-                axScore.set_title(np.array(brainAreas)[axChs][0])
-                axCumulDim = axs[1][axChs][0]
-                axByDim = axs[2][axChs][0]
-                plotInfo['axScore'] = axScore
-                plotInfo['axCumulDim'] = axCumulDim
-                plotInfo['axByDim'] = axByDim
-                # breakpoint()
-
-                if timeBeforeAndAfterStart is not None:
-                    tmValsStartBest = np.arange(-timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
-                else:
-                    tmValsStartBest = np.ndarray((0,0))
-                    
-                if timeBeforeAndAfterEnd is not None:
-                    tmValsEndBest = np.arange(-timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
-                else:
-                    tmValsEndBest = np.ndarray((0,0))
-
-                plotInfo['lblLL'] = lblLL
-                plotInfo['lblLLErr'] = lblLLErr
-                plotInfo['description'] = description
-                tmVals = [tmValsStartBest, tmValsEndBest]
-                condLabels = [idx]
-                visualizeGpfaResults(plotInfo, dimResult,  tmVals, cvApproach, normalGpfaScoreAll, dimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins)
-        
-        for axCumul, axByDim, dmB in zip(axs[1], axs[2], dimArBest):
-            axCumul.set_xlim(1, np.max(dmB))
-            axByDim.set_xlim(1, np.max(dmB))
-            axCumul.set_ylim(0, 1.05)
-            axByDim.set_ylim(0, 1.05)
-    return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll
+    return dimExp, dimMoreLL, gpfaOutDimAll, gpfaTestIndsOutAll, gpfaTrainIndsOutAll, gpfaAlignmentBins, scoreAll, gpfaCondLabels
 
 def incaComputation(bssExpConditionPairs, numNeuronsInNetwork = 25, cvalFracTrain = 0.75, numCrossvalidations = 4, xDimInNetTest = [[[2,2],[5,5]],[[5,5],[5,5]]], plotOutput=True):
     
