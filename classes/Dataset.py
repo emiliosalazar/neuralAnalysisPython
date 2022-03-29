@@ -862,6 +862,9 @@ class Dataset():
                                 durationOfStatePres = durationOfThisStatePres
                                 # locStateStrtStChoose = locStateStrtSt
                                 stTimeUse = statesPres[1, locStateStrtSt]
+                        if forRepeats=='grabFirst':
+                            stTimeUse = statesPres[1, locStateStrtSt]
+                            break # can move on after the first has been found
                         elif forRepeats=='grabAll':
                             stTimeUse.append(statesPres[1,locStateStrtSt])
 
@@ -869,10 +872,10 @@ class Dataset():
                     # locState = np.where(locStateLog)[0][0]
                     # stateTmPres.append(statesPres[1, locState])
                 else:
-                    if forRepeats=='grabLongest':
-                        stateTmPres.append(np.array(np.nan))
-                    elif forRepeats=='grabAll':
+                    if forRepeats=='grabAll':
                         stateTmPres.append(np.array([np.nan]))
+                    else:
+                        stateTmPres.append(np.array(np.nan))
                 
         return stateTmPres
             
