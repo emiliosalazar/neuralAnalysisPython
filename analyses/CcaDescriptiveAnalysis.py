@@ -2,8 +2,10 @@
 This function is responsible for the cross-area analyses/scatter matrices etc
 Like HeadlessAnalysisRun2-5.py for now...
 """
-from methods.plotUtils.PlotUtils import MoveFigureToSubplot
+from methods.plotMethods.PlotUtils import MoveFigureToSubplot
 from matplotlib import pyplot as plt
+import plotly as ply
+import plotly.express as px 
 import os
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['GOTO_NUM_THREADS'] = '1'
@@ -34,8 +36,8 @@ from methods.BinnedSpikeSetListMethods import generateBinnedSpikeListsAroundStat
 # subsampling
 from methods.BinnedSpikeSetListMethods import subsampleBinnedSpikeSetsToMatchNeuronsAndTrialsPerCondition as subsmpMatchCond
 
-# for the gpfa...
-from methods.BinnedSpikeSetListMethods import gpfaComputation
+# for the pcca...
+from classes.pCCA import pCCA
 
 # for descriptions of the data
 from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as genBSLLabGrp
@@ -76,6 +78,7 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
         _, bssiKeyTwo = genBSLAroundState(dsi['dataset_relative_path="{}"'.format(dsiTwoPath)],
                                             **binnedSpikeSetGenerationParamsDict
                                             )
+        keyStateName = binnedSpikeSetGenerationParamsDict['keyStateName']
 
         brainAreaO = dsi[bssiKeyOne]['brain_area'][0]
         brainAreaT = dsi[bssiKeyTwo]['brain_area'][0]
@@ -89,11 +92,69 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
             binnedSpikesOne = binnedSpikesOne.baselineSubtract(labels = binnedSpikesOne.labels['stimulusMainLabel'])[0]
             binnedSpikesTwo = binnedSpikesTwo.baselineSubtract(labels = binnedSpikesTwo.labels['stimulusMainLabel'])[0]
 
-        bSOAvg = binnedSpikesOne.timeSum()
-        bSTAvg = binnedSpikesTwo.timeSum()
+        bSOAvg = binnedSpikesOne#.timeSum()
+        bSTAvg = binnedSpikesTwo#.timeSum()
 
-        bSOAvgMnSub = np.array(bSOAvg - bSOAvg.trialAverage())
-        bSTAvgMnSub = np.array(bSTAvg - bSTAvg.trialAverage())
+        bSOAvgMnSub, _ = bSOAvg.baselineSubtract(labels=binnedSpikesOne.labels['stimulusMainLabel']) #np.array(bSOAvg - bSOAvg.trialAverage())
+        bSTAvgMnSub, _ = bSTAvg.baselineSubtract(labels=binnedSpikesTwo.labels['stimulusMainLabel']) #np.array(bSTAvg - bSTAvg.trialAverage())
+
+        bSOAvgMnSub = np.hstack(bSOAvgMnSub).T
+        bSTAvgMnSub = np.hstack(bSTAvgMnSub).T
+
+        numCvals = 4
+        probCCAsetup = pCCA(bSOAvgMnSub[:, :, None], bSTAvgMnSub[:, :, None], numCvals)
+        numCanonDirTest = [0,2,5,8,12]
+        pccaScoresDirs = []
+        pccaScoresDirsErr = []
+        print('running coarse pCCA dims')
+        for numDir in numCanonDirTest:
+            pccaScore, allEstParams, seqsTrainNew, seqsTestNew, fullRank = probCCAsetup.runPcca(numDir = numDir)
+            pccaScoresDirs.append(np.mean(pccaScore))
+            pccaScoresDirsErr.append(np.std(pccaScore))
+
+        bestDirInd = np.argmax(pccaScoresDirs)
+        if bestDirInd != 0:
+            bestDirFirstAround = numCanonDirTest[bestDirInd-1]+1
+        else:
+            bestDirFirstAround = numCanonDirTest[bestDirInd]+1
+
+        if bestDirInd != len(numCanonDirTest)-1:
+            bestDirLastAround = numCanonDirTest[bestDirInd+1]
+        else:
+            bestDirLastAround = numCanonDirTest[bestDirInd]+3
+
+        newCanonDirTest = list(range(bestDirFirstAround, bestDirLastAround))
+        print('running finer pCCA dims')
+        for numDir in newCanonDirTest:
+            pccaScore, allEstParams, seqsTrainNew, seqsTestNew, fullRank = probCCAsetup.runPcca(numDir = numDir)
+            pccaScoresDirs.append(np.mean(pccaScore))
+            pccaScoresDirsErr.append(np.std(pccaScore))
+        allCanonDirTest = numCanonDirTest + newCanonDirTest
+        canonDirSort = np.sort(allCanonDirTest)
+        pccaScoresDirsSort = np.array(pccaScoresDirs)[np.argsort(allCanonDirTest)]
+        pccaScoresDirsErrSort = np.array(pccaScoresDirsErr)[np.argsort(allCanonDirTest)]
+        fig = px.line().add_scatter(
+                x=canonDirSort, y=pccaScoresDirsSort,
+                line=dict(color='rgb(0,100,80)'),
+                mode='lines',
+            ).add_scatter(
+                x = np.hstack((canonDirSort, canonDirSort[::-1])),
+                y = np.hstack((pccaScoresDirsSort+pccaScoresDirsErrSort,pccaScoresDirsSort[::-1]-pccaScoresDirsErrSort[::-1])) ,
+                line=dict(color='rgba(255,255,255,0)'), # get rid of border lines
+                fill = 'toself',
+                fillcolor='rgba(0,100,80,0.2)',
+                hoverinfo='skip',
+                showlegend=False,
+            )
+
+        fig.update_layout(
+            title=f'pCCA dimensionality LL between {brainAreaO} and {brainAreaT} during {keyStateName}',
+            xaxis_title_text='number latents in pCCA model',
+            yaxis_title_text='LL (average ± std of four crossvalidations)',
+        )
+        fig.show()
+        # breakpoint()
+
 
         from sklearn.cross_decomposition import CCA
 
@@ -159,15 +220,15 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
             figAnglesToSave.append(figAngle.number)
             figAttToSave.append(figAtt.number)
 
-        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription='ccaAnalysisPFC_V4',pdfname='{}{}_angle'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = figAnglesToSave))
-        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription='ccaAnalysisPFC_V4',pdfname='{}{}_attention'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = figAttToSave))
+        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription=f'ccaAnalysis{brainAreaO}_{brainAreaT}',pdfname='{}{}_angle'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = figAnglesToSave))
+        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription=f'ccaAnalysis{brainAreaO}_{brainAreaT}',pdfname='{}{}_attention'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = figAttToSave))
 
         figPrincCorr, axCorr = plt.subplots(1,1,constrained_layout=True)
         corrs = np.corrcoef(bSOTransf, bSTTransf).diagonal(compCCA).copy()
         corrs = np.sort(corrs)[::-1]
         axCorr.plot(corrs, label='original correlations')
 
-        numShuffs = 1000
+        numShuffs = 50
         cvTrain = 0.75
         corrShuffs = []
         corrCV = []
@@ -175,12 +236,12 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
             print(shuff)
             numTrls = bSOAvgMnSub.shape[0]
             trlIndsUse = np.random.permutation(range(numTrls))
-            # cca = CCA(n_components = compCCA)
-            # bSOAvgMnSubShuff = bSOAvgMnSub[trlIndsUse, :]
-            # bSOTransfShuff, bSTTransfShuff = cca.fit_transform(bSOAvgMnSubShuff, bSTAvgMnSub)
-            # bSOTransfShuff = bSOTransfShuff.T
-            # bSTTransfShuff = bSTTransfShuff.T
-            # corrShuffs.append(np.corrcoef(bSOTransfShuff, bSTTransfShuff).diagonal(compCCA))
+            cca = CCA(n_components = compCCA)
+            bSOAvgMnSubShuff = bSOAvgMnSub[trlIndsUse, :]
+            bSOTransfShuff, bSTTransfShuff = cca.fit_transform(bSOAvgMnSubShuff, bSTAvgMnSub)
+            bSOTransfShuff = bSOTransfShuff.T
+            bSTTransfShuff = bSTTransfShuff.T
+            corrShuffs.append(np.corrcoef(bSOTransfShuff, bSTTransfShuff).diagonal(compCCA))
 
             trlIndsTrain = trlIndsUse[:int(numTrls*cvTrain)]
             trlIndsTest = trlIndsUse[int(numTrls*cvTrain):]
@@ -193,9 +254,9 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
 
 
 
-        # allShuffsStack = np.stack(corrShuffs)
-        # sortedCorrsShuffStack = np.stack([np.sort(shuff.copy())[::-1] for shuff in allShuffsStack])
-        # mnShuffs = sortedCorrsShuffStack.mean(axis=0)
+        allShuffsStack = np.stack(corrShuffs)
+        sortedCorrsShuffStack = np.stack([np.sort(shuff.copy())[::-1] for shuff in allShuffsStack])
+        mnShuffs = sortedCorrsShuffStack.mean(axis=0)
 
         allCvStack = np.stack(corrCV)
         sortedCorrsCvStack = np.stack([np.sort(shuff.copy())[::-1] for shuff in allCvStack])
@@ -206,11 +267,11 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
         ciInt = 0.95
         ciIntEdgeDist = 1-ciInt
 
-        # ciEdgeDistShuff = [np.diff(np.sort(sortCorrs.copy())[[0,-1]])*ciIntEdgeDist/2 for sortCorrs in sortedCorrsShuffStack.T]
-        # smBgShuff = [np.sort(sortCorrs.copy())[[0,-1]] for sortCorrs in sortedCorrsShuffStack.T]
+        ciEdgeDistShuff = [np.diff(np.sort(sortCorrs.copy())[[0,-1]])*ciIntEdgeDist/2 for sortCorrs in sortedCorrsShuffStack.T]
+        smBgShuff = [np.sort(sortCorrs.copy())[[0,-1]] for sortCorrs in sortedCorrsShuffStack.T]
 
-        # axCorr.plot(mnShuffs, label='trial shuffle correlations (1000)', color=[0,0,0])
-        # axCorr.fill_between(np.arange(mnShuffs.shape[0]), np.stack([sB[0]+ciED for sB, ciED in zip(smBgShuff, ciEdgeDistShuff)]).squeeze(), np.stack([sB[1]-ciED for sB, ciED in zip(smBgShuff, ciEdgeDistShuff)]).squeeze(), alpha = 0.2, label='shuff 95\% confidence interval', color=[0,0,0], linewidth=0.0)
+        axCorr.plot(mnShuffs, label=f'trial shuffle correlations ({numShuffs})', color=[0,0,0])
+        axCorr.fill_between(np.arange(mnShuffs.shape[0]), np.stack([sB[0]+ciED for sB, ciED in zip(smBgShuff, ciEdgeDistShuff)]).squeeze(), np.stack([sB[1]-ciED for sB, ciED in zip(smBgShuff, ciEdgeDistShuff)]).squeeze(), alpha = 0.2, label='shuff 95\% confidence interval', color=[0,0,0], linewidth=0.0)
 
         ciEdgeDistCv = [np.diff(np.sort(sortCorrs.copy())[[0,-1]])*ciIntEdgeDist/2 for sortCorrs in sortedCorrsCvStack.T]
         smBgCv = [np.sort(sortCorrs.copy())[[0,-1]] for sortCorrs in sortedCorrsCvStack.T]
@@ -219,9 +280,9 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
         # ** POP BACK HERE **
         figPrincCorr, axCorr = plt.subplots(1,1,constrained_layout=True)
         plotCC = 25
-        axCorr.plot(mnCv[:plotCC], label='1000 75/25\% train/test CVs', color=[1,0,0])
+        axCorr.plot(mnCv[:plotCC], label=f'{numShuffs} 75/25\% train/test CVs', color=[1,0,0])
         axCorr.fill_between(np.arange(plotCC), [cB[0] for cB in ciBound][:plotCC], [cB[1] for cB in ciBound][:plotCC], alpha = 0.2, label='95\% CI', color=[1,0,0], linewidth=0.0)
-        axCorr.set_title('PFC/V4 correlations')
+        axCorr.set_title(f'{brainAreaO}/{brainAreaT} correlations')
 
         # axCorr.legend()
         axCorr.set_xticks(np.arange(0, compCCA, 5))
@@ -232,7 +293,8 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
         axCorr.hlines(0, xmin, xmax, linestyle='--')
         # ** POP TO HERE **
 
-        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription='ccaAnalysisPFC_V4',pdfname='{}{}_princCorr'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = [figPrincCorr.number]))
+        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription=f'ccaAnalysis{brainAreaO}_{brainAreaT}',pdfname='{}{}_princCorr'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = [figPrincCorr.number]))
+        breakpoint()
 
 
         ciNumSig = np.nonzero((ciBound[:, 0] < 0) & (ciBound[:, 1] > 0))[0][0]
@@ -367,13 +429,13 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
         varLabels = ('b/t area var', 'w/i area var', 'private var')
         axsPie[0].pie(bsoVars, labels = varLabels, autopct='%1.1f%%', startangle=90)
         axsPie[0].axis('equal')
-        axsPie[0].set_title('V4')
+        axsPie[0].set_title(f'{brainAreaO}')
         axsPie[1].pie(bstVars, labels = varLabels, autopct='%1.1f%%', startangle=90)
         axsPie[1].axis('equal')
-        axsPie[1].set_title('PFC')
+        axsPie[1].set_title(f'{brainAreaT}')
         # ** POP BACK TO HERE **
 
-        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription='ccaAnalysisPFC_V4',pdfname='{}{}_shBtWiPrivVar'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = [figPrincCorr.number]))
+        outputFiguresRelativePath.append(saveFiguresToPdf(analysisDescription=f'ccaAnalysis{brainAreaO}_{brainAreaT}',pdfname='{}{}_shBtWiPrivVar'.format(plotParams['pdfnameSt'],plotParams['analysisIdentifier']), figNumsToSave = [figPrincCorr.number]))
 
         from importlib import reload
         from methods.plotUtils import PlotUtils 
@@ -397,7 +459,7 @@ def ccaDescriptiveAnalysis(datasetSqlPairings, binnedSpikeSetGenerationParamsDic
         # finalFig.set_constrained_layout_pads(w_pad=0, h_pad=0, hspace=0, wspace=0)
         # reload(GeneralMethods)
         # saveFiguresToPdf = GeneralMethods.saveFiguresToPdf
-        saveFiguresToPdf(analysisDescription='ccaAnalysisPFC_V4', pdfname='finalFig', figNumsToSave=[finalFig.number])
+        saveFiguresToPdf(analysisDescription=f'ccaAnalysis{brainAreaO}_{brainAreaT}', pdfname='finalFig', figNumsToSave=[finalFig.number])
         # ** POP BACK TO HERE **
         breakpoint()
 
