@@ -10,6 +10,7 @@ are better set out as a class that contains lists of these... but methinks not
 """
 
 import numpy as np
+import scipy as sp
 from classes.BinnedSpikeSet import BinnedSpikeSet
 from matplotlib import pyplot as plt
 from pathlib import Path
@@ -21,7 +22,7 @@ import json
 import dill as pickle
 
 from methods.GpfaMethods import crunchGpfaResults, computeBestDimensionality
-from methods.plotMethods.GpfaPlotMethods import visualizeGpfaResults
+from methods.plotMethods.BinnedSpikeSetPlotMethods import plotGpfaResults, plotSlowDriftVsFaSpace
 
 def generateBinnedSpikeListsAroundState(data, keyStateName, trialType = 'successful', lenSmallestTrl=251, binSizeMs = 25, furthestTimeBeforeState=251, furthestTimeAfterState=251, setStartToStateEnd = False, setEndToStateStart = False, returnResiduals = False,  firingRateThresh = 1, fanoFactorThresh = 4, unitsOut = None, trialFilterLambda = None):
 
@@ -972,6 +973,206 @@ def informationComputations(listBSS, labelUse):
     }
 
     return infoDict 
+
+def slowDriftComputation(listBse, preprocessInputs, dimResultsAll = None, testInds = None, binSizeForAvg = 500, labelUse='stimulusMainLabel', plotOutput = False, chRestrictRefExp = None):
+    from classes.FA import FA
+    defaultParams = loadDefaultParams()
+    dataPath = Path(defaultParams['dataPath'])
+    
+    prepInputKeywords = ['sqrtSpikes', 'labelUse', 'condNums', 'combineConds', 'overallFiringRateThresh', 'perConditionGroupFiringRateThresh', 'balanceConds', 'computeResiduals']
+    preprocessInputsFinal = {}
+    [preprocessInputsFinal.update({pIK : preprocessInputs[pIK]}) for pIK in prepInputKeywords if pIK in preprocessInputs]
+    preprocessInputsFinal['condNums'] = preprocessInputs['conditionNumbers']
+    preprocessInputsFinal['combineConds'] = preprocessInputs['combineConditions']
+
+    slowDriftDims = []
+    slowDriftSpikes = []
+    slowDriftRollingAverageSpikes = []
+    spikesWithSlowDriftSubtracted = []
+    spikesWithSlowDriftDimOneSubtracted = []
+    bsi = BinnedSpikeSetInfo()
+    dsi = DatasetInfo()
+    num = 0
+    latentVarExpBySlowDriftByArea, slowDriftVarExpTrialsByArea, slowDriftVarExpRAByArea, slowDriftVarExpSharedSpaceByArea, rollAvgPercOrigVarByArea, rollAvgSDPercOrigVarByArea = [],[],[],[], [], []
+    if plotOutput:
+        if dimResultsAll is None or testInds is None:
+            raise("plotting the slow drift output must provide FA/GPFA comparison")
+    for bssExp, trlIndAllCv in zip(listBse,testInds):
+        print(num)
+        if type(bssExp) is not dict:
+            bssExpKeys = bssExp.fetch('KEY')
+        else:
+            print('Computed slow drift from spikes and assuming the spikes are first grouped by condition and *then* ordered by trial!')
+            bssExpKeys = [dict(key=bssExp['subExp'].fetch('KEY'),spikes=bssExp['spikes'])]
+
+        dimResult = dimResultsAll[num]
+        numKey = 0
+        latentVarExpBySlowDriftByCond, slowDriftVarExpTrialsByCond, slowDriftVarExpRAByCond, slowDriftVarExpSharedSpaceByCond, rollAvgPercOrigVar, rollAvgSDPercOrigVar = [],[],[],[],[],[]
+        for bssKey, trlInds in zip(bssExpKeys, trlIndAllCv):
+            if 'spikes' in bssKey:
+                bssSpikes = bssKey['spikes']
+                bssKey = bssKey['key'][0]
+                bssExpHere = bssExp['subExp'][bssKey]
+            else:
+                bssSpikes = bssExp[bssKey].grabBinnedSpikes()[0]
+                bssExpHere = bssExp[bssKey]
+            dsParentExp = dsi[bssExpHere]
+            trlFromDs = bssExpHere.trialAndChannelFilterFromParent(dsParentExp)[0]
+            dsParent = dsParentExp.grabDataset()
+            description = dsParentExp['dataset_name']
+            # only use neurons GPFA uses
+            *_, trlChKeep = bssSpikes.prepareGpfaOrFa(**preprocessInputsFinal)
+            chUsedForFa = trlChKeep['channelsKeep']
+            trlsUsedForFa = trlChKeep['trialsKeep']
+            if chRestrictRefExp is not None:
+                bssSpikesRef = chRestrictRefExp[num].grabBinnedSpikes()[0]
+                *_, trlChKeep = bssSpikesRef.prepareGpfaOrFa(**preprocessInputsFinal)
+                chFiltRefFromHere = chRestrictRefExp[num].trialAndChannelFilterFromParent(bssExpHere)[1]
+                chUsedForFa = chFiltRefFromHere[trlChKeep['channelsKeep']]
+            bssSpikes = bssSpikes[trlsUsedForFa][:,chUsedForFa]
+
+
+            spikeBinStartInTrial = bssExpHere['start_time'][0]
+            condLabels = bssSpikes.labels[labelUse]
+            unLab = np.unique(condLabels, axis = 0)
+            if unLab.shape[0]>1:
+                # NOTE: this is for when conditions are combined; think
+                # it'll be easy to do just haven't written the code yet
+                trialsInBssWithLabel = np.hstack([(np.all(bssSpikes.labels[labelUse] == uL, axis=1)).nonzero()[0] for uL in unLab])
+                # NOTE: you do NOT want to sort trialsInBssWithLabel. The
+                # simplest way to give the reason is that before FA/GPFA was
+                # run, when all the conditions were combined, the trials for
+                # each condition were first grouped together. This means
+                # that the trial index refers to the index of the trial not
+                # ordered by when it was presented in the session, but
+                # ordered first by the condition, and then *within* the
+                # condition by when it was presented. By not sorting
+                # trialsInBssWithLabel, I effectively replicate that
+                # ordering here, so now testInds below is referring to the
+                # same trials as indexed by trialsInBssWithLabel
+                # trialsInBssWithLabel.sort()
+                trialsForLabel = trlFromDs[trialsInBssWithLabel]
+                trlTimes = dsParent.trialStartTimeInSession()[trialsForLabel] 
+                strtTimesInTrial = spikeBinStartInTrial[trialsInBssWithLabel]
+                spikeStartTimesInSession = trlTimes + strtTimesInTrial
+            else:
+                # note that eventually I might want to be flexible in using
+                # another label... but for the moment this is hardcoded
+                labelUse = 'stimulusMainLabel'
+                trialsInBssWithLabel = np.all(spikesForGpfa.labels[labelUse] == unLab, axis=1)
+                trialsForLabel = trlFromDs[trialsInBssWithLabel]
+                trlTimes = dsParent.trialStartTimeInSession()[trialsForLabel] 
+                strtTimesInTrial = spikeBinStartInTrial[trialsInBssWithLabel]
+                spikeStartTimesInSession = trlTimes + strtTimesInTrial
+
+            spikesUsedNorm = np.vstack([(br - br.mean(axis=(0,2))[:,None])/br.std(axis=(0,2))[:,None] for br in bssSpikes.groupByLabel(labels=bssSpikes.labels['stimulusMainLabel'])[0]])
+            spikesUsedNorm = spikesUsedNorm.squeeze() # this tells me this wouldn't work with multi-timepoint trials...
+            spikesUsedSortByTrials = spikesUsedNorm.copy()
+            spikesUsedSortByTrials[trialsInBssWithLabel] = spikesUsedNorm
+            slowDriftSpikes.append(spikesUsedNorm)
+            # below wasn't doing appropriate residual-by-condition
+            # bssSpikes, _ = bssSpikes.baselineSubtract(labels=bssSpikes.labels['stimulusMainLabel'])
+            # spikesNorm = ((bssSpikes - bssSpikes.mean(axis=0))/bssSpikes.std(axis=0)).squeeze()
+            # slowDriftSpikes.append(spikesNorm)
+            # spikesUsedNorm = spikesNorm[trialsInBssWithLabel]
+
+            if len(trlInds) > 1:
+                breakpoint() # I think this means you've not combined conditions... unsure
+            else:
+                trlInds = trlInds[0].squeeze()
+
+            minTime = 0 # ms
+            maxTime = binSizeForAvg * np.ceil(spikeStartTimesInSession.max()/binSizeForAvg) # ms
+            binnedSpikesOverSession, binEdges, binNum = sp.stats.binned_statistic(trlTimes, spikesUsedNorm.T, statistic='sum', bins=np.arange(minTime, maxTime+binSizeForAvg/2, binSizeForAvg))
+            maskRecordedVals = np.zeros_like(binnedSpikesOverSession[0], dtype='bool')
+            maskRecordedVals[binNum-1] = True # binNum is 1-indexed for these purposes...
+            windowSizeForMeanMinutes = 20 # minutes
+            minsToSecs = 60
+            secsToMs = 1000
+            windowSizeForMeanInBinSizes = np.round(windowSizeForMeanMinutes*minsToSecs*secsToMs/binSizeForAvg).astype(int)
+            boxAverageFilter = np.ones(windowSizeForMeanInBinSizes, dtype=int)
+            maskedVals = np.where(maskRecordedVals, binnedSpikesOverSession, 0)
+            numValsExist = np.convolve(maskRecordedVals, boxAverageFilter, mode='valid')
+            boxedAvgOut = [np.convolve(spkChan, boxAverageFilter, mode='valid')/numValsExist for spkChan in maskedVals]
+            firstFullVal = boxAverageFilter.shape[0]
+            # NOTE the binsToUse are the bins for which the filtered signal is
+            # causal (i.e. filtering happened from spikes in the past)
+            binsToUse = np.sort(binNum[binNum>firstFullVal])-firstFullVal
+            binnedSpikeRunningAvgOverSession = np.stack(boxedAvgOut)[:, binsToUse]
+            binnedSpikeRunningAvgOverSession = binnedSpikeRunningAvgOverSession.T
+            spikesUsedMatchedToRunningAvg = spikesUsedNorm[np.argsort(binNum), :][np.sort(binNum)>firstFullVal, :]
+            spikesUsedMinusRunningAvg = spikesUsedMatchedToRunningAvg - binnedSpikeRunningAvgOverSession
+            pcs, evalsPca, _ = np.linalg.svd(np.cov(binnedSpikeRunningAvgOverSession.T,ddof=0))
+            slowDriftRollingAverageSpikes.append(binnedSpikeRunningAvgOverSession)
+            spikesWithSlowDriftSubtracted.append(spikesUsedMinusRunningAvg[:,:,None])
+            slowDriftDim = 0
+            pcSlowDrift = pcs[:, [slowDriftDim]]
+            rollingAvgInSlowDriftDim = binnedSpikeRunningAvgOverSession @ pcSlowDrift @ pcSlowDrift.T
+            percOrigVarOfRAInSD = 100*np.var(binnedSpikeRunningAvgOverSession @ pcSlowDrift) / np.cov(spikesUsedNorm.T, ddof=0).trace()
+            percOrigVarOfRA = 100*np.cov(binnedSpikeRunningAvgOverSession.T, ddof=0).trace() / np.cov(spikesUsedNorm.T, ddof=0).trace()
+            rollAvgPercOrigVar.append(percOrigVarOfRA)
+            rollAvgSDPercOrigVar.append(percOrigVarOfRAInSD)
+            allOnesDir = np.ones_like(pcSlowDrift)
+            allOnesDir = allOnesDir/np.linalg.norm(allOnesDir)
+            spikesUsedMinusSlowDriftOneDimRunAvg = spikesUsedMatchedToRunningAvg - rollingAvgInSlowDriftDim # + spikesUsedMatchedToRunningAvg @ allOnesDir @ allOnesDir.T
+            spikesWithSlowDriftDimOneSubtracted.append(spikesUsedMinusSlowDriftOneDimRunAvg[:,:,None])
+            # ** slow drift computations over **
+            # breakpoint()
+            # ** ATTEMPT AT FA
+            # crossvalidateNum = 4
+            # outputPathToConditions = ( dataPath / bssKey['bss_relative_path'] ).parent / 'slowDrift'
+            # faScoreAll = []
+            # for xDim in range(10):#np.arange(0,20, 5):
+            #     faPrep = FA(binnedSpikeRunningAvgOverSession[:, :, None], crossvalidateNum=crossvalidateNum)
+            #     # faPrep = FA(spikesUsedNorm[:, :, None], crossvalidateNum=crossvalidateNum)
+            #     # faPrep = FA(((bssSpikes - bssSpikes.mean(axis=0))/bssSpikes.std(axis=0)), crossvalidateNum=crossvalidateNum)
+            #     faScoreCond = np.empty((1,crossvalidateNum))
+            #     fullOutputPath = outputPathToConditions / 'allCond'
+            #     faScoreCond[0, :] = faPrep.runFa( numDim=xDim, gpfaResultsPath = fullOutputPath )[0]
+            #     faScoreAll.append(faScoreCond)
+            # finalAvgFaScore = np.stack(faScoreAll).squeeze().mean(axis=1)
+            # ** END ATTEMPT
+
+            slowDriftDims.append(pcSlowDrift)
+            if plotOutput:
+                title = plotOutput['title']
+                plotTitle = description + ' ' + title
+                dimResultHere = dimResult[numKey]
+                if len(dimResultHere) > 1:
+                    # I believe this is a case where conditions aren't combined,
+                    # so there's one per condition; gotta think about how to
+                    # make this work
+                    breakpoint() 
+                else:
+                    dimResultHere = dimResultHere[0]
+                binSize = bssSpikes.binSize
+                latentVarExpBySlowDrift, slowDriftVarExpTrials, slowDriftVarExpRA, slowDriftVarExpSharedSpace = plotSlowDriftVsFaSpace(spikesUsedNorm, trlInds, trlTimes, binSize, pcSlowDrift, pcs, evalsPca, plotTitle, condLabels, dimResultHere)
+                latentVarExpBySlowDriftByCond.append(latentVarExpBySlowDrift)
+                slowDriftVarExpTrialsByCond.append(slowDriftVarExpTrials)
+                slowDriftVarExpRAByCond.append(slowDriftVarExpRA)
+                slowDriftVarExpSharedSpaceByCond.append(slowDriftVarExpSharedSpace)
+               
+
+            numKey += 1
+        num+=1
+        
+        latentVarExpBySlowDriftByArea.append(latentVarExpBySlowDriftByCond)
+        slowDriftVarExpTrialsByArea.append(slowDriftVarExpTrialsByCond)
+        slowDriftVarExpRAByArea.append(slowDriftVarExpRAByCond)
+        slowDriftVarExpSharedSpaceByArea.append(slowDriftVarExpSharedSpaceByCond)
+        rollAvgPercOrigVarByArea.append(rollAvgPercOrigVar)
+        rollAvgSDPercOrigVarByArea.append(rollAvgSDPercOrigVar)
+    
+    slowDriftDict = {
+        '%ev of latent dimension by slow drift dim' : latentVarExpBySlowDriftByArea,
+        '%ev of trials explained by slow drift dim' : slowDriftVarExpTrialsByArea,
+        '%ev of rolling average by slow drift dim' : slowDriftVarExpRAByArea,
+        '%ev of slow drift dim by shared space' : slowDriftVarExpSharedSpaceByArea,
+        '%overall var of slow drift dim rolling avg' : rollAvgSDPercOrigVarByArea,
+        '%overall var of rolling avg' : rollAvgPercOrigVarByArea,
+    }
+    return slowDriftDims, slowDriftDict, slowDriftSpikes, slowDriftRollingAverageSpikes, spikesWithSlowDriftSubtracted, spikesWithSlowDriftDimOneSubtracted
+
 #%% Plotting and descriptive
 def plotFiringRates(listBSS, descriptions, supTitle=None, cumulative = True):
     
