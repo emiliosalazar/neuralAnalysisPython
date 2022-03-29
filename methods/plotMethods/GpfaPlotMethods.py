@@ -86,6 +86,69 @@ def plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesPlotList, axesOthe
     
     return axesHere
 
+def plotDimensionsOverTrials(figOverTime, pltNum, axesOverTime, rowsPlt, colsPlt, allDimTraj, trlInds, startTimesInSession, binSize, dimNum, xDimBest, colorUse, linearFit=None, plotAnnot=None, labelTraj = "trajectory", linewidth=0.4, alpha = 1):
+
+    if len(axesOverTime) < rowsPlt*colsPlt:
+        axesHere = figOverTime.add_subplot(rowsPlt, colsPlt, pltNum)
+
+        if pltNum == 1: 
+            axesHere.set_title("dim " + str(dimNum) + " over session" )
+            axesHere.set_ylabel("dim score")
+        else:
+            axesHere.set_title("d"+str(dimNum))
+
+        if pltNum <= (xDimBest - colsPlt):
+            axesHere.set_xticklabels('')
+            axesHere.xaxis.set_visible(False)
+            axesHere.spines['bottom'].set_visible(False)
+        else:  
+            axesHere.set_xlabel('time (ms)')
+    
+        if (pltNum % colsPlt) != 1 and colsPlt != 1:
+            axesHere.set_yticklabels('')
+            axesHere.yaxis.set_visible(False)
+            axesHere.spines['left'].set_visible(False)
+        
+        axesHere.spines['right'].set_visible(False)
+        axesHere.spines['top'].set_visible(False)
+    else:
+        axesHere = axesOverTime[pltNum]
+
+    axesOverTime.append(axesHere)
+
+
+    if plotAnnot is not None:
+        annotList = ['{} = {:0.2f}'.format(k,v) for k, v in plotAnnot.items()]
+        annotStr = '\n'.join(annotList)
+
+    # meanTrajLen = np.mean([traj.shape[0] for traj in allDimTraj])
+    # sortingInds = np.argsort(trlInds)
+    for traj, trlInd in zip(allDimTraj, trlInds):
+    # for indSorted in sortingInds:
+    #     traj = allDimTraj[indSorted]
+    #     trlInd = trlInds[indSorted]
+        # this accounts for trials that aren't plotted (i.e. because they were
+        # training trials) between the current trial and the previous plotted
+        # trials: if sequential trials were computed, then this will be zero and
+        # nothing will shift
+        tmptSt = startTimesInSession[trlInd] + binSize/2
+        tmptUse = np.arange(tmptSt, tmptSt + len(traj)*binSize, binSize)
+        if traj.size == 1:
+            marker = '.'
+        else:
+            marker = None
+        axesHere.plot(tmptUse, traj, color='k', marker = marker)
+
+    if plotAnnot is not None:
+        xlms = axesHere.get_xlim()
+        ylms = axesHere.get_ylim()
+        axesHere.text(xlms[-1], ylms[-1], annotStr, ha='right', va='top', fontsize='x-small')
+
+    if linearFit is not None:
+        startTmsTog = np.sort(np.hstack(startTimesInSession[trlInds]))
+        axesHere.plot(startTmsTog, linearFit, linestyle='--', color='r')
+
+        return axesHere
    
 
 def visualizeGpfaResults(plotInfo, dimResults, tmVals, cvApproach, gpfaScoreAll, xDimTest, testInds, shCovThresh, crossValsUse, binSize, condLabels, alignmentBins,
