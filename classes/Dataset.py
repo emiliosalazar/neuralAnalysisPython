@@ -547,6 +547,7 @@ class Dataset():
         randIdxes = np.random.permutation(trlIdxes)
         idxesUse = randIdxes[:round(numTrls*checkNumTrls)]
 
+        # get the overall spike count
         spikeCountOverallPerChan = np.stack(np.stack([np.concatenate(trlSpks[:], axis=1).shape[1] for trlSpks in self.spikeDatTimestamps[idxesUse,:].T]))
         coincCnt = np.zeros((spikeCountOverallPerChan.shape[0],  spikeCountOverallPerChan.shape[0]))
         
@@ -555,11 +556,19 @@ class Dataset():
                 print(str(100*numRound/(len(idxesUse)-1)) + "% done")
             if numRound == len(idxesUse)-1:
                 print("100% done")
+
+            # this gets you the spike times for each channel in a trial
             trlChTmstmp = self.spikeDatTimestamps[trlIdx]
+
+            # then we go through each channel ch1, and look at its coincidence
+            # with another channel, ch2
             for idx1, ch1 in enumerate(trlChTmstmp):
-                # print(str(idx1))
                 for idx2, ch2 in enumerate(trlChTmstmp):
+                    # we're only computing one half of the matrix since its
+                    # symmetric
                     if idx2>idx1:
+                        # find the spike time difference and only add the spikes
+                        # that are closer together than the coincidenceTime
                         ch1ch2TDiff = ch1 - ch2.T
                         coincCnt[idx1, idx2] = coincCnt[idx1, idx2]+np.where(abs(ch1ch2TDiff)<coincidenceTime)[0].shape[0]
                         coincCnt[idx2, idx1] = coincCnt[idx1, idx2]
@@ -570,6 +579,12 @@ class Dataset():
         # columns here)
         coincProp = coincCnt/spikeCountOverallPerChan
         
+        # here we're obviously checking that the proportion of coincident
+        # spikes is below the threshold (I use 0.2, or 20% coincidence), but
+        # we're also checking that both channels actually *have* spikes.
+        # (Algorithmically, that gets rid of NaNs caused by a divide by zero
+        # above, which gives you an NaN. But also it makes sense to remove
+        # channels that don't fire).
         chanPairsGoodLogical = (coincProp<coincidenceThresh) & (spikeCountOverallPerChan != 0)[:,None] & (spikeCountOverallPerChan != 0)[:,None].T # every column is the division with that channel's spike count
         chanPairsBadLogicalOrig = (coincProp>=coincidenceThresh) | (spikeCountOverallPerChan == 0)[:,None] | (spikeCountOverallPerChan == 0)[:,None].T# every column is the division with channel's spike count
 
@@ -590,20 +605,30 @@ class Dataset():
         # overview of what things were like to start with
         timesOtherChannelsCoincidentToThisChannel = timesOtherChannelsCoincidentToThisChannelOrig
         timesThisChannelCoincidentToOtherChannels = timesThisChannelCoincidentToOtherChannelsOrig 
+
+        # the while loop just keeps going until there are no coincident channels
         while timesOtherChannelsCoincidentToThisChannel.sum() + timesThisChannelCoincidentToOtherChannels.sum() > 0:
             mxOthCh = timesOtherChannelsCoincidentToThisChannel.max()
             mxThsCh = timesThisChannelCoincidentToOtherChannels.max()
             
+            # as stated above, we remove channels one by one, and always going
+            # for the channel that has the highest coincidence with other
+            # channels
             if mxThsCh >= mxOthCh:
                 chRem = timesThisChannelCoincidentToOtherChannels.argmax()
             else:
                 chRem = timesOtherChannelsCoincidentToThisChannel.argmax()
 
+            # keep track of channels to remove
             badChans.append(chRem)
+            # set them as not coincident to any channel, and no channel
+            # coincident to them, because we know we'll remove them
             chanPairsBadLogical[:,chRem] = False
             chanPairsBadLogical[chRem,:] = False
             
     
+            # recompute the coincidence numbers so we can find the new channel
+            # that has most coincidence
             timesOtherChannelsCoincidentToThisChannel = chanPairsBadLogical.sum(axis=1)
             timesThisChannelCoincidentToOtherChannels = chanPairsBadLogical.sum(axis=0)
 
