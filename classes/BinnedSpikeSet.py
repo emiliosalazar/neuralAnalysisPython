@@ -1013,6 +1013,7 @@ class BinnedSpikeSet(np.ndarray):
         # this is going to use a Gaussian naive Bayes classifier to try and
         # predict the labels of a held out set...
         from sklearn.naive_bayes import GaussianNB
+        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
         from sklearn.svm import LinearSVC
 
 
@@ -1055,18 +1056,51 @@ class BinnedSpikeSet(np.ndarray):
 
         if decodeType == 'naiveBayes':
             cvalAccuracies = []
+            unLab = np.unique(labels, axis=0)
+            unLabInd = [np.all(labels == uL, axis=1).nonzero()[0] for uL in unLab]
+            randIndPerLab = [indUL[np.random.permutation(np.arange(indUL.size))] for indUL in unLabInd]
             for cv in range(numCVal):
-                randomizedIndOrder = np.random.permutation(idxUse)
-                trainInds = randomizedIndOrder[:round(trainFrac*trls)]
-                testInds = randomizedIndOrder[round(trainFrac*trls):]
+                # decided to implement stratified k-fold crossvalidation, to
+                # ensure balance of conditions across folds
+                testIndPerLab = [rI[int(rI.size*cv/numCVal):int(rI.size*(cv+1)/numCVal)] for rI in randIndPerLab]
+                trainIndPerLab = [np.hstack((rI[:int(rI.size*cv/numCVal)], rI[int(rI.size*(cv+1)/numCVal):])) for rI in randIndPerLab]
+                trainInds = np.hstack(trainIndPerLab)
+                testInds = np.hstack(testIndPerLab)
 
                 bayesClassifier = GaussianNB()
-                bayesClassifier.fit(tmAvgBins[trainInds], labels[trainInds])
+                bayesClassifier.fit(tmAvgBins[trainInds], labels[trainInds].squeeze())
                 # breakpoint()
 
                 testLabels = labels[testInds]
 
-                accuracy = bayesClassifier.score(tmAvgBins[testInds], labels[testInds])
+                accuracy = bayesClassifier.score(tmAvgBins[testInds], labels[testInds].squeeze())
+                cvalAccuracies.append(accuracy)
+
+            meanAccuracy = np.mean(cvalAccuracies)
+            stdAccuracy = np.std(cvalAccuracies)
+
+            out1 = meanAccuracy
+            out2 = stdAccuracy
+        elif decodeType == 'LDA':
+            cvalAccuracies = []
+            unLab = np.unique(labels, axis=0)
+            unLabInd = [np.all(labels == uL, axis=1).nonzero()[0] for uL in unLab]
+            randIndPerLab = [indUL[np.random.permutation(np.arange(indUL.size))] for indUL in unLabInd]
+            for cv in range(numCVal):
+                # decided to implement stratified k-fold crossvalidation, to
+                # ensure balance of conditions across folds
+                testIndPerLab = [rI[int(rI.size*cv/numCVal):int(rI.size*(cv+1)/numCVal)] for rI in randIndPerLab]
+                trainIndPerLab = [np.hstack((rI[:int(rI.size*cv/numCVal)], rI[int(rI.size*(cv+1)/numCVal):])) for rI in randIndPerLab]
+                trainInds = np.hstack(trainIndPerLab)
+                testInds = np.hstack(testIndPerLab)
+
+                ldaClassifier = LinearDiscriminantAnalysis()
+                ldaClassifier.fit(tmAvgBins[trainInds], labels[trainInds].squeeze())
+                # breakpoint()
+
+                testLabels = labels[testInds]
+
+                accuracy = ldaClassifier.score(tmAvgBins[testInds], labels[testInds].squeeze())
                 cvalAccuracies.append(accuracy)
 
             meanAccuracy = np.mean(cvalAccuracies)
