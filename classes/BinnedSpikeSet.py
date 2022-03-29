@@ -890,10 +890,13 @@ class BinnedSpikeSet(np.ndarray):
             supTitle = plot['supTitle'] if 'supTitle' in plot else ''
             fig.suptitle(supTitle)
 
-            ax01 = plt.subplot(221)
-            ax02 = plt.subplot(222)
-            ax12 = plt.subplot(223)
-            ax3D = plt.subplot(224,projection='3d')
+            ax = np.empty((2,2), dtype='object')
+            ax[0,0] = plt.subplot(221)
+            ax[0,1] = plt.subplot(222)
+            ax[1,0] = plt.subplot(223)
+            ax[1,1] = plt.subplot(224,projection='3d')
+
+
             trialNumbersAll = np.arange(trialsPresented.shape[0])
             if self.ndim == 3:
                 trialNumbersAllExp = np.repeat(trialNumbersAll, self.shape[2])
@@ -911,40 +914,41 @@ class BinnedSpikeSet(np.ndarray):
                     colorUse = self.colorset[idx]
                     # mlab.points3d(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], color = colorUse, scale_factor=10)
                     if np.sum(trlsUse)>1:
-                        ax01.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1], '-', color = colorUse)
-                        ax01.set_xlabel('PC1')
-                        ax01.set_ylabel('PC2')
+                        ax[0,0].plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1], '-', color = colorUse)
+                        ax[0,0].set_xlabel('PC1')
+                        ax[0,0].set_ylabel('PC2')
 
-                        ax02.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 2], '-', color = colorUse)
-                        ax02.set_xlabel('PC1')
-                        ax02.set_ylabel('PC3')
+                        ax[0,1].plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 2], '-', color = colorUse)
+                        ax[0,1].set_xlabel('PC1')
+                        ax[0,1].set_ylabel('PC3')
 
-                        ax12.plot(xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '-', color = colorUse)
-                        ax12.set_xlabel('PC2')
-                        ax12.set_ylabel('PC3')
+                        ax[1,0].plot(xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '-', color = colorUse)
+                        ax[1,0].set_xlabel('PC2')
+                        ax[1,0].set_ylabel('PC3')
 
-                        ax3D.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '-', color = colorUse)
-                        ax3D.set_xlabel('PC1')
-                        ax3D.set_ylabel('PC2')
-                        ax3D.set_zlabel('PC3')
+                        ax[1,1].plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '-', color = colorUse)
+                        ax[1,1].set_xlabel('PC1')
+                        ax[1,1].set_ylabel('PC2')
+                        ax[1,1].set_zlabel('PC3')
                     else:
-                        ax01.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1], '.', color = colorUse)
-                        ax01.set_xlabel('PC1')
-                        ax01.set_ylabel('PC2')
+                        ax[0,0].plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1], '.', color = colorUse)
+                        ax[0,0].set_xlabel('PC1')
+                        ax[0,0].set_ylabel('PC2')
 
-                        ax02.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 2], '.', color = colorUse)
-                        ax02.set_xlabel('PC1')
-                        ax02.set_ylabel('PC3')
+                        ax[0,1].plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 2], '.', color = colorUse)
+                        ax[0,1].set_xlabel('PC1')
+                        ax[0,1].set_ylabel('PC3')
 
-                        ax12.plot(xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '.', color = colorUse)
-                        ax12.set_xlabel('PC2')
-                        ax12.set_ylabel('PC3')
+                        ax[1,0].plot(xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '.', color = colorUse)
+                        ax[1,0].set_xlabel('PC2')
+                        ax[1,0].set_ylabel('PC3')
 
-                        ax3D.plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '.', color = colorUse)
-                        ax3D.set_xlabel('PC1')
-                        ax3D.set_ylabel('PC2')
-                        ax3D.set_zlabel('PC3')
+                        ax[1,1].plot(xDimRed[trlsUse, 0],xDimRed[trlsUse, 1],xDimRed[trlsUse, 2], '.', color = colorUse)
+                        ax[1,1].set_xlabel('PC1')
+                        ax[1,1].set_ylabel('PC2')
+                        ax[1,1].set_zlabel('PC3')
         
+        plt.tight_layout()
         return pcaModel
     
     def lda(self, labels, n_components = None, baselineSubtract = False, plot = False):
