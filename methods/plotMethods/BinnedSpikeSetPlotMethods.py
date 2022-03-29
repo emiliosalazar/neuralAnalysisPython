@@ -1,11 +1,16 @@
 """
 Here I will have methods for plotting binned spike sets, so they can be separate from codey-code
 """
-from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as genBSLLabGrp
 from matplotlib import pyplot as plt
 import numpy as np
+from pathlib import Path
 
-def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None):
+from setup.DataJointSetup import DatasetInfo, GpfaAnalysisInfo, GpfaAnalysisParams, FilterSpikeSetParams
+from methods.GpfaMethods import crunchGpfaResults
+from methods.plotMethods.GpfaPlotMethods import visualizeGpfaResults, plotDimensionsOverTrials
+
+def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, stateName = 'Delay', chPlot = None):
+    from methods.BinnedSpikeSetListMethods import generateLabelGroupStatistics as genBSLLabGrp
     plotSegments = plotTypeInfo['plotSegments'] if 'plotSegments' in plotTypeInfo else True
     binsAroundAlign = plotTypeInfo['ptsAroundAlBin'] if 'ptsAroundAlBin' in plotTypeInfo else 4
     plotMethod = plotTypeInfo['plotMethod'] if 'plotMethod' in plotTypeInfo else 'plot'
@@ -17,7 +22,7 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
         numAlignmentBins = bnSp.alignmentBins[0].shape[0]
         numCols = 3
         numRows = 3
-        stateName = 'Delay'
+        
         if plotSegments:
             groupedSpikes = []
             grpSpkTrlAvgSem = []
@@ -45,10 +50,10 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                     # NOTE: the trl:trl+1 prevents squashing the first
                     # dimension with timeAverage()...
                     if seg == 0:
-                        bnSpSegB4Avg = np.stack([bnSp[trl:trl+1,:,:aB].timeAverage() for trl, aB in enumerate(alBins)])
+                        bnSpSegB4Avg = np.vstack([bnSp[trl:trl+1,:,:aB].timeAverage() for trl, aB in enumerate(alBins)])
                     else:
                         alBinsB4 = bnSp.alignmentBins[:, seg-1].astype(int)
-                        bnSpSegB4Avg = np.stack([bnSp[trl:trl+1,:,aBb4:aB].timeAverage() for trl, (aBb4, aB) in enumerate(zip(alBinsB4, alBins))])
+                        bnSpSegB4Avg = np.vstack([bnSp[trl:trl+1,:,aBb4:aB].timeAverage() for trl, (aBb4, aB) in enumerate(zip(alBinsB4, alBins))])
 
                 else:
                     alBins = np.unique(bnSp.alignmentBins, axis=0)[0].astype(int)
@@ -80,7 +85,7 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
             if bnSp.dtype=="object":
                 # NOTE: the trl:trl+1 prevents squashing the first
                 # dimension...
-                bnSpSegAftAvg = np.stack([bnSp[trl:trl+1,:,aB:].timeAverage() for trl, aB in enumerate(alBins)])
+                bnSpSegAftAvg = np.vstack([bnSp[trl:trl+1,:,aB:].timeAverage() for trl, aB in enumerate(alBins)])
             else:
                 bnSpSegAftAvg = bnSp[:,:,int(alB):].timeAverage()
             grpSpkTrlAvgSemAll, _, _ = genBSLLabGrp([bnSpSegAftAvg], labelUse='stimulusMainLabel')
@@ -91,6 +96,20 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
             numAlignmentBins = 1
             zeroBins = bnSp.alignmentBins[0].astype(int)
             grpSpkTrlAvgSem, groupedSpikes, grpLabels = genBSLLabGrp([bnSp], labelUse='stimulusMainLabel')
+            chanTmAvgs = []
+            if len(grpSpkTrlAvgSem[0]):
+                chanTmAvgs.append(grpSpkTrlAvgSem[0][0][:,:,:zeroBins[0]].timeAverage())
+                chanTmAvgs.append(grpSpkTrlAvgSem[0][0][:,:,zeroBins[0]:].timeAverage())
+            else:
+                chanTmAvgs.append(np.array([]))
+
+
+        # we'll have this be based on the entire period... at least
+        # for now; also we time average before splitting into
+        # different groups to allow for binned spikes with
+        # different length trials to be used...
+        grpSpkTrlAvgSemAll, _, _ = genBSLLabGrp([bnSp.timeAverage()], labelUse='stimulusMainLabel')
+        chanTmAvgAll = grpSpkTrlAvgSemAll[0][0]
 
         grpLabels = grpLabels[0]
         if chPlot is not None:
@@ -98,42 +117,110 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
         else:
             chans = np.arange(bnSp.shape[1])
         binSizeMs = bnSp.binSize
+
+        grpLabels = grpLabels.astype('float64')
+        if grpLabels.astype('float64').max()>2*np.pi:
+            sbpltAngs = np.arange(135, -225, -45)
+            modulusFullRot = 360
+            grpLblPlotFactor = np.pi/180
+        else:
+            sbpltAngs = np.arange(3*np.pi/4, -5*np.pi/4, -np.pi/4)
+            modulusFullRot = 2*np.pi
+            grpLblPlotFactor = 1
+
+        figTuneRaw = plt.figure()
+        figTuneRaw.tight_layout()
+        figTuneRaw.suptitle(dsName)
+        tuningCurveParams = bnSp.computeCosTuningCurves()
+        tuningCurves = tuningCurveParams['tuningCurves'].T
+        tuningCurveAngs = tuningCurveParams['tuningCurveAngs']
+        axTun = []
+        pltNum=0
+        totPltRow = 2
+        pltNum+=1
+        axTun.append(plt.subplot(totPltRow, 1, pltNum))
+        axTun[-1].set_ylabel('FR (Hz)')
+        axTun[-1].set_xlim([0, 2*np.pi])
+        axTun[-1].set_xticklabels('')
+        axTun[-1].xaxis.set_visible(False)
+        axTun[-1].spines['bottom'].set_visible(False)
+        axTun[-1].spines['top'].set_visible(False)
+        axTun[-1].spines['right'].set_visible(False)
+        pltAngsUnsort = ((sbpltAngs+180)*np.pi/180) % (2*np.pi)
+        srtInds = np.argsort(pltAngsUnsort)
+        pltAngs = pltAngsUnsort[srtInds][::-1]
+        pltAngs = np.hstack([2*np.pi, pltAngs])
+        chanTmAvgPlt = chanTmAvgAll[np.hstack([srtInds[-1],srtInds])]
+        axTun[-1].plot(pltAngs, chanTmAvgPlt)
+        axTun[-1].set_title('raw data')
+        pltNum+=1
+        axTun.append(plt.subplot(totPltRow, 1, pltNum))
+        axTun[-1].set_ylabel('FR (Hz)')
+        axTun[-1].set_xlim([0, 2*np.pi])
+        axTun[-1].set_xticklabels('')
+        axTun[-1].xaxis.set_visible(False)
+        axTun[-1].spines['bottom'].set_visible(False)
+        axTun[-1].spines['top'].set_visible(False)
+        axTun[-1].spines['right'].set_visible(False)
+        axTun[-1].plot(tuningCurveAngs, tuningCurves)
+        axTun[-1].set_title('raw tuning curves')
+        figTuneRaw.tight_layout()
+
+        figTuneNorm = plt.figure()
+        figTuneNorm.tight_layout()
+        figTuneNorm.suptitle(dsName)
+        pltNum = 0
+        axTun = []
+        totPltRow = 2
+        pltNum+=1
+        axTun.append(plt.subplot(totPltRow, 1, pltNum))
+        axTun[-1].set_ylabel('$\Delta$FR from baseline (Hz)')
+        axTun[-1].set_xlim([0, 2*np.pi])
+        axTun[-1].set_xticklabels('')
+        axTun[-1].xaxis.set_visible(False)
+        axTun[-1].spines['bottom'].set_visible(False)
+        axTun[-1].spines['top'].set_visible(False)
+        axTun[-1].spines['right'].set_visible(False)
+        tuningCurveBaselines = tuningCurveParams['bslnPerChan']
+        axTun[-1].plot(tuningCurveAngs, tuningCurves-tuningCurveBaselines)
+        axTun[-1].set_title('tuning curves, baseline subtracted')
+        pltNum+=1
+        axTun.append(plt.subplot(totPltRow, 1, pltNum))
+        tuningCurveModulations = tuningCurveParams['modPerChan']
+        axTun[-1].plot(tuningCurveAngs, (tuningCurves-tuningCurveBaselines)/tuningCurveModulations)
+        axTun[-1].set_title('tuning curves, normalized modulation')
+        axTun[-1].set_xlabel('angle (degrees)')
+        axTun[-1].set_xlim([0, 2*np.pi])
+        axTun[-1].set_xticks(np.linspace(0, 2*np.pi, 9))
+        axTun[-1].set_xticklabels(np.linspace(0, 360, 9, dtype=int))
+        axTun[-1].spines['top'].set_visible(False)
+        axTun[-1].spines['right'].set_visible(False)
+        figTuneNorm.tight_layout()
+
+        # Add nan to represent center for tuning polar curve...
+        sbpltAngs = np.concatenate((sbpltAngs[0:3], sbpltAngs[[-1]], np.expand_dims(np.asarray(np.nan),axis=0), sbpltAngs[[3]], np.flip(sbpltAngs[4:-1])), axis=0)
+
+
         for chan in chans:
             # Prep figure
             plt.figure()
             plt.suptitle(dsName + ': channel ' + str(chan))
             axMn = None
-            grpLabels = grpLabels.astype('float64')
-            if grpLabels.astype('float64').max()>2*np.pi:
-                sbpltAngs = np.arange(135, -225, -45)
-                modulusFullRot = 360
-                grpLblPlotFactor = np.pi/180
-            else:
-                sbpltAngs = np.arange(3*np.pi/4, -5*np.pi/4, -np.pi/4)
-                modulusFullRot = 2*np.pi
-                grpLblPlotFactor = 1
-            # Add nan to represent center for tuning polar curve...
-            sbpltAngs = np.concatenate((sbpltAngs[0:3], sbpltAngs[[-1]], np.expand_dims(np.asarray(np.nan),axis=0), sbpltAngs[[3]], np.flip(sbpltAngs[4:-1])), axis=0)
             axVals = np.empty((0,4))
             axes = []
 
-            # we'll have this be based on the entire period... at least
-            # for now; also we time average before splitting into
-            # different groups to allow for binned spikes with
-            # different length trials to be used...
-            grpSpkTrlAvgSemAll, _, _ = genBSLLabGrp([bnSp.timeAverage()], labelUse='stimulusMainLabel')
-            chanTmAvg = grpSpkTrlAvgSemAll[0][0][:,[chan]]
             for alB in range(numAlignmentBins):
                 # Prep parameters to plot
                 grpSpkTrlAvgSemHere = grpSpkTrlAvgSem[alB]
-                chanRespMean = np.squeeze(grpSpkTrlAvgSemHere[0][:,[chan]])
-                chanRespSem = np.squeeze(grpSpkTrlAvgSemHere[1][:,[chan]])
+                if plotMethod == 'plot':
+                    chanRespMean = np.squeeze(grpSpkTrlAvgSemHere[0][:,[chan]])
+                    chanRespSem = np.squeeze(grpSpkTrlAvgSemHere[1][:,[chan]])
 
-                if chanRespMean.ndim == 1: 
-                    # the squeeze can get rid of the condition dimension if
-                    # there was only one condition...
-                    chanRespMean = chanRespMean[None, :]
-                    chanRespSem = chanRespSem[None, :]
+                    if chanRespMean.ndim == 1: 
+                        # the squeeze can get rid of the condition dimension if
+                        # there was only one condition...
+                        chanRespMean = chanRespMean[None, :]
+                        chanRespSem = chanRespSem[None, :]
 
 
                 colSt = bnSp.colorset[alB, :]
@@ -153,13 +240,13 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                     numColsAll = numCols*numAlignmentBins if plotSegments else 3
                     axes.append(plt.subplot(numRows, numColsAll, subplotChoose+1))
                     
-                    numTp = chanRespMean.shape[1]
-#                        tmValStart = np.arange(timeBeforeAndAfterStart[0]+binSizeMs/2, timeBeforeAndAfterStart[1]+binSizeMs/2, binSizeMs)
-                    binAll = np.arange(numTp)
-                    zeroBin = zeroBins[alB]
-                    tmVals = (binAll - zeroBin)*binSizeMs
 
+                    zeroBin = zeroBins[alB]
                     if plotMethod == 'plot':
+                        numTp = chanRespMean.shape[1]
+    #                        tmValStart = np.arange(timeBeforeAndAfterStart[0]+binSizeMs/2, timeBeforeAndAfterStart[1]+binSizeMs/2, binSizeMs)
+                        binAll = np.arange(numTp)
+                        tmVals = (binAll - zeroBin)*binSizeMs
                         # plot pre-alignment bin
                         plt.plot(tmVals[:zeroBin+1], chanRespMean[idx, :zeroBin+1], color=colSt)
                         plt.fill_between(tmVals[:zeroBin+1], chanRespMean[idx, :zeroBin+1]-chanRespSem[idx,:zeroBin+1], chanRespMean[idx, :zeroBin+1]+chanRespSem[idx,:zeroBin+1], alpha=0.2, color=colSt)
@@ -168,13 +255,24 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                         plt.plot(tmVals[zeroBin:], chanRespMean[idx, zeroBin:], color=colEnd)
                         plt.fill_between(tmVals[zeroBin:], chanRespMean[idx, zeroBin:]-chanRespSem[idx,zeroBin:], chanRespMean[idx, zeroBin:]+chanRespSem[idx,zeroBin:], alpha=0.2, color=colEnd)
                     elif plotMethod == 'eventplot':
+                        allAlBins = chanSpkBinsByTrial.alignmentBins
                         # plot pre-alignment bin
-                        chPltEvts = [np.where(ch)[0]-zeroBin for ch in chanSpkBinsByTrial[:, :zeroBin+1]]
+                        chPltEvts = [np.where(ch==1)[0]-zeroBin for ch in chanSpkBinsByTrial[:, :zeroBin+1]]
                         plt.eventplot(chPltEvts, color=colSt)
 
                         # plot post-alignment bin
-                        chPltEvts = [np.where(ch)[0] for ch in chanSpkBinsByTrial[:, zeroBin:]]
-                        plt.eventplot(chPltEvts, color=colEnd)
+                        if numAlignmentBins == 1 and allAlBins.shape[1] > 1:
+                            for colNm, (alBinNumFirst, alBinNumNext) in enumerate(zip(allAlBins[:,:-1].T, allAlBins[:,1:].T)):
+                                colCurr = bnSp.colorset[colNm+1, :]
+                                chPltEvts = [np.where(ch[int(alFst):int(alNxt)+1]==1)[0]+int(alFst)-zeroBin for ch, alFst, alNxt in zip(chanSpkBinsByTrial[:, :], alBinNumFirst, alBinNumNext)]
+                                plt.eventplot(chPltEvts, color=colCurr)
+                            colCurr = bnSp.colorset[colNm+2, :]
+                            chPltEvts = [np.where(ch[int(alNxt):]==1)[0] + int(alNxt) - zeroBin for ch, alNxt in zip(chanSpkBinsByTrial[:, :], alBinNumNext)]
+                            plt.eventplot(chPltEvts, color=colCurr)
+                        else:
+                            chPltEvts = [np.where(ch==1)[0] for ch in chanSpkBinsByTrial[:, zeroBin:]]
+                            plt.eventplot(chPltEvts, color=colEnd)
+
 
                     axVals = np.append(axVals, np.array(plt.axis())[None, :], axis=0)
 
@@ -201,16 +299,19 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                         ax.spines['bottom'].set_visible(False)
 
                 # plot the average before the bin
-                plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
-                ptch = plt.fill(grpLabels*grpLblPlotFactor, chanTmAvgs[alB][:,[chan]])
-                ptch[0].set_fill(False)
-                ptch[0].set_edgecolor(colSt)
+                if axMn is None:
+                    axMn = plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
+                if chanTmAvgs[alB].size>1:
+                    ptch = axMn.fill(grpLabels*grpLblPlotFactor, chanTmAvgs[alB][:,[chan]])
+                    ptch[0].set_fill(False)
+                    ptch[0].set_edgecolor(colSt)
 
             # plot the average after the last bin
-            plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
-            ptch = plt.fill(grpLabels*grpLblPlotFactor, chanTmAvgs[alB+1][:,[chan]])
-            ptch[0].set_fill(False)
-            ptch[0].set_edgecolor(colEnd)
+            # plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
+            if chanTmAvgs[alB+1].size>1:
+                ptch = axMn.fill(grpLabels*grpLblPlotFactor, chanTmAvgs[alB+1][:,[chan]])
+                ptch[0].set_fill(False)
+                ptch[0].set_edgecolor(colEnd)
 
             ymin = np.min(np.append(0, np.min(axVals, axis=0)[2]))
             ymax = np.max(axVals, axis=0)[3]
@@ -222,10 +323,12 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
                 plt.axvline(x=0, linestyle='--')
 
             # plot the overall average
-            plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
-            ptch = plt.fill(grpLabels*grpLblPlotFactor, chanTmAvg)
-            ptch[0].set_fill(False)
-            ptch[0].set_edgecolor('k')
+            # plt.subplot(numRows, numCols, np.where(np.isnan(sbpltAngs))[0][0]+1, projection='polar')
+            if chanTmAvgAll.size>1:
+                ptch = axMn.fill(grpLabels*grpLblPlotFactor, chanTmAvgAll[:,[chan]])
+                ptch[0].set_fill(False)
+                ptch[0].set_edgecolor('k')
+
 
 # def plotGpfaResults(bssExp, gpfaRes, useFa, crossvalidateNumFolds = 4, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None):
 def plotGpfaResults(gpfaResAll, descriptionsAll, brainAreas, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, bssExp = None):
