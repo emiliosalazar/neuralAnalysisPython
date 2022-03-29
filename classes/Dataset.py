@@ -375,6 +375,86 @@ class Dataset():
 
             breakpoint()
             self.kinematics = kinematicsCont
+        # NOTE HERE WE ARE
+        elif preprocessor == "EmilioJoystickHE":
+            from methods.GeneralMethods import loadDefaultParams
+            from methods.MatFileMethods import LoadMatFile
+            params = loadDefaultParams()
+            trlCodes = LoadMatFile(params['smithLabTrialCodes'])
+
+            # cursor movements will be between 9000 and 11000
+            datName = list(annots.keys())[0]
+            cursorPosXandY = [evt[(evt[:,1]>9000) & (evt[:,1]<11000),1:].astype(float)-[10000, 0] for evt in annots[datName]['event'][0]]
+
+            # set the states presented
+            sToMsConv = 1000;
+            recHz = 30000 # recording frequency in Matt's rig
+
+            # here we compute the time when the reaction happens and then mark it as a state that can be processed
+            cursorRtCode = trlCodes['codesArray'].squeeze().shape[0]+1
+            cursorRtState = np.array(['CURSOR_REACT'])
+            trlCodes['codesArray'] = np.append(trlCodes['codesArray'], cursorRtState[:,None], axis=1)
+            trlCodes['codesArray'][0,-1] = cursorRtState
+            posAndTime = [np.vstack((cPXY[0:-1:2, 0], cPXY[1::2, 0], cPXY[0:-1:2, 1]/recHz)).T for cPXY in cursorPosXandY]
+            distFromCentAndTotMoveAndTime = [np.vstack([np.sqrt(np.sum(pt[:, :2]**2, axis=1)),np.sqrt(np.sum((pt[:, :2] - pt[0,:2])**2, axis=1)), pt[:, -1]] ).T if pt.size else np.array([]) for pt in posAndTime]
+            timeAndPosDiff = [np.hstack([np.diff(pt,axis=0), pt[:-1, [-1]]] ) for pt in posAndTime]
+            # speed below is in pixels/ms
+            speedAndTimeInMv = [np.vstack([np.sqrt(np.sum(pD[:,:2]**2, axis=1))/pD[:, -2], pD[:,-1]-pD[0,-1] if pD.size else np.array([])]).T for pD in timeAndPosDiff]
+            joystickHoldRtWindow = [cds['block']['joystickHoldTolerance'][0,0] for cds in  annots[datName]['params'].squeeze()]
+            speedThresh = .5 # pixels/ms--process of staring at data
+            binsWithMovement = [((sAT[:,0]>speedThresh) | (np.sqrt(np.sum(crsPosAndT[:-1, :2]**2, axis=1)) > jHT)) if sAT.size>0 else None for crsPosAndT, sAT, jHT in zip(posAndTime, speedAndTimeInMv, joystickHoldRtWindow)]
+            stOfMove = [crsPosAndT[(binsWithMvmt).nonzero()[0][0], 2] if np.any(binsWithMvmt) else None for crsPosAndT, binsWithMvmt in zip(posAndTime, binsWithMovement)]
+            statesPresentedNoMoveStart = [cds[:,1:].T for cds in annots[datName]['trialcodes'][0]]
+            statesPresentedWithMove = [np.insert(cds, (cds[1,:]>tm).nonzero()[0][0], [cursorRtCode,tm], 1) if tm is not None else cds for cds, tm in zip(statesPresentedNoMoveStart, stOfMove)]
+            statesPresentedWithMoveMs = [cds*np.array([1,sToMsConv])[:,None] for cds in statesPresentedWithMove]
+            trlStMs = [cds[1,0] for cds in statesPresentedWithMoveMs]
+            statesPresentedWithMsTmInTrial = [(cds - np.array([0,cds[1,0]])[:,None]) for cds in statesPresentedWithMoveMs]
+
+            self.statesPresented = statesPresentedWithMsTmInTrial
+
+            # set spike timestamps
+            numChans = annots[datName]['channels'][0,0].shape[0]
+            weirdIntermediate = np.stack([[ (np.hstack((firstSpk.squeeze(), spkTimeDiffs[:,0])).cumsum()[np.all(spikeInfos == chan, axis=1)][:, None]/recHz*sToMsConv - trlSt).astype('uint32') for chan in allChans] for allChans, firstSpk, spkTimeDiffs, spikeInfos, trlSt in zip(annots[datName]['channels'][0], annots[datName]['firstspike'][0], annots[datName]['spiketimesdiff'][0], annots[datName]['spikeinfo'][0], trlStMs)])
+
+            with np.nditer(weirdIntermediate, ['refs_ok'], ['readwrite']) as iterRef:
+                for valIn in iterRef:
+                    valIn[()] = valIn[()].T
+                    
+            self.spikeDatTimestamps = weirdIntermediate
+            self.isi = np.empty(self.spikeDatTimestamps.shape, dtype=object) # initialize to right size
+            
+            with np.nditer([self.isi, self.spikeDatTimestamps], ['refs_ok'], [['writeonly'], ['readonly']]) as iterRef:
+                for valOut, valIn in iterRef:
+                    if valIn[()].size != 0:
+                        valOut[()] = 1/np.diff(valIn[()])
+            
+            
+            self.spikeDatSort = np.stack([ch[:,1] for ch in annots[datName]['channels'][0]])
+            
+            self.trialStatuses = np.stack([np.any(res==150) for res in annots[datName]['result'][0]]).astype('int8')
+            
+            self.spikeDatChannels = np.stack(annots[datName]['channels'].squeeze())[:,:,0]
+            
+            self.stateNames = trlCodes['codesArray']
+
+            kinematicsTemp = [np.vstack((cPXY[0:-1:2, 0], cPXY[1::2, 0], cPXY[0:-1:2, 1]/recHz*sToMsConv-trlSt)).T for cPXY, trlSt in zip(cursorPosXandY, trlStMs)]
+            kinematicsCont = np.empty((len(kinematicsTemp),), dtype='object')
+            for ind,kin in enumerate(kinematicsTemp):
+                kinematicsCont[ind] = kin
+
+            mrkAng = []
+            for cds in annots[datName]['event'].squeeze():
+                cdsTrl = cds[:, 1]
+                asciiCodeTrlDat = (cdsTrl[(cdsTrl>=256) & (cdsTrl < 512)] - 256).astype('int')
+                strCharArray = np.array([chr(x) for x in range(256)])[asciiCodeTrlDat]
+                strChar = "".join(strCharArray)
+                targAngSt = strChar.find('targetAngle=') + len('targetAngle=')
+                lenOfAng = strChar[targAngSt:].find(';')
+                targAng = int(strChar[targAngSt:targAngSt+lenOfAng])
+                mrkAng.append(targAng)
+
+            self.markerTargAngles = np.array(mrkAng)[:,None]
+            self.kinematics = kinematicsCont
 
             
         allComboTimestamps = np.concatenate(self.spikeDatTimestamps.flatten(), axis=1)
