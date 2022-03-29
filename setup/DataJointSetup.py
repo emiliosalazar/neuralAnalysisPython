@@ -1572,74 +1572,34 @@ class GpfaAnalysisInfo(dj.Manual):
                     # for the moment we're only running if it hasn't been done at 2000 yet
                     unconvergedGpfa.computeGpfaResults(gap[unconvergedGpfa],bsi[unconvergedGpfa], expMaxIterationMaxNum = expMaxIterationMaxNum, tolerance = tolerance, tolType = tolType, forceNewGpfaRun=True, **gpfaRunArgsMap)
 
-            if True:#not useFa:
-                print('Loading %s' % fullPath)
-                try:
-                    with np.load(fullPath, allow_pickle=True) as gpfaRes:
-                        gpfaResLoaded = dict(
-                            zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
-                        )
-                except FileNotFoundError:
-                    if useFa:
-                        breakpoint()
-                    print('GPFA saved file not found even though it was in the database, recomputing extraction')
-                    unsavedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
-
-                    condNums = unsavedGpfa['condition_nums'][0]
-                    combConds = gap[gpfaParams]['combine_conditions']
-                    gpfaRunArgsMap = dict(
-                        labelUse = unsavedGpfa['label_use'][0],
-                        # the way I set it up, setting conditionNumbersGpfa to
-                        # None needs to happen if combConds is all
-                        conditionNumbersGpfa = condNums if combConds != 'all' else None,
-                        perCondGroupFiringRateThresh = unsavedGpfa['condition_grp_fr_thresh'][0]
+            print('Loading %s' % fullPath)
+            try:
+                with np.load(fullPath, allow_pickle=True) as gpfaRes:
+                    gpfaResLoaded = dict(
+                        zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
                     )
-                    
-                    unsavedGpfa.computeGpfaResults(gap[unsavedGpfa],bsi[unsavedGpfa], **gpfaRunArgsMap)
+            except FileNotFoundError:
+                if useFa:
+                    breakpoint()
+                print('GPFA saved file not found even though it was in the database, recomputing extraction')
+                unsavedGpfa = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
 
-                    with np.load(fullPath, allow_pickle=True) as gpfaRes:
-                        gpfaResLoaded = dict(
-                            zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
-                        )
-            else:
-                # NOTE this means that this FA test can only be run IF GPFA HAS ALREADY BEEN COMPUTED
-                print('Loading FA for %s' % fullPath)
-                flName = fullPath.name
-                flName = flName[2:] # erm... tacky but it changes gpfa to fa >.>
-                fullPath = fullPath.parent / flName
-                try:
-#                    raise(FileNotFoundError)
-                    with np.load(fullPath, allow_pickle=True) as faRes:
-                        gpfaResLoaded = dict(
-                            zip((k for k in faRes), (faRes[k] for k in faRes))
-                        )
-                except FileNotFoundError:
-                    gpfaParams = self[{k:v for k,v in info.items() if k in ['gpfa_rel_path_from_bss', 'bss_relative_path']}]
+                condNums = unsavedGpfa['condition_nums'][0]
+                combConds = gap[gpfaParams]['combine_conditions']
+                gpfaRunArgsMap = dict(
+                    labelUse = unsavedGpfa['label_use'][0],
+                    # the way I set it up, setting conditionNumbersGpfa to
+                    # None needs to happen if combConds is all
+                    conditionNumbersGpfa = condNums if combConds != 'all' else None,
+                    perCondGroupFiringRateThresh = unsavedGpfa['condition_grp_fr_thresh'][0]
+                )
+                
+                unsavedGpfa.computeGpfaResults(gap[unsavedGpfa],bsi[unsavedGpfa], **gpfaRunArgsMap)
 
-                    labelUse = gpfaParams['label_use'][0]
-                    condNums = gpfaParams['condition_nums'][0]
-                    combConds = gap[gpfaParams]['combine_conditions']
-                    gpfaRunArgsMap = dict(
-                        labelUse = labelUse,
-                        # the way I set it up, setting conditionNumbersGpfa to
-                        # None needs to happen if combConds is all
-                        conditionNumbersGpfa = condNums if combConds != 'all' else None,
-                        perCondGroupFiringRateThresh = gpfaParams['condition_grp_fr_thresh'][0]
+                with np.load(fullPath, allow_pickle=True) as gpfaRes:
+                    gpfaResLoaded = dict(
+                        zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
                     )
-                    
-                    # I'm putting this output in the format that saved GPFA files
-                    # will have--i.e. a dictionary of variables... of these
-                    # specific variables
-                    faResLoadedInit = gpfaParams.computeGpfaResults(gap[gpfaParams],bsi[gpfaParams], **gpfaRunArgsMap, useFa=True)
-
-                    if len(faResLoadedInit[0]['faRes'][0]) > 0:
-                        with np.load(fullPath, allow_pickle=True) as faRes:
-                            gpfaResLoaded = dict(
-                                zip((k for k in faRes), (faRes[k] for k in faRes))
-                            )
-                    else:
-                        gpfaResLoaded = []
-
 
             gpfaResults[relPathAndCond].update({dimensionality : gpfaResLoaded})
 
