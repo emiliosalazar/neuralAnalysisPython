@@ -814,14 +814,15 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
     mnCorrPerCond = []
     stdCorrPerCond = []
     for rsCorr in residCorrPerCondAll:
-        mnCorrPerCond.append([residCorr.mean(axis=(0,1)) for residCorr in rsCorr])
-        stdCorrPerCond.append([residCorr.std(axis=(0,1)) for residCorr in rsCorr])
+        mnCorrPerCond.append([residCorr[np.triu_indices(residCorr.shape[0], 1)].mean(axis=0) for residCorr in rsCorr])
+        stdCorrPerCond.append([residCorr[np.triu_indices(residCorr.shape[0], 1)].std(axis=0) for residCorr in rsCorr])
     
     mnCorrPerCondOBPT = []
     stdCorrPerCondOBPT = []
+    breakpoint()
     for rsCorr in residCorrPerCondOBPTAll:
-        mnCorrPerCondOBPT.append([residCorr.mean(axis=(0,1)) for residCorr in rsCorr])
-        stdCorrPerCondOBPT.append([residCorr.std(axis=(0,1)) for residCorr in rsCorr])
+        mnCorrPerCondOBPT.append([residCorr[np.triu_indices(residCorr.shape[0], 1)].mean(axis=0) for residCorr in rsCorr])
+        stdCorrPerCondOBPT.append([residCorr[np.triu_indices(residCorr.shape[0], 1)].std(axis=0) for residCorr in rsCorr])
     
     fRChMnByArea = []
     fRChStdMnByArea = []
