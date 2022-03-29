@@ -818,6 +818,21 @@ class Dataset():
         
         return groupedSpikes
     
+    # NOTE: this is a rough metric of trial start time that assumes no
+    # intertrial interval... could definitely be improved, and might actually
+    # require resaving all these Dataset instances with this as a property so it
+    # can be correctly grabbed from raw data
+    def trialStartTimeInSession(self, units='ms'):
+        # this will output in ms because the maxTimestamps are saved in ms
+        startTimeOfTrialsMs = np.cumsum(self.maxTimestamp)
+
+        if units == 's':
+            startTimeOfTrials = startTimeOfTrialsMs/1000
+        else:
+            startTimeOfTrials = startTimeOfTrialsMs
+
+        return startTimeOfTrials
+    
     def timeOfState(self, state, forRepeats = 'grabLongest', ignoreStates = []):
         stNm = self.stateNames
         if len(stNm)==1: # otherwise there's already a unique name per trial
