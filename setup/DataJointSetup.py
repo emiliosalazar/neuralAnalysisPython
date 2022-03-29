@@ -1695,7 +1695,7 @@ class GpfaAnalysisInfo(dj.Manual):
             bss = binnedSpikeSet[0]
             bss = bss.convertUnitsTo(units)
 
-            groupedBalancedSpikes, condDescriptors, condsUse = bss.prepareGpfaOrFa(**gpfaPrepParamsForCall)
+            groupedBalancedSpikes, condDescriptors, condsUse, *_ = bss.prepareGpfaOrFa(**gpfaPrepParamsForCall)
             if useFa:
                 retVals = bss.fa(groupedBalancedSpikes, fullPathToConditions, condDescriptors, **gpfaCallParams)
                 # retVals = {}
