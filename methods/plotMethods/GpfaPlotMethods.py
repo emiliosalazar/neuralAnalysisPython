@@ -14,25 +14,20 @@ from matplotlib.axis import Axis as AxisObj
 def plotDimensionsAgainstEachOther(axUse, dimensionVals, tmVals, tpIndUse, lblStTraj, lblEndTraj, lblsAlign, colorset, idx, axTtl, axLabel, colorAlignPts):
     
     valsPlot = dimensionVals[:, tpIndUse[0]:tpIndUse[1]]
-    axUse.plot(*valsPlot, color = colorset[idx,:], linewidth = 0.4)
+    axUse.plot(*valsPlot, color = colorset[idx,:], linewidth = 0.4, marker='.' if valsPlot.shape[1] == 1 else None)
     
     # axUse.plot(sq['xorth'][0,:tmValsStart.shape[0]], sq['xorth'][1,:tmValsStart.shape[0]], sq['xorth'][2,:tmValsStart.shape[0]],
                # color=colorset[idx,:], linewidth=0.4)
                
-               
-    valsPlot = dimensionVals[:, tpIndUse[0], None]
-    axUse.plot(*valsPlot, 'o', color = colorset[idx,:], linewidth=0.4, label=lblStTraj, markeredgecolor='black')
-                         
-    # axUse.plot([sq['xorth'][0,0]], [sq['xorth'][1,0]], [sq['xorth'][2,0]], 'o',
-    #        color=colorset[idx,:], linewidth=0.4, label=lblStartTraj, markeredgecolor='black')
-    
-    valsPlot = dimensionVals[:, tpIndUse[1]-1, None]
-    axUse.plot(*valsPlot, '>', color = colorset[idx,:], linewidth=0.4, label=lblEndTraj, markeredgecolor='black')
-    
-    # axUse.plot([sq['xorth'][0,tmValsStart.shape[0]-1]], [sq['xorth'][1,tmValsStart.shape[0]-1]], [sq['xorth'][2,tmValsStart.shape[0]-1]], '>',
-    #        color=colorset[idx,:], linewidth=0.4, label=lblEndTraj, markeredgecolor='black')
+    # no need to mark beginning and end if we don't have a trajectory...
+    if valsPlot.shape[1] > 1:
+        valsPlot = dimensionVals[:, tpIndUse[0], None]
+        axUse.plot(*valsPlot, 'o', color = colorset[idx,:], linewidth=0.4, label=lblStTraj, markeredgecolor='black')
+                            
+        valsPlot = dimensionVals[:, tpIndUse[1]-1, None]
+        axUse.plot(*valsPlot, '>', color = colorset[idx,:], linewidth=0.4, label=lblEndTraj, markeredgecolor='black')
         
-    # marking the alginment point here
+    # marking the alignment point here
     if type(tmVals) is not list:
         tmVals = [tmVals]
         lblsAlign = [lblsAlign]
@@ -59,7 +54,8 @@ def plotDimensionsAgainstEachOther(axUse, dimensionVals, tmVals, tpIndUse, lblSt
     # axUse.set_xlabel('gpfa 1')
     # axUse.set_ylabel('gpfa 2')
     # axUse.set_zlabel('gpfa 3')
-    axUse.legend()
+    if lblStTraj is not None and lblEndTraj is not None and lbAl[0] is not None and lbAl[1] is not None:
+        axUse.legend()
 
 # the biggest chunk of this function is just finding which plot to plot into...
 def plotDimensionsAgainstTime(figSep, pltNum, pltListNum, axesPlotList, axesOtherList, rowsPlt, colsPlt, tmValsPlot, dimVals, dimNum, xDimBest, colorUse, labelTraj = "trajectory", linewidth=0.4, alpha = 1, axTitle="AlPoint"):
