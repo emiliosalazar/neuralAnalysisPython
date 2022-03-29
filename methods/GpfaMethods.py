@@ -6,7 +6,7 @@ what the class can do
 from pathlib import Path
 import numpy as np
 
-def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensionality, dimensionalityExtractionParams, binSizeMs):
+def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensionality, dimensionalityExtractionParams, binSizeMs, bsiExpressions):
 
     # prep the outputs we're getting
     coefDetLowDByExParams = []
@@ -17,6 +17,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
     shCovPropNeurNormDimByExParams = []
     shCovPropByLatentByExParams = []
     shCovPropNeurGeoNormDimExParams = []
+    rscByLatentByExParams = []
     privVarSpreadExParams = []
     ffLoadingSimByExParams = []
     overallLoadingSimByExParams = []
@@ -44,6 +45,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
         shCovPropNeurNormDimBySubset = []
         shCovPropByLatentBySubset = []
         shCovPropNeurGeoNormDimBySubset = []
+        rscByLatentByExSubset = []
         privVarSpreadBySubset = []
         ffLoadingSimBySubset = []
         overallLoadingSimBySubset = []
@@ -102,6 +104,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
                 lowDSeqsNonorth = [seq['xsm'] if hasattr(seq['xsm'], 'shape') else np.array(seq['xsm'])[None,None] for seq in testSeqsOrigAndInferred]
                 lowDSeqsOrth = [seq['xorth'] if hasattr(seq['xorth'], 'shape') else np.array(seq['xorth'])[None,None] for seq in testSeqsOrigAndInferred]
 
+
                 highDReprojAll = [C@xsm for xsm in lowDSeqsNonorth]
                 stackIndTrls = np.dstack(lowDSeqsOrth)
                 meanProj = stackIndTrls.mean(axis=2)
@@ -139,12 +142,14 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
                 Corth.append(Co)
                 timescales.append(binSizeMs/np.sqrt(timescale))
 
+
             shCovPropPop = [np.trace(C @ C.T) / (np.trace(C @ C.T) + np.trace(R)) for C, R in CR] 
-            shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
+            shCovPropNeurAvg = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) if C.size>0 else np.array(0) for C, R in CR] 
             shCovPropByLatent = [np.mean(np.diag(eVal**2 * C[:,None] @ C[:,None].T) / (np.diag(Call @ np.diag(eigAll) @ np.diag(eigAll) @ Call.T) + np.diag(R))) for Call, eigAll, Rall in CERorth for C, eVal in zip(Call.T, eigAll)] 
-            shCovPropNeurStd = [np.std(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) for C, R in CR] 
-            shCovPropNeurNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))/C.shape[1] for C, R in CR] 
-            shCovPropNeurGeoNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))**(1/C.shape[1]) if C.shape[1]>0 else np.array([0]) for C, R in CR] 
+            shCovPropNeurStd = [np.std(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R))) if C.size>0 else np.array(np.nan) for C, R in CR] 
+            shCovPropNeurNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))/C.shape[1] if C.size>0 else np.array(0) for C, R in CR] 
+            shCovPropNeurGeoNormDim = [np.mean(np.diag(C @ C.T) / (np.diag(C @ C.T) + np.diag(R)))**(1/C.shape[1]) if C.shape[1]>0 else np.array(0) for C, R in CR] 
+            rscByLatent = [np.mean((C @ C.T)[np.triu_indices(C.shape[0])]) if C.shape[1]>0 else np.array(0) for C, R in CR]
             privVarSpread = [np.diag(R).max()-np.diag(R).min() for C, R in CR]
 
             
@@ -155,7 +160,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             #
             # Also remember that Python is zero-indexed for grabbing that first
             # one >.>
-            Cnorm1 = [C[:,0]/np.sqrt((C[:,0]**2).sum()) if C.shape[1]>0 else np.array([np.nan]) for C in Corth]
+            Cnorm1 = [C[:,0]/np.sqrt((C[:,0]**2).sum()) if C.shape[1]>0 else np.array(np.nan) for C in Corth]
             firstFactorLoadingSimilarity = [1-Cn1.size*Cn1.var() for Cn1 in Cnorm1]
             Cnorm = [C/np.sqrt((C**2).sum()) for C in Corth]
             overallLoadingSimilarity = [1-Cn.size*Cn.var() for Cn in Cnorm]
@@ -174,7 +179,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             # and its variance explained bretheren...
             # Don't forget the 1- ! (because I had...)
             varExpByDimHere = [1-np.sum((indivDimPrj-origSeqsTog)**2) / np.trace(origSeqsTog @ origSeqsTog.T) for indivDimPrj in highDReprojByDimTog]
-            varExpTog = [1-np.sum((highDReprojTog-origSeqsTog)**2) / np.trace(origSeqsTog @ origSeqsTog.T)]
+            varExpTog = [1-np.sum((highDReprojTog-origSeqsTog)**2) / np.trace(origSeqsTog @ origSeqsTog.T) if highDReprojTog.size>0 else np.array(0)]
 
             # note all we know is the determinant is the product of the e-vals
             # and the trace is their sum--this is a way to get at the geomean
@@ -184,7 +189,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
                 breakpoint() # determinant suggests shrinking!
             shVarGeoMnVsMn = [(np.trace(C @ C.T)/C.shape[1]) / np.exp(1/C.shape[1]*np.linalg.slogdet(C.T @ C)[1]) if C.shape[1]>0 else np.array(np.nan)  for C, R in CR]
             participationRatio = [np.trace(C @ C.T)**2 / (np.trace(C @ C.T @ C @ C.T)) for C, R in CR] 
-            participationRatioRawCov = [np.trace(C @ C.T + R)**2 / (np.trace((C @ C.T + R) @ (C @ C.T + R) )) for C, R in CR] 
+            participationRatioRawCov = [np.trace(C @ C.T + R)**2 / (np.trace((C @ C.T + R) @ (C @ C.T + R) )) if C.shape[1]>0 else np.trace(R)**2/np.trace(R @ R.T) for C, R in CR] 
 
             
             coefDetLowDBySubset.append(np.array(coefDetLowD))
@@ -195,6 +200,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
             shCovPropNeurNormDimBySubset.append(np.array(shCovPropNeurNormDim))
             shCovPropByLatentBySubset.append(np.array(shCovPropByLatent))
             shCovPropNeurGeoNormDimBySubset.append(np.array(shCovPropNeurGeoNormDim))
+            rscByLatentByExSubset.append(np.array(rscByLatent).squeeze())
             privVarSpreadBySubset.append(np.array(privVarSpread))
             ffLoadingSimBySubset.append(np.array(firstFactorLoadingSimilarity))
             overallLoadingSimBySubset.append(np.array(overallLoadingSimilarity))
@@ -216,6 +222,7 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
         shCovPropNeurNormDimByExParams.append(shCovPropNeurNormDimBySubset)
         shCovPropByLatentByExParams.append(np.concatenate(shCovPropByLatentBySubset, axis=0)) # can only be plotted vs by dim var exp and by dim load factor
         shCovPropNeurGeoNormDimExParams.append(shCovPropNeurGeoNormDimBySubset)
+        rscByLatentByExParams.append(rscByLatentByExSubset)
         privVarSpreadExParams.append(privVarSpreadBySubset)
         ffLoadingSimByExParams.append(np.array(ffLoadingSimBySubset))
         overallLoadingSimByExParams.append(np.array(overallLoadingSimBySubset))
