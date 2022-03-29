@@ -1462,7 +1462,7 @@ class BinnedSpikeSet(np.ndarray):
             binSize = self.binSize
             colorset = self.colorset
         
-        # note that overallFiringRateThresh should be a negative number if we're inputing residuals...
+        # note that overallFiringRateThresh should be a negative number if we're inputting residuals...
         _, chIndsUseFR = bnSpksCheck.channelsAboveThresholdFiringRate(firingRateThresh=overallFiringRateThresh)
         
         if balanceConds:
@@ -1496,6 +1496,7 @@ class BinnedSpikeSet(np.ndarray):
             if sqrtSpikes:
                 binnedSpikesUse = np.sqrt(binnedSpikesUse)
         
+        infoTrlChKeep = dict(trialsKeep = trlIndsUseLabel, channelsKeep = chIndsUseFR)
         uniqueTargAngle, trialsPresented = np.unique(newLabels, return_inverse=True, axis=0)
         
         if condNums is None:
@@ -1570,6 +1571,8 @@ class BinnedSpikeSet(np.ndarray):
             # that to 0. I do this since I've only witnessed it when the
             # channel has zero response. It could conceivably occur elsewhere,
             # but I'll cross that bridge when I get to it?
+            if np.any(np.isnan(grpSpksNpArr)[0]):
+                breakpoint() # NOTE I added this here because I want to know/remember what happens if the perCondFR up above removes a channel from one condition but not the other
             grpSpksNpArr[0][np.isnan(grpSpksNpArr[0])] = 0
             condDescriptors = ['s' + '-'.join(['%d' % stN for stN in condsUse]) + 'Grpd']
             # grouping all of them together
@@ -1586,7 +1589,7 @@ class BinnedSpikeSet(np.ndarray):
         # simple change of variable name
         groupedBalancedSpikes = grpSpksNpArr
             
-        return groupedBalancedSpikes, condDescriptors, condsUse
+        return groupedBalancedSpikes, condDescriptors, condsUse, infoTrlChKeep
 
     def fa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio'):
         assert isinstance(xDim, int), "Must only provide one integer xDim at a time"
