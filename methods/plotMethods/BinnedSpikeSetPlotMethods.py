@@ -226,3 +226,313 @@ def plotResponseOverTime(binnedSpikes, datasetNames, plotTypeInfo, chPlot = None
             ptch = plt.fill(grpLabels*grpLblPlotFactor, chanTmAvg)
             ptch[0].set_fill(False)
             ptch[0].set_edgecolor('k')
+
+# def plotGpfaResults(bssExp, gpfaRes, useFa, crossvalidateNumFolds = 4, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None):
+def plotGpfaResults(gpfaResAll, descriptionsAll, brainAreas, timeBeforeAndAfterStart = None, timeBeforeAndAfterEnd = None, bssExp = None):
+    dsi = DatasetInfo()
+    fsp = FilterSpikeSetParams()
+    gai = GpfaAnalysisInfo()
+    gap = GpfaAnalysisParams()
+
+    plotInfo = {}
+    # might have to go back on these lines for how to define ncols...
+    gpPathPer = [[Path(gpH[0]).parent for gpH in gp.keys()] for gp in gpfaResAll]
+    gpUnPathNum = [len(np.unique(gpP)) for gpP in gpPathPer]
+    ncols = np.max(gpUnPathNum) # len(bssExp)
+    # sorry for the hard code
+    # brainAreas = np.unique(dsi[bssExp]['brain_area'])
+    dimArBest = [[],[],[]]
+    ncols = len(brainAreas)
+    # axs = figErr.subplots(nrows=3, ncols=ncols, squeeze=False, constrained_layout=True)
+    figErr, axs = plt.subplots(nrows=3, ncols=ncols, squeeze=False, constrained_layout=True)
+    figErr.suptitle('dimensionality vs (GP)FA log likelihood/cumulative/individual variance accounted for')
+    
+    if bssExp is not None:
+        dsParents = [dsi[bE] for bE in bssExp]
+        trlUsedForGp = [bE.trialAndChannelFilterFromParent(ds)[0] for bE,ds in zip(bssExp, dsParents)]
+
+    # gpfaResAll = []
+    # gpfaInfoAll = []
+    # for subExp in bssExp:
+    #     gpfaResH, gpfaInfoH = gai[subExp][gap['num_folds_crossvalidate={}'.format(crossvalidateNumFolds)]].grabGpfaResults(returnInfo=True, useFa=useFa)
+        
+    #     gpfaResAll.append(gpfaResH)
+    #     gpfaInfoAll.append(gpfaInfoH)
+    
+    cvApproach = "logLikelihood"
+    shCovThresh = 0.95
+    lblLLErr = 'LL err over folds'
+    lblLL= 'LL mean over folds'
+    crossValsUse = [0]
+
+    for gpResInd, (gpfaResHere, descriptions) in enumerate(zip(gpfaResAll, descriptionsAll)):
+        gpfaCrunchedResults = crunchGpfaResults(gpfaResHere, cvApproach = cvApproach, shCovThresh = shCovThresh)
+        
+        dimExpAllTest = [d['xDimBestAll'] for _, d in gpfaCrunchedResults.items()]
+        normScoreAllTest = [d['normalGpfaScoreAll'] for _, d in gpfaCrunchedResults.items()]
+        gpfaOutDimAllTest = [d['dimResults'] for _, d in gpfaCrunchedResults.items()]
+        gpfaTestIndsOutAllTest = [d['testInds'] for _, d in gpfaCrunchedResults.items()]
+        gpfaBinSizeAllTest = [d['binSize'] for _, d in gpfaCrunchedResults.items()]
+        gpfaCondLabelsAllTest = [d['condLabel'] for _, d in gpfaCrunchedResults.items()]
+        gpfaAlignmentBinsAllTest = [d['alignmentBins'] for _, d in gpfaCrunchedResults.items()]
+        gpfaDimsTestedAllTest = [d['dimsTest'] for _, d in gpfaCrunchedResults.items()]
+
+        if bssExp is not None:
+            # this is going to be used to understand what trials were used/what their timing was
+            spikesForGpfa =  bssExp[gpResInd].grabBinnedSpikes()[0].convertUnitsTo('count')
+            dsParent = dsParents[gpResInd].grabDataset()
+            trlFromDs = trlUsedForGp[gpResInd]
+            spikeBinStartInTrial = bssExp[gpResInd]['start_time'][0]
+
+            spikesNorm = ((spikesForGpfa - spikesForGpfa.mean(axis=0))/spikesForGpfa.std(axis=0)).squeeze()
+
+        for idx, (description, dimsTest, testIndsCondAll, dimResult, normalGpfaScoreAll, binSize, condLabels, alignmentBins) in enumerate(zip(descriptions, gpfaDimsTestedAllTest, gpfaTestIndsOutAllTest, gpfaOutDimAllTest, normScoreAllTest, gpfaBinSizeAllTest, gpfaCondLabelsAllTest, gpfaAlignmentBinsAllTest)):
+
+            if bssExp is not None:
+                unLab = np.unique(condLabels[0], axis = 0)
+                if unLab.shape[0]>1:
+                    # NOTE: this is for when conditions are combined; think
+                    # it'll be easy to do just haven't written the code yet
+                    labelUse = 'stimulusMainLabel'
+                    trialsInBssWithLabel = np.hstack([(np.all(spikesForGpfa.labels[labelUse] == uL, axis=1)).nonzero()[0] for uL in unLab])
+                    # NOTE: you do NOT want to sort trialsInBssWithLabel. The
+                    # simplest way to give the reason is that before FA/GPFA was
+                    # run, when all the conditions were combined, the trials for
+                    # each condition were first grouped together. This means
+                    # that the trial index refers to the index of the trial not
+                    # ordered by when it was presented in the session, but
+                    # ordered first by the condition, and then *within* the
+                    # condition by when it was presented. By not sorting
+                    # trialsInBssWithLabel, I effectively replicate that
+                    # ordering here, so now testInds below is referring to the
+                    # same trials as indexed by trialsInBssWithLabel
+                    # trialsInBssWithLabel.sort()
+                    trialsForLabel = trlFromDs[trialsInBssWithLabel]
+                    trlTimes = dsParent.trialStartTimeInSession()[trialsForLabel] 
+                    strtTimesInTrial = spikeBinStartInTrial[trialsInBssWithLabel]
+                    spikeStartTimesInSession = trlTimes + strtTimesInTrial
+                else:
+                    # note that eventually I might want to be flexible in using
+                    # another label... but for the moment this is hardcoded
+                    labelUse = 'stimulusMainLabel'
+                    trialsInBssWithLabel = np.all(spikesForGpfa.labels[labelUse] == unLab, axis=1)
+                    trialsForLabel = trlFromDs[trialsInBssWithLabel]
+                    trlTimes = dsParent.trialStartTimeInSession()[trialsForLabel] 
+                    strtTimesInTrial = spikeBinStartInTrial[trialsInBssWithLabel]
+                    spikeStartTimesInSession = trlTimes + strtTimesInTrial
+
+
+            # grab first cval--they'll be the same for each cval, which is what
+            # these lists store
+            dimTest = dimsTest[0]
+            binSize = binSize[0]
+            testInds = testIndsCondAll[0]
+
+            axChs = np.array([description.find(bA)!=-1 for bA in brainAreas])
+            dimArBest[axChs.nonzero()[0][0]] += dimExpAllTest
+            axScore = axs[0][axChs][0]
+            axScore.set_title(np.array(brainAreas)[axChs][0])
+            axCumulDim = axs[1][axChs][0]
+            axByDim = axs[2][axChs][0]
+            plotInfo['axScore'] = axScore
+            plotInfo['axCumulDim'] = axCumulDim
+            plotInfo['axByDim'] = axByDim
+            # breakpoint()
+
+            if timeBeforeAndAfterStart is not None:
+                tmValsStartBest = np.arange(-timeBeforeAndAfterStart[0], timeBeforeAndAfterStart[1], binSize)
+            else:
+                tmValsStartBest = np.ndarray((0,0))
+                
+            if timeBeforeAndAfterEnd is not None:
+                tmValsEndBest = np.arange(-timeBeforeAndAfterEnd[0], timeBeforeAndAfterEnd[1], binSize)  
+            else:
+                tmValsEndBest = np.ndarray((0,0))
+
+            plotInfo['lblLL'] = lblLL
+            plotInfo['lblLLErr'] = lblLLErr
+            plotInfo['description'] = description
+            tmVals = [tmValsStartBest, tmValsEndBest]
+            condLabelsInt = [idx]
+            visualizeGpfaResults(plotInfo, dimResult,  tmVals, cvApproach, normalGpfaScoreAll, dimTest, testInds, shCovThresh, binSize, condLabelsInt, alignmentBins, crossValsUse, trlTimes=spikeStartTimesInSession, spikesUsedNorm = spikesNorm[trialsInBssWithLabel])
+    
+    for axCumul, axByDim, dmB in zip(axs[1], axs[2], dimArBest):
+        axCumul.set_xlim(1, np.max(dmB))
+        axByDim.set_xlim(1, np.max(dmB))
+        axCumul.set_ylim(0, 1.05)
+        axByDim.set_ylim(0, 1.05)
+
+def plotSlowDriftVsFaSpace(spikesUsedNorm, trlInds, trlTimes, binSize, pcSlowDrift, pcs, evalsPca, description, condLabel, dimResult):
+
+    # plot dimension over trials!
+    figOverTime = plt.figure()
+    figOverTime.suptitle(description)# + " cond " + str(condLabel) + "")
+
+    figOverTimePC = plt.figure()
+    figOverTimePC.suptitle(description)#+ " cond " + str(condLabel) + "")
+
+    pltNum = 1
+    rowsPlt = 2
+    axesOverTime = []
+    axesOverTimePC = []
+    axVals = np.empty((0,4))
+    
+    dimsComp = list(dimResult.keys())
+    if len(dimsComp) > 1:
+        breakpoint() # this only works if one dim has been computed! The best hopefully
+    else:
+        xDimScoreBest = dimsComp[0]
+    seqTestUse = dimResult[xDimScoreBest]['seqsTestNew']
+    if len(seqTestUse) > 1:
+        print('only using the first crossvalidation of the GPFA/FA result for slow drift comparison!')
+    cValUse = 0
+    seqTestUse = seqTestUse[cValUse]
+    allSeqsTog = [sq['xorth'] for sq in seqTestUse]
+    # else:
+    #     allSeqsTog = [sq['xsm'] for sq in seqTestUse]
+
+    allSeqsByDim = list(zip(*allSeqsTog))
+    colsOverTimePlt = np.ceil(len(allSeqsByDim) / rowsPlt)
+    C = dimResult[xDimScoreBest]['allEstParams'][cValUse]['C']
+    Corth, egsOrth, _ = np.linalg.svd(C)
+    Corth = Corth[:, :egsOrth.size]
+    CorthScaled = Corth @ np.diag(egsOrth)
+    R = dimResult[xDimScoreBest]['allEstParams'][cValUse]['R']
+    svPerLatent = [np.mean(np.diag(C[:,None] @ C[None,:]) / np.diag(CorthScaled @ CorthScaled.T + R)) for C in CorthScaled.T]
+
+    # calculated dshared...
+    shEigs = egsOrth**2
+    percAcc = np.cumsum(shEigs)/np.sum(shEigs)
+    shCovThresh = 0.95
+    if percAcc.size>0:
+        xDimBest = np.where(percAcc>shCovThresh)[0][0]+1
+    else:
+        xDimBest = 0
+
+    latentVarExpBySlowDrift = []
+    
+    for dimNum, dimSeqs in enumerate(allSeqsByDim):
+        trajTms = np.hstack(trlTimes[trlInds])
+        trajAll = np.hstack(dimSeqs)
+        intercept = np.ones_like(trajTms)
+        coeffs = np.vstack([trajTms,intercept]).T
+        modelParams, resid = np.linalg.lstsq(coeffs, trajAll, rcond=None)[:2]
+        slp,intcpt = modelParams
+        linearFit = slp*np.sort(trajTms) + intcpt
+        r2latent = 1-resid/(trajAll.var()*trajAll.size)
+        latentSv = svPerLatent[dimNum]
+        try:
+            trajReprojToSlowDrift = trajAll[:,None] @ Corth[:,[dimNum]].T @ pcSlowDrift
+            varInSlowDriftDim = trajReprojToSlowDrift.var(ddof=0)
+            varInShLatent = trajAll.var(ddof=0)
+            varExpBySlowDrift = varInSlowDriftDim/varInShLatent
+        except ValueError:
+            breakpoint()
+            varExpBySlowDrift = -0.01
+        plotAnnot = {
+            '%sv' : 100*latentSv,
+            'R^2' : r2latent[0],
+            '%latent var exp by slow drift pc' : 100*varExpBySlowDrift,
+        }
+        latentVarExpBySlowDrift.append(100*varExpBySlowDrift)
+        colorUse = [0.5,0.5,0.5]
+
+        dimNum = dimNum+1 # for the plot, 1 is 1-dimensional, not zero-dimensinoal
+        axUsed = plotDimensionsOverTrials(figOverTime, pltNum, axesOverTime, rowsPlt, colsOverTimePlt, dimSeqs, trlInds, trlTimes, binSize, dimNum, xDimBest, colorUse, linearFit = linearFit, plotAnnot = plotAnnot, linewidth=0.2, alpha = 0.5)
+        axVals = np.append(axVals, np.array(axUsed.axis())[None, :], axis=0)
+        pltNum += 1
+
+    axesOverTimePC = []
+
+
+    numPCUse = 4
+    colsOverTimePltPC = np.ceil(numPCUse/rowsPlt)
+    spikesProjNorm = [pcs.T @ sp[:, None]  for sp in spikesUsedNorm[trlInds]]
+    spikesProjNormByDim = list(zip(*spikesProjNorm))
+    dimsExpVar = evalsPca/evalsPca.sum()
+    totalVarTrls = np.cov(spikesUsedNorm.T, ddof=0).trace()
+    dimsExpVarTrls = np.array([np.array(spProj).var() for spProj in spikesProjNormByDim])/totalVarTrls
+
+
+    pltNum = 1
+    trajTms = np.hstack(trlTimes)
+    intercept = np.ones_like(trajTms)
+    coeffs = np.vstack([trajTms,intercept]).T
+    numOverSessPcPlot = 4
+    slowDriftVarExpTrials = 100*dimsExpVarTrls[0]
+    slowDriftVarExpRA = 100*dimsExpVar[0]
+    for dimNum, dimVals in enumerate(spikesProjNormByDim[:numOverSessPcPlot]):
+        trajAll = np.hstack(dimVals)
+        # linear fit
+        modelParams, resid = np.linalg.lstsq(coeffs, trajAll, rcond=None)[:2]
+        slp,intcpt = modelParams
+        linearFit = slp*np.sort(trajTms) + intcpt
+        # r^2 computation
+        r2latent = 1-resid/(trajAll.var()*trajAll.size)
+        # grab explained variance
+        dimExpVar = dimsExpVar[dimNum]
+        dimExpVarTrls = dimsExpVarTrls[dimNum]
+        # project to shared space to see explained variance
+        try:
+            trajInHighDim = trajAll[:,None] @ pcs[:, [dimNum]].T
+            trajInShSpace = trajInHighDim @ Corth
+            varInPC = np.var(trajAll, axis=0, ddof=0)
+            varInShSpace = np.var(trajInShSpace, axis=0, ddof=0).sum()
+            varExpByShSpace = varInShSpace/varInPC
+            if dimNum == 0:
+                slowDriftVarExpSharedSpace = 100*varExpByShSpace
+        except ValueError:
+            breakpoint()
+            varExpByShSpace = -0.01
+        plotAnnot = {
+            '%ev of rolling avg' : 100*dimExpVar,
+            '%ev of ind trials' : 100*dimExpVarTrls,
+            '%pc var exp by sh space' : 100*varExpByShSpace,
+            'R^2' : r2latent[0],
+        }
+        colorUse = [0.5,0.5,0.5]
+
+        dimNum = dimNum+1 # for the plot, 1 is 1-dimensional, not zero-dimensinoal
+        axUsed = plotDimensionsOverTrials(figOverTimePC, pltNum, axesOverTimePC, rowsPlt, colsOverTimePltPC, dimVals, trlInds, trlTimes, binSize, dimNum, xDimBest, colorUse, linearFit = linearFit, plotAnnot = plotAnnot, linewidth=0.2, alpha = 0.5)
+        axVals = np.append(axVals, np.array(axUsed.axis())[None, :], axis=0)
+        pltNum += 1
+    # figOverTimePC.tight_layout()
+
+    if axVals.size:
+        ymin = np.min(np.append(0, np.min(axVals, axis=0)[2]))
+        ymax = np.max(axVals, axis=0)[3]
+
+        for ax in axesOverTime:
+            from matplotlib import text
+            annot = [child for child in ax.get_children() if isinstance(child, text.Text) and child.get_text().find('=') != -1]
+            annot[0].set_y(ymax)
+
+            ax.set_ylim(bottom = ymin, top = ymax )
+            ax.axvline(x=0, linestyle=':', color='black')
+            ax.axhline(y=0, linestyle=':', color='black')
+#                        xl = ax.get_xlim()
+#                        yl = ax.get_ylim()
+#                        ax.axhline(y=0,xmin=xl[0],xmax=xl[1], linestyle = ':', color='black')
+#                        ax.axvline(x=0,ymin=xl[0],ymax=xl[1], linestyle = ':', color='black')
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+
+        for ax in axesOverTimePC:
+            from matplotlib import text
+            annot = [child for child in ax.get_children() if isinstance(child, text.Text) and child.get_text().find('=') != -1]
+            annot[0].set_y(ymax)
+
+            ax.set_ylim(bottom = ymin, top = ymax )
+            ax.axvline(x=0, linestyle=':', color='black')
+            ax.axhline(y=0, linestyle=':', color='black')
+#                        xl = ax.get_xlim()
+#                        yl = ax.get_ylim()
+#                        ax.axhline(y=0,xmin=xl[0],xmax=xl[1], linestyle = ':', color='black')
+#                        ax.axvline(x=0,ymin=xl[0],ymax=xl[1], linestyle = ':', color='black')
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+    
+    return latentVarExpBySlowDrift, slowDriftVarExpTrials, slowDriftVarExpRA, slowDriftVarExpSharedSpace
+
+
+
