@@ -777,14 +777,25 @@ class BinnedSpikeSetInfo(dj.Manual):
                     paramsNew = self.fetch(as_dict=True)[0]
                     paramsNew['bss_relative_path'] = str(pathRelativeToBase)
                     paramsNew['bss_hash'] = bssFilteredHash
+
+                    # take care of filtering the start and end times saved with
+                    # this BSS here
+                    if trialFilter is not None:
+                        paramsNew['start_time'] = paramsNew['start_time'][trialFilter]
+                        paramsNew['start_time_alignment'] = paramsNew['start_time_alignment'][trialFilter]
+                        paramsNew['end_time'] = paramsNew['end_time'][trialFilter]
+                        paramsNew['end_time_alignment'] = paramsNew['end_time_alignment'][trialFilter]
+                    print('inserting bsi')
                     bsi.insert1(dict(
                             **paramsNew
                     ))
                     prmPk = {k : v for k,v in paramsNew.items() if k in self.primary_key}
+                    print('inserting fsp')
                     fsp.insert1(dict(
                         **prmPk,
                         **bssFilterParams
                     ))
+                    print('inserted')
                 else:
                     fsp.insert1(dict(
                         **key,
@@ -863,6 +874,22 @@ class BinnedSpikeSetInfo(dj.Manual):
             # FilteredSpikeSetParams that was a child of BSI--now I believe I
             # can directly filter with the existingSS value
             randomSubsets = bsi[existingSS].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
+
+            for bs in existingSS.fetch('KEY'):
+                bssFiltered = bsi[bs].grabBinnedSpikes()[0]
+                if bsi[bs]['start_time'][0].shape[0] != bssFiltered.shape[0]:
+                    # NOTE: this'll be painful, but we need the filtered times
+                    # to be the correct length so we're doing it here
+                    trialFilter = fsp[bsi[bs]]['trial_filter'][0]
+                    startTimeOld = bsi[bs]['start_time'][0]
+                    startTimeAlignOld = bsi[bs]['start_time_alignment'][0]
+                    endTimeOld = bsi[bs]['end_time'][0]
+                    endTimeAlignOld = bsi[bs]['end_time_alignment'][0]
+                    breakpoint()
+                    bsi[bs]._update('start_time', value=startTimeOld[trialFilter])
+                    bsi[bs]._update('start_time_alignment', value=startTimeAlignOld[trialFilter])
+                    bsi[bs]._update('end_time', value=endTimeOld[trialFilter])
+                    bsi[bs]._update('end_time_alignment', value=endTimeAlignOld[trialFilter])
 
             if len(randomSubsets) < numSubsets:
 
