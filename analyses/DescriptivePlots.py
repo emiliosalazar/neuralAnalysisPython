@@ -47,7 +47,7 @@ from methods.BinnedSpikeSetListMethods import rscComputations
 from methods.GpfaMethods import computePopulationMetrics
 
 # for plotting the metrics
-from methods.plotUtils.PlotUtils import MoveFigureToSubplot, MoveAxisToSubplot
+from methods.plotMethods.PlotUtils import MoveFigureToSubplot, MoveAxisToSubplot
 
 
 # @saveCallsToDatabase
@@ -80,7 +80,7 @@ def binnedSpikesDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationPa
             dsID = dsi[bssExp]['dataset_name'][0].replace(' ', '_')
             pdfName = dsID + '_' + bssExp['bss_hash'][0][:5]
 
-            bssExp.generateDescriptivePlots(plotTypes = plotChannelRespParams)
+            bssExp.generateDescriptivePlots(plotTypes = plotChannelRespParams, stateName=binnedSpikeSetGenerationParamsDict['keyStateName'])
             saveFiguresToPdf(pdfname=pdfName, analysisDescription="descriptivePlots")
             plt.close('all')
 
@@ -104,9 +104,9 @@ def binnedSpikesDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationPa
             mnChan = [np.argmax(cosTunCrvPrms['modPerChan'])]
 
             if 'raster' in plotChannelRespParams:
-                bssExp.generateDescriptivePlots(plotTypes = {'raster': plotChannelRespParams['raster']}, chPlot = [mnChan])
+                bssExp.generateDescriptivePlots(plotTypes = {'raster': plotChannelRespParams['raster']}, stateName=binnedSpikeSetGenerationParamsDict['keyStateName'], chPlot = [mnChan])
             elif 'psth' in plotChannelRespParams:
-                bssExp.generateDescriptivePlots(plotTypes = {'psth': plotChannelRespParams['psth']}, chPlot = [mnChan])
+                bssExp.generateDescriptivePlots(plotTypes = {'psth': plotChannelRespParams['psth']}, stateName=binnedSpikeSetGenerationParamsDict['keyStateName'], chPlot = [mnChan])
 
             respFig = plt.gcf()
 
@@ -121,8 +121,10 @@ def binnedSpikesDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationPa
             scFig = plt.gcf()
             mnVsStdCountSubplot = scFig.axes[2]
 
-            naiveBayesAcc = bss.decode(labels=bss.labels['stimulusMainLabel'], trainFrac = 0.75)
-            bss.timeAverage().pca(labels = bss.labels['stimulusMainLabel'], plot = {'supTitle' : "naive Bayes decoding accuracy of {:.2f}%".format(naiveBayesAcc*100)})
+            if plotChannelRespParams['decode']:
+                decodeMethod = plotChannelRespParams['decode']['decodeMethod']
+                decodeAcc = bss.decode(decodeType = decodeMethod, labels=bss.labels['stimulusMainLabel'], trainFrac = 0.75)[0]
+                bss.timeAverage().pca(labels = bss.labels['stimulusMainLabel'], plot = {'supTitle' : "{} decoding accuracy of {:.2f}%".format(decodeMethod, decodeAcc*100)})
             pcaFig = plt.gcf()
 #            MoveAxisToSubplot(mnVsStdCountSubplot, frFig, mnVsStdFrSubplot, removeOldFig = True)
 
