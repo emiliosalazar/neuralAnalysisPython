@@ -562,11 +562,11 @@ def crunchGpfaResults(gpfaResultsDictOfDicts, cvApproach = "logLikelihood", shCo
     
     groupedResults = {}
     for relPathAndCond, gpfaResultsDict in gpfaResultsDictOfDicts.items():
-        condition = gpfaResultsDict.pop('condition')
+        condition = gpfaResultsDict.pop('condition', None)
 
         # we sort things by extraction dimensionality
         dimAll = np.array(list(gpfaResultsDict.keys()))
-        dimSort = list(np.sort(dimAll))
+        dimSort = np.sort(dimAll).tolist()
         dimResultsHere = {}
         gpfaScore = np.empty((0,0))
         for idxDim, dim in enumerate(dimSort):
@@ -655,7 +655,7 @@ def computeBestDimensionality(gpfaResultsDictOfDicts, cvApproach = "logLikelihoo
 
         # we sort things by extraction dimensionality
         allKeys = list(gpfaResultsDict.keys())
-        dimAll = np.array([aK for aK in allKeys if isinstance(aK, np.integer)])
+        dimAll = np.array([aK for aK in allKeys if isinstance(aK, (np.integer, int))])
         dimSort = list(np.sort(dimAll))
         dimResultsHere = {}
         gpfaScore = np.empty((0,0))
@@ -692,7 +692,7 @@ def crunchFaResults(faResultsDictOfDicts, cvApproach = "logLikelihood", shCovThr
     
     groupedResults = {}
     for relPathAndCond, gpfaResultsDict in gpfaResultsDictOfDicts.items():
-        condition = gpfaResultsDict.pop('condition')
+        condition = gpfaResultsDict.pop('condition', None)
 
         # we sort things by extraction dimensionality
         dimAll = np.array(list(gpfaResultsDict.keys()))
