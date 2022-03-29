@@ -299,7 +299,7 @@ class BinnedSpikeSet(np.ndarray):
                     #NOTE check about labels field...
                     return meanOut
                 else:
-                    raise Exception('Can only trial average trials of different lengths if they have equally spaced alignment points!')
+                    raise ValueError('Can only trial average trials of different lengths if they have equally spaced alignment points!')
             else:
                 return np.average(self, axis=0)
         else:
