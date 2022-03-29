@@ -156,6 +156,23 @@ class DatasetInfo(dj.Manual):
                 datasets.append(dataset)
 
         return datasets
+    
+    # like above, but requires that self only be one record, and it doesn't
+    # return a list but the actual dataset
+    def grabDataset(self):
+        defaultParams = loadDefaultParams()
+        dataPath = Path(defaultParams['dataPath'])
+
+        if len(self) > 1:
+            raise("Can only grabDataset if one record in restriction expression")
+        
+        path, dsId = self.fetch('dataset_relative_path', 'dataset_id', order_by='dataset_id')
+        fullPath = dataPath / path[0]
+        with fullPath.open(mode='rb') as datasetDillFh:
+            dataset = pickle.load(datasetDillFh)
+            dataset.id = dsId[0]
+
+        return dataset
 
     # alright... this guy is to create the raw dataset with *nothing*
     # removed--generally not saved, but nice to be able to go back to the
