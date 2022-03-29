@@ -263,6 +263,91 @@ def computePopulationMetrics(gpfaResultsByExtractionParams, logLikelihoodDimensi
 
     return resultsDict
 
+def computeOverSessionMetrics(bsiExpressions, gpfaResultsByExtractionParams, logLikelihoodDimensionality, testIndsByArea, condUsedLabels, labelNameUse):
+    from setup.DataJointSetup import DatasetInfo
+    dsi = DatasetInfo()
+
+    r2LatentByExParams = []
+    for gpfaResult, dimsGpfaUse, testIndsBySubset, condLabelsAllSubsets, bssExp in zip(gpfaResultsByExtractionParams, logLikelihoodDimensionality, testIndsByArea, condUsedLabels, bsiExpressions):
+        # lists of subsamples; often of area subsamples, but sometimes could be
+        # subsamples with certain parameters (say, neuron number or trial
+        # number per condition)
+        if type(gpfaResult) is not list:
+            gpfaResult = [gpfaResult]
+
+        for (gpSubset, dGU, testIndsSubset, condLabSubset) in zip(gpfaResult, dimsGpfaUse, testIndsBySubset, condLabelsAllSubsets):
+            spikesForGpfa = bssExp.grabBinnedSpikes()[0]
+            dsInfoParent = dsi[bssExp]
+            dsParent = dsInfoParent.grabDataset()
+            trlFromDs = bssExp.trialAndChannelFilterFromParent(dsInfoParent)[0]
+            spikeBinStartInTrial = bssExp['start_time'][0]
+
+            # spikesNorm = ((spikesForGpfa - spikesForGpfa.mean(axis=0))/spikesForGpfa.var(axis=0)).squeeze()
+            # numTrials = spikesNorm.shape[0]
+            # pcs, evalsPca, _ = np.linalg.svd(np.array(spikesNorm.T @ spikesNorm)/numTrials)
+
+            r2LatentBySubset = []
+            for gpfaCond, llDim, trlInds, condLab in zip(gpSubset, dGU, testIndsSubset, condLabSubset):
+                testSeqsOrigAndInferred = gpfaCond[int(llDim)]['seqsTestNew'][0]
+
+                lowDSeqsNonorth = [seq['xsm'] if hasattr(seq['xsm'], 'shape') else np.array(seq['xsm'])[None,None] for seq in testSeqsOrigAndInferred]
+                # lowDSeqsOrth = [seq['xorth'] if hasattr(seq['xorth'], 'shape') else np.array(seq['xorth'])[None,None] for seq in testSeqsOrigAndInferred]
+                allSeqsByDim = list(zip(*lowDSeqsNonorth))
+                # allSeqsByDim = list(zip(*lowDSeqsOrth))
+
+                unLab = np.unique(condLab, axis = 0)
+                if unLab.shape[0]>1:
+                    # NOTE: this is for when conditions are combined; think
+                    # it'll be easy to do just haven't written the code yet
+                    trialsInBssWithLabel = np.hstack([(np.all(spikesForGpfa.labels[labelNameUse] == uL, axis=1)).nonzero()[0] for uL in unLab])
+                    # NOTE: you do NOT want to sort trialsInBssWithLabel. The
+                    # simplest way to give the reason is that before FA/GPFA was
+                    # run, when all the conditions were combined, the trials for
+                    # each condition were first grouped together. This means
+                    # that the trial index refers to the index of the trial not
+                    # ordered by when it was presented in the session, but
+                    # ordered first by the condition, and then *within* the
+                    # condition by when it was presented. By not sorting
+                    # trialsInBssWithLabel, I effectively replicate that
+                    # ordering here, so now trlInds below is referring to the
+                    # same trials as indexed by trialsInBssWithLabel
+                    # trialsInBssWithLabel.sort()
+                    trialsForLabel = trlFromDs[trialsInBssWithLabel]
+                    trlTimes = dsParent.trialStartTimeInSession()[trialsForLabel] 
+                    strtTimesInTrial = spikeBinStartInTrial[trialsInBssWithLabel]
+                    spikeStartTimesInSession = trlTimes + strtTimesInTrial
+                else:
+                    # note that eventually I might want to be flexible in using
+                    # another label... but for the moment this is hardcoded
+                    trialsInBssWithLabel = np.all(spikesForGpfa.labels[labelNameUse] == unLab, axis=1)
+                    trialsForLabel = trlFromDs[trialsInBssWithLabel]
+                    trlTimes = dsParent.trialStartTimeInSession()[trialsForLabel] 
+                    strtTimesInTrial = spikeBinStartInTrial[trialsInBssWithLabel]
+                    spikeStartTimesInSession = trlTimes + strtTimesInTrial
+
+
+                r2Latent = []
+                # breakpoint()
+                for dimNum, dimSeqs in enumerate(allSeqsByDim):
+                    trajTms = np.hstack(trlTimes[trlInds])
+                    trajAll = np.hstack(dimSeqs)
+                    intercept = np.ones_like(trajTms)
+                    coeffs = np.vstack([trajTms,intercept]).T
+                    modelParams, resid = np.linalg.lstsq(coeffs, trajAll, rcond=None)[:2]
+                    slp,intcpt = modelParams
+                    linearFit = slp*np.sort(trajTms) + intcpt
+                    r2Latent.append(1-resid/(trajAll.var()*trajAll.size))
+                # ** END SOME COMPUTATIONS **
+
+            r2LatentBySubset.append(r2Latent)
+        r2LatentByExParams.append(r2LatentBySubset)
+
+    overSessionMetrics = {
+        'R^2 over session by latent' : r2LatentByExParams,
+    }
+
+    return overSessionMetrics
+
 def computeProjectionMetrics(binnedSpikeList, binnedSpikeListBaseline, gpfaResultsByExtractionParams, logLikelihoodDimensionality, gpfaTestInds, gpfaParams):
     # Note that gpfaParams are passed here so that various firing rates can be
     # accurately used to remove channels that are actually use to find the
