@@ -1222,6 +1222,8 @@ class BinnedSpikeSetInfo(dj.Manual):
                     bsiHere._update('bss_relative_path', value=str(bsiNewPath), allowPkUpdate=True)
 
     def trialAndChannelFilterFromParent(self, parent):
+        if len(self) > 1:
+            raise('Only one filter from parent can be computed at a time!')
         fsp = FilterSpikeSetParams()
         trlFilter, chFilter = fsp[self].trialAndChannelFilterFromParent(parent)
 
