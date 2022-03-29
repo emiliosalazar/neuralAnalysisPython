@@ -873,7 +873,10 @@ class BinnedSpikeSetInfo(dj.Manual):
             # NOTE: I think usign fssKeys was from a prior iteration fo
             # FilteredSpikeSetParams that was a child of BSI--now I believe I
             # can directly filter with the existingSS value
-            randomSubsets = bsi[existingSS].grabBinnedSpikes(orderBy='bss_hash')[:numSubsets]
+            randomSubsets, infoOnSubsets = bsi[existingSS].grabBinnedSpikes(orderBy='bss_hash', returnInfo=True)
+            randomSubsets = randomSubsets[:numSubsets]
+            subsetPaths = infoOnSubsets['paths'][:numSubsets]
+            fssKeys = [fsp[{'bss_relative_path' : pth}].fetch('KEY') for pth in subsetPaths]
 
             for bs in existingSS.fetch('KEY'):
                 bssFiltered = bsi[bs].grabBinnedSpikes()[0]
@@ -928,7 +931,7 @@ class BinnedSpikeSetInfo(dj.Manual):
                         trlsUse = None
                         chansUse = None
 
-                    if randomSubset not in randomSubsets:
+                    if not np.any([np.allclose(randomSubset, randomSubsetAlreadyInList) for randomSubsetAlreadyInList in randomSubsets]):
                         randomSubsets += [randomSubset]
                         trlChanFilters.append((trlsUse, chansUse))
                         fssKeys.append(fssKey)
