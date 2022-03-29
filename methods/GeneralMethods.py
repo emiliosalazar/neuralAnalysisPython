@@ -36,25 +36,24 @@ def userChoice(prompt, info, choices=("yes", "no"), default=None):
     return response
 
 
-def prepareMatlab(eng=None):
+def prepareMatlab(eng=None, pathsAdd = ['matlabCodePath']):
     # print('HI')
     # from importlib import reload
     # import matlab
     # reload(matlab)
     from matlab import engine
-    # print('Matlab imported')
-    # k = globals()
-    # print(k.keys())
-    # if "__warningregistry__" in k.keys():
-    #     print(k["__warningregistry__"])
-    # if "__cached__" in k.keys():
-    #     print(k["__cached__"])
-    # import multiprocessing as mp
-    # print(mp.current_process())
-    # print(mp.get_context())
-    # import sys
-    # print(sys.path)
-    # print(mp.parent_process())
+    if type(pathsAdd) is not list:
+        pathsAdd = [pathsAdd]
+    pathsToAdd = []
+    for path in pathsAdd:
+        defaultParams = loadDefaultParams()
+        if Path(path).exists():
+            pathsToAdd.append(Path(path))
+        elif path in defaultParams:
+            path = defaultParams[path]
+            pathsToAdd.append(Path(path))
+        else:
+            raise Exception('path for addition to Matlab path is neither a key in default params nor a true path') 
     if eng is not None:
         try:
             eng.workspace
@@ -63,9 +62,8 @@ def prepareMatlab(eng=None):
         finally:
             eng.clear('all', nargout=0)
             # add the gpfaEngine path
-            defaultParams = loadDefaultParams()
-            matlabCodePath = Path(defaultParams['matlabCodePath'])
-            eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
+            for path in pathsToAdd:
+                eng.evalc("addpath(genpath('"+str(path)+"'))")
     else:
         # print('HELLO2')
         # print(engine._engines)
@@ -75,9 +73,8 @@ def prepareMatlab(eng=None):
         print('Matlab started')
         eng.clear('all', nargout=0)
         # add the gpfaEngine path
-        defaultParams = loadDefaultParams()
-        matlabCodePath = Path(defaultParams['matlabCodePath'])
-        eng.evalc("addpath(genpath('"+str(matlabCodePath)+"'))")
+        for path in pathsToAdd:
+            eng.evalc("addpath(genpath('"+str(path)+"'))")
         
     return eng
 
