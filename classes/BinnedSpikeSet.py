@@ -1591,8 +1591,8 @@ class BinnedSpikeSet(np.ndarray):
             
         return groupedBalancedSpikes, condDescriptors, condsUse, infoTrlChKeep
 
-    def fa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio'):
-        assert isinstance(xDim, int), "Must only provide one integer xDim at a time"
+    def fa(self, groupedBalancedSpikes, outputPathToConditions, condDescriptors, xDim, labelUse, crossvalidateNum = 4, expMaxIterationMaxNum = 500, tolerance = 1e-8, tolType = 'ratio', forceNewFaRun = False):
+        assert isinstance(xDim, (int,np.integer)), "Must only provide one integer xDim at a time"
         from classes.FA import FA
         from time import time
         tSt = time()
@@ -1629,7 +1629,30 @@ class BinnedSpikeSet(np.ndarray):
 
 
                 fullOutputPath = outputPathToConditions /  ("cond" + str(condDescriptors[idx]))
-                faScoreCond[0, :] = faPrep.runFa( numDim=xDim, gpfaResultsPath = fullOutputPath )[0]
+                preSavedDataPath = fullOutputPath / ("faResultsDim%d.npz" % xDim)
+                condSavePaths.append(preSavedDataPath)
+
+                if preSavedDataPath.exists() and not forceNewFaRun:
+                    print("Loading FA for condition %d/%d" % (idx+1, len(groupedBalancedSpikes)))
+                    with np.load(preSavedDataPath, allow_pickle=True) as gpfaRes:
+                        faResLoaded = dict(
+                            zip((k for k in gpfaRes), (gpfaRes[k] for k in gpfaRes))
+                        )
+                        faScoreCond[0,:] = faResLoaded['score' if 'score' in faResLoaded else 'normalGpfaScore']
+                        faPrep.dimOutput[xDim] = faResLoaded['dimOutput'][()]
+                        
+                        # These are getting replaced every time. I think... that's... fine...
+                        faPrep.testInds = faResLoaded['testInds']
+                        faPrep.trainInds = faResLoaded['trainInds']
+                else:
+                    preSavedDataPath.parent.mkdir(parents=True, exist_ok = True)
+                    faScoreCond[0, :] = faPrep.runFa( numDim=xDim, gpfaResultsPath = fullOutputPath )[0]
+
+
+
+                    print("FA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
+                            
+                    np.savez(preSavedDataPath, dimOutput=faPrep.dimOutput[xDim], testInds = faPrep.testInds, trainInds=faPrep.trainInds, score=faScoreCond[0,:], alignmentBins = grpSpks.alignmentBins, condLabel = grpSpks.labels[labelUse], binSize = grpSpks.binSize  )
 
                 converged = [estParam['converge'] for estParam in faPrep.dimOutput[xDim]['allEstParams']]
                 finalRatioChange = [estParam['finalRatioChange'] for estParam in faPrep.dimOutput[xDim]['allEstParams']]
@@ -1637,15 +1660,7 @@ class BinnedSpikeSet(np.ndarray):
                 trainIsFullRank = faPrep.dimOutput[xDim]['fullRank']
 
                 faRunFinalDetails.append([trainIsFullRank,converged,finalRatioChange,finalDiffChange])
-
                 faScoreAll.append(faScoreCond)
-
-                print("FA training for condition %d/%d done" % (idx+1, len(groupedBalancedSpikes)))
-                        
-                preSavedDataPath = fullOutputPath / ("faResultsDim%d.npz" % xDim)
-                preSavedDataPath.parent.mkdir(parents=True, exist_ok = True)
-                condSavePaths.append(preSavedDataPath)
-                np.savez(preSavedDataPath, dimOutput=faPrep.dimOutput[xDim], testInds = faPrep.testInds, trainInds=faPrep.trainInds, score=faScoreCond[0,:], alignmentBins = grpSpks.alignmentBins, condLabel = grpSpks[0].labels[labelUse], binSize = grpSpks.binSize  )
 
         print("All FA training done in %d seconds" % (time()-tSt))
         # using getattr here allows me to preset gpfaPrepAll to an empty array
