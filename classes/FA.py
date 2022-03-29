@@ -137,9 +137,11 @@ class FA:
             # here I'm again matching to the GPFA output... (I'm trying to use
             # the same downstream code, see...
             projTrainBnSp = np.stack([(fA.transform(bS.T)).T for bS in bnSp[trnInd, :].view(np.ndarray)])
+            projTrainBnSpOrth = np.stack([np.diag(singVal) @ rightSingVec @ scores for scores in projTrainBnSp])
             projTestBnSp = np.stack([(fA.transform(bS.T)).T for bS in bnSp[tstInd, :].view(np.ndarray)])
-            seqsTrainNew.append([{'trialId' : trlNum, 'xsm' : trlProj, 'y': trlOrig} for trlNum, (trlProj, trlOrig) in enumerate(zip(projTrainBnSp, bnSp[trnInd, :].view(np.ndarray)))])
-            seqsTestNew.append([{'trialId' : trlNum, 'xsm' : trlProj, 'y': trlOrig} for trlNum, (trlProj, trlOrig) in enumerate(zip(projTestBnSp, bnSp[tstInd, :].view(np.ndarray)))])
+            projTestBnSpOrth = np.stack([np.diag(singVal) @ rightSingVec @ scores for scores in projTestBnSp])
+            seqsTrainNew.append([{'trialId' : trlNum, 'xsm' : trlProj, 'xorth' : trlProjOrth, 'y': trlOrig} for trlNum, (trlProj, trlProjOrth, trlOrig) in enumerate(zip(projTrainBnSp, projTrainBnSpOrth, bnSp[trnInd, :].view(np.ndarray)))])
+            seqsTestNew.append([{'trialId' : trlNum, 'xsm' : trlProj, 'xorth' : trlProjOrth, 'y': trlOrig} for trlNum, (trlProj, trlProjOrth, trlOrig) in enumerate(zip(projTestBnSp, projTestBnSpOrth, bnSp[tstInd, :].view(np.ndarray)))])
 
 
         self.dimOutput[numDim]['allEstParams'] = allEstParams

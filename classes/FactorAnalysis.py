@@ -325,10 +325,10 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
 
         Ih = np.eye(len(self.components_))
 
-        # This is the code as it was... I'm even tripped up on the first line
-        # because I don't know if that division once did inversion or
-        # something...
-#:w
+        # this was what the code used to be... which after thorough checking I
+        # agree is identical to the above code, but takes another matrix
+        # expansion approach (and originally I didn't understand it... which is
+        # why I commented it out)
 #        Wpsi = self.components_ / self.noise_variance_
 #        cov_z = linalg.inv(Ih + np.dot(Wpsi, self.components_.T))
 #        tmp = np.dot(X_transformed, Wpsi.T)
