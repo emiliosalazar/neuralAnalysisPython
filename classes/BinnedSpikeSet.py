@@ -768,11 +768,13 @@ class BinnedSpikeSet(np.ndarray):
     def computeCosTuningCurves(self, label='stimulusMainLabel', plot=False):
         labels = self.labels['stimulusMainLabel']
         groupedSpikes, uniqueTargAngle = self.groupByLabel(labels)
-        if any(np.abs(uniqueTargAngle>7)): # dumb way to check if radians by seeing if anything > 2*pi...
+        if np.any(np.abs(uniqueTargAngle)>7): # dumb way to check if radians by seeing if anything > 2*pi...
             uniqueTargAngle = uniqueTargAngle/180*np.pi
 
         targTmAvgList = [grpSp.convertUnitsTo('Hz').timeAverage().trialAverage() for grpSp in groupedSpikes]
         targTmAndTrlSpkAvgArr = np.stack(targTmAvgList).view(BinnedSpikeSet)
+        tmAvgList = [grpSp.convertUnitsTo('Hz').timeAverage() for grpSp in groupedSpikes]
+        tmAvgArr = np.vstack(tmAvgList)
         
         targAvgNumSpks = targTmAndTrlSpkAvgArr
         cosTuningCurveParams = {}
@@ -780,6 +782,15 @@ class BinnedSpikeSet(np.ndarray):
 
         predictors = np.concatenate((np.ones_like(uniqueTargAngle), np.sin(uniqueTargAngle), np.cos(uniqueTargAngle)), axis=1)
         out = [np.linalg.lstsq(predictors, targAvgNumSpks[:, chan, None], rcond=None)[0] for chan in range(targAvgNumSpks.shape[1])]
+        residuals = [np.linalg.lstsq(predictors, targAvgNumSpks[:, chan, None], rcond=None)[1] for chan in range(targAvgNumSpks.shape[1])]
+        totalSumSquares = [((chanSpks-chanSpks.mean())**2).sum() for chanSpks in targAvgNumSpks.T]
+        r2 = np.array([1-sse/sst for sse, sst in zip(residuals, totalSumSquares)])
+
+        predictorsIndividual = np.vstack([np.repeat(p[None,:], grp.shape[0],axis=0) for p, grp in zip(predictors, groupedSpikes)])
+        outInd = [np.linalg.lstsq(predictorsIndividual, chanSpks[:,None], rcond=None)[0] for chanSpks in tmAvgArr.T]
+        residInd = [np.linalg.lstsq(predictorsIndividual, chanSpks[:,None], rcond=None)[1] for chanSpks in tmAvgArr.T]
+        totalSSInd = [((chanSpks-chanSpks.mean())**2).sum() for chanSpks in tmAvgArr.T]
+        r2Ind = np.array([1-sse/sst for sse, sst in zip(residInd, totalSSInd)])
         
         paramsPerChan = np.stack(out).squeeze()
         thBestPerChan = np.arctan2(paramsPerChan[:, 1], paramsPerChan[:, 2])
@@ -789,34 +800,51 @@ class BinnedSpikeSet(np.ndarray):
         cosTuningCurveParams['thBestPerChan'] = thBestPerChan
         cosTuningCurveParams['modPerChan'] = modPerChan
         cosTuningCurveParams['bslnPerChan'] = bslnPerChan
+        cosTuningCurveParams['r2OnMean'] = r2
+        cosTuningCurveParams['r2OnIndTrials'] = r2Ind
 
         if plot:
-            from methods.plotUtils.ScatterBar import scatterBar
+            from methods.plotMethods.ScatterBar import scatterBar
 
-            fig, ax = plt.subplots(1,3)
+            fig, ax = plt.subplots(2,3)
+            fig.tight_layout()
 
             # in the following we grab the 0th third index because those are
             # meant to be bars per group, but there's only one bar per group
             # here!
             scatterXY, _ = scatterBar(thBestPerChan)
 
-            ax[0].scatter(*(scatterXY[:, :, 0].T))
-            ax[0].set_title('$\\theta$ pref')
-            ax[0].set_ylabel('$\\theta$')
+            ax[0,0].scatter(*(scatterXY[:, :, 0].T))
+            ax[0,0].set_title('$\\theta$ pref')
+            ax[0,0].set_ylabel('$\\theta$')
 
             scatterXY, _ = scatterBar(modPerChan)
 
-            ax[1].scatter(*(scatterXY[:, :, 0].T))
-            ax[1].set_title('modulations')
-            ax[1].set_ylabel('FR')
+            ax[0,1].scatter(*(scatterXY[:, :, 0].T))
+            ax[0,1].set_title('modulations')
+            ax[0,1].set_ylabel('FR')
 
             scatterXY, _ = scatterBar(bslnPerChan)
 
-            ax[2].scatter(*(scatterXY[:, :, 0].T))
-            ax[2].set_title('baselines')
-            ax[2].set_ylabel('FR')
+            ax[0,2].scatter(*(scatterXY[:, :, 0].T))
+            ax[0,2].set_title('baselines')
+            ax[0,2].set_ylabel('FR')
 
-            fig.tight_layout()
+            ax[1,0].scatter(modPerChan, r2)
+            ax[1,0].set_title('mod vs R^2')
+            ax[1,0].set_xlabel('modulation')
+            ax[1,0].set_ylabel('R^2')
+
+            ax[1,1].scatter(bslnPerChan, r2)
+            ax[1,1].set_title('baseline vs R^2')
+            ax[1,1].set_xlabel('baseline FR')
+            ax[1,1].set_ylabel('R^2')
+
+            ax[1,2].scatter(thBestPerChan, r2)
+            ax[1,2].set_title('pref angle vs R^2')
+            ax[1,2].set_xlabel('theta')
+            ax[1,2].set_ylabel('R^2')
+
 
 
         
@@ -824,6 +852,7 @@ class BinnedSpikeSet(np.ndarray):
         cosTuningCurves = np.stack([chBs + chMod*np.cos(chTh-angs) for chBs, chMod, chTh in zip(bslnPerChan, modPerChan, thBestPerChan)])
         
         cosTuningCurveParams['tuningCurves'] = cosTuningCurves
+        cosTuningCurveParams['tuningCurveAngs'] = angs
         
         return cosTuningCurveParams
 
