@@ -1138,8 +1138,9 @@ class BinnedSpikeSetInfo(dj.Manual):
 
         return kinsForBss
 
-    def generateDescriptivePlots(self, plotTypes = ['all'], chPlot = None):
-        from methods.plotUtils.BinnedSpikeSetPlotMethods import plotResponseOverTime
+    def generateDescriptivePlots(self, stateName, plotTypes = ['all'], chPlot = None):
+        from methods.plotMethods.BinnedSpikeSetPlotMethods import plotResponseOverTime
+        from classes.BinnedSpikeSet import BinnedSpikeSet
         binnedSpikes, bSInfo = self.grabBinnedSpikes(returnInfo=True)
 
 
@@ -1152,15 +1153,22 @@ class BinnedSpikeSetInfo(dj.Manual):
                     
                 binSizeMs = 1 # we are now binning at 1ms for this...
                 reBinnedSpikeSet = self[bsPk].rebinSpikes(binSizeMs)
-                reBinnedSpikes.append(reBinnedSpikeSet.convertUnitsTo('count'))
+                reBinnedSpikeSetCount = reBinnedSpikeSet.convertUnitsTo('count')
+                if reBinnedSpikeSetCount.dtype == 'object':
+                    trlsAsObj = [np.stack(trl) for trl in reBinnedSpikeSetCount]
+                    mxLen = np.max([trl.shape[1] for trl in trlsAsObj])
+                    padSelf = np.stack([np.pad(trl, ((0,0),(0,mxLen-trl.shape[1])), constant_values=np.nan) for trl in trlsAsObj])
+                    reBinnedSpikeSetCount = BinnedSpikeSet(padSelf, start=reBinnedSpikeSetCount.start, end=reBinnedSpikeSetCount.end, binSize=reBinnedSpikeSetCount.binSize, labels = reBinnedSpikeSetCount.labels, alignmentBins = reBinnedSpikeSetCount.alignmentBins, units = reBinnedSpikeSetCount.units)
 
-            plotResponseOverTime(reBinnedSpikes, bSInfo['dataset_names'], rasterPlotInfo, chPlot = chPlot)
+                reBinnedSpikes.append(reBinnedSpikeSetCount)
+
+            plotResponseOverTime(reBinnedSpikes, bSInfo['dataset_names'], rasterPlotInfo, stateName = stateName, chPlot = chPlot)
 
 
         if 'psth' in plotTypes or 'all' in plotTypes:
             psthPlotInfo = plotTypes['psth'] if 'psth' in plotTypes else {}
             psthPlotInfo['plotMethod'] = 'plot'
-            plotResponseOverTime(binnedSpikes, bSInfo['dataset_names'], psthPlotInfo, chPlot = chPlot)
+            plotResponseOverTime(binnedSpikes, bSInfo['dataset_names'], psthPlotInfo, stateName = stateName, chPlot = chPlot)
 
         #%% PCA projections
         if 'pca' in plotTypes or 'all' in plotTypes:
