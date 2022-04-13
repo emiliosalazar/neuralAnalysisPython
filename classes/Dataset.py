@@ -738,7 +738,7 @@ class Dataset():
 
             import plotly as ply
             import plotly.express as px 
-            px.imshow(coincProp)
+            px.imshow(coincProp).show()
 
             breakpoint()
 
