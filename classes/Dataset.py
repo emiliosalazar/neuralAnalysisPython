@@ -376,7 +376,7 @@ class Dataset():
             breakpoint()
             self.kinematics = kinematicsCont
         # NOTE HERE WE ARE
-        elif preprocessor == "EmilioJoystickHE":
+        elif preprocessor == "EmilioJoystickHE" or preprocessor == "EmilioKalmanBci":
             from methods.GeneralMethods import loadDefaultParams
             from methods.MatFileMethods import LoadMatFile
             params = loadDefaultParams()
@@ -391,24 +391,31 @@ class Dataset():
             recHz = 30000 # recording frequency in Matt's rig
 
             # here we compute the time when the reaction happens and then mark it as a state that can be processed
-            cursorRtCode = trlCodes['codesArray'].squeeze().shape[0]+1
-            cursorRtState = np.array(['CURSOR_REACT'])
-            trlCodes['codesArray'] = np.append(trlCodes['codesArray'], cursorRtState[:,None], axis=1)
-            trlCodes['codesArray'][0,-1] = cursorRtState
-            posAndTime = [np.vstack((cPXY[0:-1:2, 0], cPXY[1::2, 0], cPXY[0:-1:2, 1]/recHz)).T for cPXY in cursorPosXandY]
-            distFromCentAndTotMoveAndTime = [np.vstack([np.sqrt(np.sum(pt[:, :2]**2, axis=1)),np.sqrt(np.sum((pt[:, :2] - pt[0,:2])**2, axis=1)), pt[:, -1]] ).T if pt.size else np.array([]) for pt in posAndTime]
-            timeAndPosDiff = [np.hstack([np.diff(pt,axis=0), pt[:-1, [-1]]] ) for pt in posAndTime]
-            # speed below is in pixels/ms
-            speedAndTimeInMv = [np.vstack([np.sqrt(np.sum(pD[:,:2]**2, axis=1))/pD[:, -2], pD[:,-1]-pD[0,-1] if pD.size else np.array([])]).T for pD in timeAndPosDiff]
-            joystickHoldRtWindow = [cds['block']['joystickHoldTolerance'][0,0] for cds in  annots[datName]['params'].squeeze()]
-            speedThresh = .5 # pixels/ms--process of staring at data
-            binsWithMovement = [((sAT[:,0]>speedThresh) | (np.sqrt(np.sum(crsPosAndT[:-1, :2]**2, axis=1)) > jHT)) if sAT.size>0 else None for crsPosAndT, sAT, jHT in zip(posAndTime, speedAndTimeInMv, joystickHoldRtWindow)]
-            stOfMove = [crsPosAndT[(binsWithMvmt).nonzero()[0][0], 2] if np.any(binsWithMvmt) else None for crsPosAndT, binsWithMvmt in zip(posAndTime, binsWithMovement)]
-            statesPresentedNoMoveStart = [cds[:,1:].T for cds in annots[datName]['trialcodes'][0]]
-            statesPresentedWithMove = [np.insert(cds, (cds[1,:]>tm).nonzero()[0][0], [cursorRtCode,tm], 1) if tm is not None else cds for cds, tm in zip(statesPresentedNoMoveStart, stOfMove)]
-            statesPresentedWithMoveMs = [cds*np.array([1,sToMsConv])[:,None] for cds in statesPresentedWithMove]
-            trlStMs = [cds[1,0] for cds in statesPresentedWithMoveMs]
-            statesPresentedWithMsTmInTrial = [(cds - np.array([0,cds[1,0]])[:,None]) for cds in statesPresentedWithMoveMs]
+            if preprocessor == "EmilioJoystickHE":
+                cursorRtCode = trlCodes['codesArray'].squeeze().shape[0]+1
+                cursorRtState = np.array(['CURSOR_REACT'])
+                trlCodes['codesArray'] = np.append(trlCodes['codesArray'], cursorRtState[:,None], axis=1)
+                trlCodes['codesArray'][0,-1] = cursorRtState
+                posAndTime = [np.vstack((cPXY[0:-1:2, 0], cPXY[1::2, 0], cPXY[0:-1:2, 1]/recHz)).T for cPXY in cursorPosXandY]
+                distFromCentAndTotMoveAndTime = [np.vstack([np.sqrt(np.sum(pt[:, :2]**2, axis=1)),np.sqrt(np.sum((pt[:, :2] - pt[0,:2])**2, axis=1)), pt[:, -1]] ).T if pt.size else np.array([]) for pt in posAndTime]
+                timeAndPosDiff = [np.hstack([np.diff(pt,axis=0), pt[:-1, [-1]]] ) for pt in posAndTime]
+                # speed below is in pixels/ms
+                speedAndTimeInMv = [np.vstack([np.sqrt(np.sum(pD[:,:2]**2, axis=1))/pD[:, -2], pD[:,-1]-pD[0,-1] if pD.size else np.array([])]).T for pD in timeAndPosDiff]
+                joystickHoldRtWindow = [cds['block']['joystickHoldTolerance'][0,0] for cds in  annots[datName]['params'].squeeze()]
+                speedThresh = .5 # pixels/ms--process of staring at data
+                binsWithMovement = [((sAT[:,0]>speedThresh) | (np.sqrt(np.sum(crsPosAndT[:-1, :2]**2, axis=1)) > jHT)) if sAT.size>0 else None for crsPosAndT, sAT, jHT in zip(posAndTime, speedAndTimeInMv, joystickHoldRtWindow)]
+                stOfMove = [crsPosAndT[(binsWithMvmt).nonzero()[0][0], 2] if np.any(binsWithMvmt) else None for crsPosAndT, binsWithMvmt in zip(posAndTime, binsWithMovement)]
+                statesPresentedNoMoveStart = [cds[:,1:].T for cds in annots[datName]['trialcodes'][0]]
+                statesPresentedWithMove = [np.insert(cds, (cds[1,:]>tm).nonzero()[0][0], [cursorRtCode,tm], 1) if tm is not None else cds for cds, tm in zip(statesPresentedNoMoveStart, stOfMove)]
+                statesPresentedWithMoveMs = [cds*np.array([1,sToMsConv])[:,None] for cds in statesPresentedWithMove]
+                trlStMs = [cds[1,0] for cds in statesPresentedWithMoveMs]
+                statesPresentedWithMsTmInTrial = [(cds - np.array([0,cds[1,0]])[:,None]) for cds in statesPresentedWithMoveMs]
+
+            else:
+                statesPresentedNoMoveStart = [cds[:,1:].T for cds in annots[datName]['trialcodes'][0]]
+                statesPresentedNoMoveStartMs = [cds*np.array([1,sToMsConv])[:,None] for cds in statesPresentedNoMoveStart]
+                trlStMs = [cds[1,0] for cds in statesPresentedNoMoveStartMs]
+                statesPresentedWithMsTmInTrial = [(cds - np.array([0,cds[1,0]])[:,None]) for cds in statesPresentedNoMoveStartMs]
 
             self.statesPresented = statesPresentedWithMsTmInTrial
 
@@ -728,6 +735,10 @@ class Dataset():
             print('    timesOtherChannelsCoincidentToThisChannelOrig')
             print('    timesThisChannelCoincidentToOtherChannelsOrig')
             print('    coincProp')
+
+            import plotly as ply
+            import plotly.express as px 
+            px.imshow(coincProp)
 
             breakpoint()
 
