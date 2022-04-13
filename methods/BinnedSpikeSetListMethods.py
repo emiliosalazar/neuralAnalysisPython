@@ -819,7 +819,6 @@ def rscComputations(listBSS,descriptions, labelUse, separateNoiseCorrForLabels =
     
     mnCorrPerCondOBPT = []
     stdCorrPerCondOBPT = []
-    breakpoint()
     for rsCorr in residCorrPerCondOBPTAll:
         mnCorrPerCondOBPT.append([residCorr[np.triu_indices(residCorr.shape[0], 1)].mean(axis=0) for residCorr in rsCorr])
         stdCorrPerCondOBPT.append([residCorr[np.triu_indices(residCorr.shape[0], 1)].std(axis=0) for residCorr in rsCorr])

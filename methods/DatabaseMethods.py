@@ -18,7 +18,7 @@ def insertDataset(dataMatPath, datasetInfo, removeCoincidentChans=True, coincide
 
     if datasetInfo['processor'] == 'Erinn':
         removeSort = np.array([31, 0])
-    elif datasetInfo['processor']  == 'EmilioJoystick' or datasetInfo['processor'] == 'EmilioJoystickHE':
+    elif datasetInfo['processor']  == 'EmilioJoystick' or datasetInfo['processor'] == 'EmilioJoystickHE' or datasetInfo['processor'] == 'EmilioKalmanBci':
         removeSort = np.array([255])
     else:
         removeSort = np.array([])
