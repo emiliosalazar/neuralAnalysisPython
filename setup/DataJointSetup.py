@@ -287,10 +287,12 @@ class DatasetInfo(dj.Manual):
         endTimeOffset = bssProcParams['end_offset']
         fanoFactorThresh = bssProcParams['fano_factor_thresh']
 
+
         binnedSpikes = []
         bssiKeys = []
 
         for datasetInfo in self.fetch("KEY"):
+            print(f'generating spikes for {datasetInfo["dataset_relative_path"]}')
             # First we want to check if we're going to compute new data or if it already exists...
 
             binnedSpikeSetDill = 'binnedSpikeSet.dill'
@@ -332,14 +334,19 @@ class DatasetInfo(dj.Manual):
                 else:
                     trialFiltType = trialsKeep
 
+                print(f'{trialFiltType.sum()} trials were of type "{trialType}"')
                 trialsKeep &= trialFiltType
+                
+                print(f'{trialsKeep.sum()} trials passing all filters up to now')
 
                 # These extra filters are in a { description : lambda } style dictionary
                 if trialFilterLambdaDict is not None:
                     for tFLDesc, tFL in trialFilterLambdaDict.items():
                         lambdaFilt = eval(tFL)
                         _, trialFiltLambda = lambdaFilt(dataset)
+                        print(f'{trialFiltLambda.sum()} trials passed lambda: {tFL}')
                         trialsKeep &= trialFiltLambda
+                        print(f'{trialsKeep.sum()} trials passing all filters up to now')
 
                 alignmentStates = dataset.metastates
                     
@@ -351,7 +358,9 @@ class DatasetInfo(dj.Manual):
                 timeInStateArr = endStateArr - startStateArr
 
                 _, trialFiltLen = dataset.filterTrials(timeInStateArr>=lenSmallestTrial)
+                print(f'{trialFiltLen.sum()} trials survived the "lenSmallestTrial" check for the state')
                 trialsKeep &= trialFiltLen
+                print(f'{trialsKeep.sum()} trials passed all filters')
 
                 dataset = dataset.filterTrials(trialsKeep)[0]
 
@@ -378,7 +387,9 @@ class DatasetInfo(dj.Manual):
                 chansKeep = np.full((binnedSpikesHere.shape[1]), True)
                 # Filter to only include high firing rate channels
                 _, chansHighFR = binnedSpikesHere.channelsAboveThresholdFiringRate(firingRateThresh=firingRateThresh, asLogical = True)
+                print(f'{chansHighFR.sum()} channels above {firingRateThresh}Hz firing rate threshold')
                 chansKeep &= chansHighFR
+                print(f'{chansKeep.sum()} channels passing all filters up to now')
 
                 # Filter for fano factor threshold, but use counts *over the trial*
                 if binnedSpikesHere.dtype == 'object':
@@ -401,7 +412,9 @@ class DatasetInfo(dj.Manual):
                 if trialLengthMs.size > 1:
                     binnedCountsPerTrial = binnedCountsPerTrial * trialLengthMs.max()/trialLengthMs[:,None,None]
                 _, chansGood = binnedCountsPerTrial.channelsBelowThresholdFanoFactor(fanoFactorThresh=fanoFactorThresh, asLogical=True)
+                print(f'{chansGood.sum()} channels below {fanoFactorThresh} Fano factor threshold')
                 chansKeep &= chansGood
+                print(f'{chansKeep.sum()} channels passed all filters')
 
                 binnedSpikesHere = binnedSpikesHere[:,chansKeep]
 
