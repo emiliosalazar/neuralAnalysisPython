@@ -211,6 +211,12 @@ class DatasetInfo(dj.Manual):
         dsi = DatasetInfo()
         bsspp = BinnedSpikeSetProcessParams()
 
+        if np.any(np.array([val for ky, val in bssProcParams.items()], dtype=object)==np.inf):
+            paramsArray = np.array([(ky, val) for ky, val in bssProcParams.items()], dtype=object)
+            infVals = np.where(paramsArray[:,1]==np.inf)[0]
+            for kyInfInd in infVals:
+                bssProcParams[paramsArray[kyInfInd, 0]] = '+Infinity'
+
         bssppUse = bsspp[bssProcParams]
 
         # Compute the lambda info, but only add once we grab the bssppUse
@@ -263,6 +269,12 @@ class DatasetInfo(dj.Manual):
             procParamId = procParamId[0]
 
 
+
+        if np.any(np.array([val for ky, val in bssProcParams.items()], dtype=object)=='+Infinity'):
+            paramsArray = np.array([(ky, val) for ky, val in bssProcParams.items()], dtype=object)
+            infVals = np.where(paramsArray[:,1]=='+Infinity')[0]
+            for kyInfInd in infVals:
+                bssProcParams[paramsArray[kyInfInd, 0]] = np.inf
 
         trialType = bssProcParams['trial_type']
         binSizeMs = bssProcParams['bin_size']
