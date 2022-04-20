@@ -88,6 +88,7 @@ class FA:
                 L = fA.components_
                 psi = fA.noise_variance_
                 d = fA.mean_
+                beta = fA.beta
                 converged = fA.n_iter_ < fA.max_iter
                 finalRatioChange = fA.finalRatioChange_
                 finalDiffChange = fA.finalDiffChange_
@@ -98,6 +99,7 @@ class FA:
                     'Corth': Lorth, # here I'm matching GPFA naming of C
                     'd': d,
                     'R': np.diag(psi), # here I'm matching GPFA naming of R...
+                    'beta' : beta,
                     'converge' : converged, # keeping track of whether we converged...
                     'finalRatioChange' : finalRatioChange,
                     'finalDiffChange' : finalDiffChange,

@@ -294,6 +294,8 @@ class FactorAnalysis(BaseEstimator, TransformerMixin):
         self.n_iter_ = i + 1
         self.finalRatioChange_ = (ll_new-ll_base)/(old_ll-ll_base) - 1;
         self.finalDiffChange_ = (ll_new-old_ll);
+        precision = self.get_precision()
+        self.beta = L.T @ precision
         return self
 
     def transform(self, X):
