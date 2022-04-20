@@ -381,10 +381,13 @@ class Dataset():
             from methods.MatFileMethods import LoadMatFile
             params = loadDefaultParams()
             trlCodes = LoadMatFile(params['smithLabTrialCodes'])
+            bciCursCode = trlCodes['codesStruct']['BCI_CURSOR_POS'][0,0].squeeze()
+            cursCode = trlCodes['codesStruct']['CURSOR_POS'][0,0].squeeze()
 
             # cursor movements will be between 9000 and 11000
             datName = list(annots.keys())[0]
-            cursorPosXandY = [evt[(evt[:,1]>9000) & (evt[:,1]<11000),1:].astype(float)-[10000, 0] for evt in annots[datName]['event'][0]]
+            # cursorPosXandY = [evt[(evt[:,1]>9000) & (evt[:,1]<11000),1:].astype(float)-[10000, 0] for evt in annots[datName]['event'][0]]
+            # cursorPosXandY = [evt[(evt[:,1]>9000) & (evt[:,1]<11000),1:].astype(float)-[10000, 0] for evt in annots[datName]['event'][0]]
 
             # set the states presented
             sToMsConv = 1000;
@@ -392,11 +395,12 @@ class Dataset():
 
             # here we compute the time when the reaction happens and then mark it as a state that can be processed
             if preprocessor == "EmilioJoystickHE":
+                cursorPosXandY = np.array([cds[np.where(cds[:,1]==cursCode)[0][:,None]+np.array([1,2]),1:].astype(int)-np.vstack([[10000,0],[10000,0]]) for cds in annots[datName]['event'][0]])
                 cursorRtCode = trlCodes['codesArray'].squeeze().shape[0]+1
                 cursorRtState = np.array(['CURSOR_REACT'])
                 trlCodes['codesArray'] = np.append(trlCodes['codesArray'], cursorRtState[:,None], axis=1)
                 trlCodes['codesArray'][0,-1] = cursorRtState
-                posAndTime = [np.vstack((cPXY[0:-1:2, 0], cPXY[1::2, 0], cPXY[0:-1:2, 1]/recHz)).T for cPXY in cursorPosXandY]
+                posAndTime = [np.vstack((cPXY[:, 0, 0], cPXY[:, 1, 0], cPXY[:, 0, 1]/recHz)).T for cPXY in cursorPosXandY]
                 distFromCentAndTotMoveAndTime = [np.vstack([np.sqrt(np.sum(pt[:, :2]**2, axis=1)),np.sqrt(np.sum((pt[:, :2] - pt[0,:2])**2, axis=1)), pt[:, -1]] ).T if pt.size else np.array([]) for pt in posAndTime]
                 timeAndPosDiff = [np.hstack([np.diff(pt,axis=0), pt[:-1, [-1]]] ) for pt in posAndTime]
                 # speed below is in pixels/ms
@@ -412,6 +416,7 @@ class Dataset():
                 statesPresentedWithMsTmInTrial = [(cds - np.array([0,cds[1,0]])[:,None]) for cds in statesPresentedWithMoveMs]
 
             else:
+                cursorPosXandY = np.array([cds[np.where(cds[:,1]==bciCursCode)[0][:,None]+np.array([1,2]),1:].astype(int)-np.vstack([[10000,0],[10000,0]]) for cds in annots[datName]['event'][0]])
                 statesPresentedNoMoveStart = [cds[:,1:].T for cds in annots[datName]['trialcodes'][0]]
                 statesPresentedNoMoveStartMs = [cds*np.array([1,sToMsConv])[:,None] for cds in statesPresentedNoMoveStart]
                 trlStMs = [cds[1,0] for cds in statesPresentedNoMoveStartMs]
@@ -444,7 +449,7 @@ class Dataset():
             
             self.stateNames = trlCodes['codesArray']
 
-            kinematicsTemp = [np.vstack((cPXY[0:-1:2, 0], cPXY[1::2, 0], cPXY[0:-1:2, 1]/recHz*sToMsConv-trlSt)).T for cPXY, trlSt in zip(cursorPosXandY, trlStMs)]
+            kinematicsTemp = [np.vstack((cPXY[:, 0, 0], cPXY[:, 1, 0], cPXY[:, 0, 1]/recHz*sToMsConv-trlSt)).T for cPXY, trlSt in zip(cursorPosXandY, trlStMs)]
             kinematicsCont = np.empty((len(kinematicsTemp),), dtype='object')
             for ind,kin in enumerate(kinematicsTemp):
                 kinematicsCont[ind] = kin
