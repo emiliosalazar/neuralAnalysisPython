@@ -4,6 +4,8 @@ Some of what's on here is like the olde HeadlessAnalysisRun4.py for now...
 """
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
+import plotly as ply
+import plotly.express as px 
 import os
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['GOTO_NUM_THREADS'] = '1'
@@ -18,7 +20,7 @@ from scipy.stats import binned_statistic
 
 from methods.GeneralMethods import saveFiguresToPdf
 # database stuff
-from setup.DataJointSetup import DatasetInfo, DatasetGeneralLoadParams, BinnedSpikeSetInfo, FilterSpikeSetParams
+from setup.DataJointSetup import DatasetInfo, DatasetGeneralLoadParams, BinnedSpikeSetInfo, FilterSpikeSetParams, BinnedSpikeSetProcessParams
 import datajoint as dj
 # the decorator to save these to a database!
 from decorators.AnalysisCallDecorators import saveCallsToDatabase
@@ -57,6 +59,7 @@ def binnedSpikesDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationPa
     dsi = DatasetInfo()
     bsi = BinnedSpikeSetInfo()
     fsp = FilterSpikeSetParams()
+    bsp = BinnedSpikeSetProcessParams()
 
     colorsUse = BinnedSpikeSet.colorset
 
@@ -260,14 +263,19 @@ def binnedSpikesDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationPa
             bss = bssExp.grabBinnedSpikes()[0]
             bss.labels['stimulusMainLabel'] = bss.labels['stimulusMainLabel'].astype('float64')
             dsID = dsi[bssExp]['dataset_name'][0].replace(' ', '_')
-            matchedKinematics = bssExp.grabAlignedKinematics(kinBinning='binToMatch')
+            matchedKinematicsPos = bssExp.grabAlignedKinematics(kinBinning='binToMatch')
+            binSizeMs = bsp[bssExp]['bin_size']
+            binSizeS = binSizeMs/1000
             # NOTE ONLY TRUE if this is the period POST cursor on...
-            for trl, (kinTrl, bsTrl) in enumerate(zip(matchedKinematics, bss)):
+            for trl, (kinTrl, bsTrl) in enumerate(zip(matchedKinematicsPos, bss)):
                 for ch, chResp in enumerate(bsTrl):
                     bss[trl,ch] = chResp[~np.isnan(kinTrl[:, 1])]
-                matchedKinematics[trl] = kinTrl[~np.isnan(kinTrl[:, 1]), :]
+                matchedKinematicsPos[trl] = kinTrl[~np.isnan(kinTrl[:, 1]), :]
+            
+            # pixels/ms velocity
+            matchedKinematics = np.array([np.vstack([[0,0],np.diff(mK,axis=0)/binSizeS]) for mK in matchedKinematicsPos])
         
-            pred = [np.linalg.lstsq(np.stack(spks).T, kin, rcond=None)[0] for kin, spks in zip(matchedKinematics, bss)]
+            # pred = [np.linalg.lstsq(np.stack(np.array(spks)).T, kin, rcond=None)[0] for kin, spks in zip(matchedKinematics, bss)]
             
             trnFrac = 0.75
             numTrls = bss.shape[0]
@@ -275,16 +283,139 @@ def binnedSpikesDescriptiveOverview(datasetSqlFilter, binnedSpikeSetGenerationPa
             trainInds = randomizedIndOrder[:round(trnFrac*numTrls)]
             testInds = randomizedIndOrder[round(trnFrac*numTrls):]
 
-            allSpkTrnTog = np.concatenate(bss[trainInds], axis=2).squeeze().T
-            allSpkTrnTog = np.concatenate([np.array(allSpkTrnTog), np.ones_like(allSpkTrnTog[:,None,0])], axis=1)
-            allKinTrnTog = np.concatenate(matchedKinematics[trainInds],axis=0)
-            lstSqFit = np.linalg.lstsq(allSpkTrnTog, allKinTrnTog, rcond=None)[0]
+            # allSpkTrnTog = np.concatenate(bss[trainInds], axis=2).squeeze().T
+            # allSpkTrnTog = np.concatenate([np.array(allSpkTrnTog), np.ones_like(allSpkTrnTog[:,None,0])], axis=1)
+            # allKinTrnTog = np.concatenate(matchedKinematics[trainInds],axis=0)
+            # lstSqFit = np.linalg.lstsq(allSpkTrnTog, allKinTrnTog, rcond=None)[0]
 
-            estimates = np.array([np.concatenate([np.array(np.stack(spk).T), np.ones_like(np.stack(spk).T[:,None,0])],axis=1) @ lstSqFit for spk in bss[testInds]])
-            trueVals = matchedKinematics[testInds]
+            # estimates = np.array([np.concatenate([np.array(np.stack(spk).T), np.ones_like(np.stack(spk).T[:,None,0])],axis=1) @ lstSqFit for spk in bss[testInds]])
+            # trueVals = matchedKinematics[testInds]
+
+            allSpksCurrStp = [np.stack(bsT)[:,1:] if bsT.size>0 else np.nan for bsT in bss]
+            allSpksPrevStp = [np.stack(bsT)[:,:-1] if bsT.size>0 else np.nan for bsT in bss]
+            allKinCurrStp = [aK[1:,:] if aK.size>0 else np.nan for aK in matchedKinematics]
+            allKinPrevStp = [aK[:-1,:] if aK.size>0 else np.nan for aK in matchedKinematics]
 
 
-            unLb, lbTrl = np.unique(bss[testInds].labels['stimulusMainLabel'], return_inverse=True)
+            allKinCurrStpConcat = np.vstack(allKinCurrStp).T
+            kinMean = np.mean(allKinCurrStpConcat,axis=1)
+            allSpksCurrStpConcat = np.hstack(allSpksCurrStp)
+
+            if 'kalman' in plotKinParams['decodeTypes']:
+                A = np.eye(allKinCurrStpConcat.shape[0])
+                Q = 100e3*np.eye(allKinCurrStpConcat.shape[0])
+
+                from classes.FA import FA
+                faMod = FA(allSpksCurrStpConcat[None, :, :], 1)
+                _, faParams, allLatentProjInfo, *_ = faMod.runFa(numDim = 10)
+                allLatentProj = allLatentProjInfo[0][0]['xorth']
+                faParams = faParams[0]
+                beta = faParams['beta']
+                allLatentProj = beta @ (allSpksCurrStpConcat-faParams['d'][:,None])
+                meanLatProj = np.mean(allLatentProj,axis=1)
+
+                C = allLatentProj @ allKinCurrStpConcat.T @ np.linalg.inv(allKinCurrStpConcat @ allKinCurrStpConcat.T)
+                Tall = allLatentProj.shape[1]
+                R = 1/Tall * (allLatentProj - C @ allKinCurrStpConcat) @ (allLatentProj - C@allKinCurrStpConcat).T
+
+                # get converged Kalman gain
+                sigCurrGivenPrev = np.cov(allKinCurrStpConcat);
+                muCurrGivenPrev = np.nanmean(allKinCurrStpConcat, axis=1);
+
+
+                Kall = []
+                for t in range(100):
+                    Kcurr = sigCurrGivenPrev @ C.T @ np.linalg.inv(C @ sigCurrGivenPrev @ C.T + R)
+                    sigCurrGivenCurr = sigCurrGivenPrev - Kcurr @ C @ sigCurrGivenPrev;
+                    sigCurrGivenPrev = A @ sigCurrGivenCurr @ A.T + Q;
+                    Kall.append(Kcurr)
+
+                K = Kall[-1]
+
+                M1 = A - K@C@A;
+                M2 = K @ beta;
+                # baseline takes care of accounting for mean offsets in training
+                M0 = -M1 @ kinMean - M2@ faParams['d'] - K@meanLatProj
+                
+
+
+                unLb, lblTrl = np.unique(bss.labels['stimulusMainLabel'], return_inverse=True)
+                figKalmanDecode = px.line()
+                targDist = 300
+                targRad = 50
+                availableColors = px.colors.qualitative.Plotly
+                [figKalmanDecode.add_shape(type='circle',
+                        xref='x',yref='y',
+                        x0=xTarg-targRad,y0=yTarg-targRad,
+                        x1=xTarg+targRad,y1=yTarg+targRad,
+                        fillcolor=availableColors[targNum],
+                        # line_color=availableColors[targNum]
+                        opacity=0.5,
+                        row=1,
+                        col=1,
+                    ) for targNum, (xTarg, yTarg) in enumerate(zip(targDist*np.cos(unLb/180*np.pi), targDist*np.sin(unLb/180*np.pi)))];
+
+                from copy import copy
+                figTrueTraj = copy(figKalmanDecode)
+
+
+                legendShown = {}
+                [legendShown.update({tA : True}) for tA in unLb]
+                boundMax = 0
+                for trlSpks, trueTraj, lbl in zip(allSpksCurrStp, allKinCurrStp, lblTrl):
+                    targAng = unLb[lbl]
+                    targAngStr = str(targAng)
+                    trueTraj = trueTraj.T
+                    trlLat = beta @ (trlSpks - faParams['d'][:,None]) - meanLatProj[:,None]
+                    
+                    # muCurrGivenPrev = np.nanmean(allKinCurrStpConcat, axis=1)
+                    # outVel = np.zeros_like(trueTraj)
+                    # for t in np.arange(trueTraj.shape[1]):
+                    #     muCurrGivenCurr = muCurrGivenPrev + K@(trlLat[:, t] - C@muCurrGivenPrev)
+                    #     outVel[:,t] = muCurrGivenCurr
+                    #     muCurrGivenPrev = A@(muCurrGivenCurr - kinMean)
+
+                    outVel = np.zeros_like(trueTraj)
+                    for t in np.arange(1, trueTraj.shape[1]):
+                        outVel[:,t] = M0 + M1 @ outVel[:,t-1] + M2 @ trlSpks[:, t]
+
+                    outPos = outVel.cumsum(axis=1)*binSizeS
+                    figKalmanDecode.add_scatter(x=outPos[0,:].squeeze(), y=outPos[1,:].squeeze(),
+                        opacity=0.5, legendgroup = 'group' + targAngStr, mode='lines',
+                        line=dict(color=availableColors[lbl]), name=targAngStr,
+                        showlegend=legendShown.pop(targAng, False), legendrank=lbl)
+                    
+                    trueTrajPos = trueTraj.cumsum(axis=1)*binSizeS
+                    xMinTraj, yMinTraj = np.min(trueTrajPos, axis=1) 
+                    xMaxTraj, yMaxTraj = np.max(trueTrajPos, axis=1) 
+                    boundMax = 1.1*np.max(np.abs([boundMax, xMinTraj, yMinTraj, xMaxTraj, yMaxTraj]))
+                    figTrueTraj.add_scatter(x=trueTrajPos[0,:].squeeze(), y=trueTrajPos[1,:].squeeze(),
+                        opacity=0.5, legendgroup = 'group' + targAngStr, mode='lines',
+                        line=dict(color=availableColors[lbl]), name=targAngStr,
+                        showlegend=legendShown.pop(targAng, False), legendrank=lbl)
+
+
+                outName = 'kalman decode'
+                xMinTraj, yMinTraj = np.min(allKinCurrStpConcat, axis=1) 
+                xMaxTraj, yMaxTraj = np.max(allKinCurrStpConcat, axis=1) 
+                boundMax = 1.1*np.max(np.abs([xMinTraj, yMinTraj, xMaxTraj, yMaxTraj]))
+                figKalmanDecode.update_layout(
+                        title=outName,
+                        xaxis=dict(range=[-boundMax, boundMax]),
+                        yaxis=dict(range=[-boundMax, boundMax], scaleanchor = "x", scaleratio = 1)
+                    );
+                figTrueTraj.update_layout(
+                        title="true trajectories",
+                        xaxis=dict(range=[-boundMax, boundMax]),
+                        yaxis=dict(range=[-boundMax, boundMax], scaleanchor = "x", scaleratio = 1)
+                    );
+
+
+                figKalmanDecode.show()
+                figTrueTraj.show()
+
+            breakpoint()
+            # unLb, lbTrl = np.unique(bss[testInds].labels['stimulusMainLabel'], return_inverse=True)
 
             fgLinEst, axs = plt.subplots(2, int(np.ceil(unLb.shape[0]/2)))
 
