@@ -15,6 +15,20 @@ def loadDefaultParams(defParamName = "paramDefs.txt", defParamBase=None):
 
     return json.load(defParamFile.open())
 
+def loadTrialCodes():
+    import scipy.io as sio
+    defaultParams = loadDefaultParams()
+    trialCodesPath = defaultParams['smithLabTrialCodes']
+    mat = sio.loadmat(trialCodesPath)
+    struct,arr_out = {}, [[]] * (255+1)
+    arr = mat['codesArray'][0]
+    for i,code in enumerate(arr):
+        code = code[0]
+        if len(code) > 0:
+            struct[code] = i+1
+            arr_out[i+1] = (code)
+    return struct,arr_out
+
 # Shamelessley ripped from DataJoint, but I'd rather have it here because it
 # seems more like an internal DataJoint util not meant to be used by other
 # libraries directly
